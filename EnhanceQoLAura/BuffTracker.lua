@@ -472,12 +472,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 				end
 			end
 			for _, inst in ipairs(eventInfo.removedAuraInstanceIDs or {}) do
-				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
-				if data then
-					changed[data.spellId] = true
-				elseif auraInstanceMap[inst] then
-					changed[auraInstanceMap[inst].buffId] = true
-				end
+				if auraInstanceMap[inst] then changed[auraInstanceMap[inst].buffId] = true end
 				auraInstanceMap[inst] = nil
 			end
 
