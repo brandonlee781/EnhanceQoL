@@ -743,6 +743,7 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 				anchors[catId] = nil
 			end
 			selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
+			rebuildAltMapping()
 			refreshTree(selectedCategory)
 		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
