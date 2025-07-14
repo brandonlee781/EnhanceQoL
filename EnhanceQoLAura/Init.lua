@@ -1,10 +1,13 @@
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
-	addon = _G[parentAddonName]
+        addon = _G[parentAddonName]
 else
-	error(parentAddonName .. " is not loaded")
+        error(parentAddonName .. " is not loaded")
 end
+
+-- Ensure the order table exists before we manipulate it later
+addon.functions.InitDBValue("unitFrameAuraOrder", {})
 
 if not addon.db["unitFrameAuraTrackers"] then
 	addon.db["unitFrameAuraTrackers"] = {
@@ -127,7 +130,6 @@ addon.functions.InitDBValue("unitFrameAuraIconSize", 20)
 addon.functions.InitDBValue("unitFrameAuraShowTime", false)
 addon.functions.InitDBValue("unitFrameAuraTrackers", nil)
 addon.functions.InitDBValue("unitFrameAuraSelectedTracker", 1)
-addon.functions.InitDBValue("unitFrameAuraOrder", {})
 
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 
