@@ -1359,11 +1359,27 @@ local function addUnitFrame(container)
 
 	local groupCoreUF = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCoreUF)
-	
+
 	local labelHeadlineUF = addon.functions.createLabelAce("|cffffd700" .. L["UnitFrameUFExplain"] .. "|r", nil, nil, 14)
 	labelHeadlineUF:SetFullWidth(true)
 	groupCoreUF:AddChild(labelHeadlineUF)
 	groupCoreUF:AddChild(addon.functions.createSpacerAce())
+
+	local cbRaidFrameBuffHide = addon.functions.createCheckboxAce(L["hideRaidFrameBuffs"], addon.db["hideRaidFrameBuffs"], function(self, _, value)
+		addon.db["hideRaidFrameBuffs"] = value
+		addon.functions.updateRaidFrameBuffs()
+		addon.variables.requireReload = true
+	end, nil)
+	groupCoreUF:AddChild(cbRaidFrameBuffHide)
+
+	local cbPartyFrameSolo = addon.functions.createCheckboxAce(L["showPartyFrameInSoloContent"], addon.db["showPartyFrameInSoloContent"], function(self, _, value)
+		addon.db["showPartyFrameInSoloContent"] = value
+		addon.variables.requireReload = true
+		container:ReleaseChildren()
+		addUnitFrame(container)
+		addon.functions.togglePlayerFrame(addon.db["hidePlayerFrame"])
+	end, nil)
+	groupCoreUF:AddChild(cbPartyFrameSolo)
 
 	local sliderName
 	local cbTruncate = addon.functions.createCheckboxAce(L["unitFrameTruncateNames"], addon.db.unitFrameTruncateNames, function(self, _, v)
@@ -1382,6 +1398,14 @@ local function addUnitFrame(container)
 	groupCoreUF:AddChild(sliderName)
 
 	groupCoreUF:AddChild(addon.functions.createSpacerAce())
+
+	if addon.db["showPartyFrameInSoloContent"] then
+		local cbHidePlayerFrame = addon.functions.createCheckboxAce(L["hidePlayerFrame"], addon.db["hidePlayerFrame"], function(self, _, value)
+			addon.db["hidePlayerFrame"] = value
+			addon.functions.togglePlayerFrame(addon.db["hidePlayerFrame"])
+		end, nil)
+		groupCoreUF:AddChild(cbHidePlayerFrame)
+	end
 end
 
 local function addDynamicFlightFrame(container)
@@ -1648,42 +1672,7 @@ local function addPartyFrame(container)
 				end
 			end,
 		},
-
-		{
-			parent = "",
-			var = "hideRaidFrameBuffs",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["hideRaidFrameBuffs"] = value
-				addon.functions.updateRaidFrameBuffs()
-				addon.variables.requireReload = true
-			end,
-		},
-		{
-			parent = "",
-			var = "showPartyFrameInSoloContent",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["showPartyFrameInSoloContent"] = value
-				addon.variables.requireReload = true
-				container:ReleaseChildren()
-				addPartyFrame(container)
-				addon.functions.togglePlayerFrame(addon.db["hidePlayerFrame"])
-			end,
-		},
 	}
-
-	if addon.db["showPartyFrameInSoloContent"] then
-		table.insert(data, {
-			parent = "",
-			var = "hidePlayerFrame",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["hidePlayerFrame"] = value
-				addon.functions.togglePlayerFrame(addon.db["hidePlayerFrame"])
-			end,
-		})
-	end
 
 	if addon.db["autoAcceptGroupInvite"] == true then
 		table.insert(data, {
