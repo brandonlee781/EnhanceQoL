@@ -1,3 +1,5 @@
+--@debug@
+
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
@@ -566,3 +568,4 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 
 	trackerTreeGroup:SelectByValue(tostring(selectedTracker))
 end
+--@end-debug@
