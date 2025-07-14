@@ -29,8 +29,9 @@ local function unitHasMana()
 	return maxMana > 0
 end
 
+local lastItemPlaced
 local function addDrinks()
-	foundItem = nil
+	local foundItem = nil
 	for _, value in ipairs(addon.Drinks.filteredDrinks) do
 		if value.getCount() > 0 then
 			foundItem = value.getId()
@@ -38,7 +39,10 @@ local function addDrinks()
 			-- We only need the highest manadrink
 		end
 	end
-	EditMacro(drinkMacroName, drinkMacroName, nil, buildMacroString(foundItem))
+	if foundItem ~= lastItemPlaced then
+		EditMacro(drinkMacroName, drinkMacroName, nil, buildMacroString(foundItem))
+		lastItemPlaced = foundItem
+	end
 end
 
 function addon.functions.updateAvailableDrinks(ignoreCombat)
