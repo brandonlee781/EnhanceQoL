@@ -8,6 +8,7 @@ end
 
 -- Ensure the order table exists before we manipulate it later
 addon.functions.InitDBValue("unitFrameAuraOrder", {})
+addon.functions.InitDBValue("unitFrameAuraEnabled", {})
 
 if not addon.db["unitFrameAuraTrackers"] then
 	addon.db["unitFrameAuraTrackers"] = {
@@ -134,7 +135,6 @@ addon.functions.InitDBValue("unitFrameAuraShowTime", false)
 addon.functions.InitDBValue("unitFrameAuraShowSwipe", true)
 addon.functions.InitDBValue("unitFrameAuraTrackers", nil)
 addon.functions.InitDBValue("unitFrameAuraSelectedTracker", 1)
-addon.functions.InitDBValue("unitFrameAuraEnabled", {})
 
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 

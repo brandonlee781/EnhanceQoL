@@ -125,11 +125,10 @@ local function UpdateTrackedBuffs(frame, unit)
 					iconFrame.showTimer = showTime
 					if iconFrame.time then iconFrame.time:Hide() end
 
-					local showSwipe = data.showSwipe
-					if showSwipe == nil then showSwipe = addon.db.unitFrameAuraShowSwipe end
-					iconFrame.cd:SetDrawSwipe(showSwipe)
-					if showSwipe then iconFrame.cd:SetSwipeColor(0, 0, 0, 0.6) end
-
+					-- local showSwipe = data.showSwipe
+					-- if showSwipe == nil then showSwipe = addon.db.unitFrameAuraShowSwipe end
+					iconFrame.cd:SetDrawSwipe(false)
+					-- if showSwipe then iconFrame.cd:SetSwipeColor(0, 0, 0, 0.6) end
 					iconFrame:Show()
 				end
 			end, true)
@@ -444,11 +443,11 @@ local function buildSpellOptions(container, tId, spellId)
 	end)
 	core:AddChild(cb)
 
-	local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], info.showSwipe == nil and addon.db.unitFrameAuraShowSwipe or info.showSwipe, function(_, _, val)
-		info.showSwipe = val
-		RefreshAll()
-	end)
-	core:AddChild(swipeCB)
+	-- local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], info.showSwipe == nil and addon.db.unitFrameAuraShowSwipe or info.showSwipe, function(_, _, val)
+	-- 	info.showSwipe = val
+	-- 	RefreshAll()
+	-- end)
+	-- core:AddChild(swipeCB)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteAura"], 150, function()
 		local auraName = info.name or tostring(spellId)
