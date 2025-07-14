@@ -51,6 +51,8 @@ for _, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if not buff.trackType then buff.trackType = "BUFF" end
 		if buff.stackOp == nil then buff.stackOp = nil end
 		if buff.stackVal == nil then buff.stackVal = nil end
+		if buff.timeOp == nil then buff.timeOp = nil end
+		if buff.timeVal == nil then buff.timeVal = nil end
 		if not buff.allowedSpecs then buff.allowedSpecs = {} end
 		if not buff.allowedClasses then buff.allowedClasses = {} end
 		if not buff.allowedRoles then buff.allowedRoles = {} end

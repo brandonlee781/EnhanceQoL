@@ -20,6 +20,8 @@ for _, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if not buff.allowedRoles then buff.allowedRoles = {} end
 		if buff.stackOp == nil then buff.stackOp = nil end
 		if buff.stackVal == nil then buff.stackVal = nil end
+		if buff.timeOp == nil then buff.timeOp = nil end
+		if buff.timeVal == nil then buff.timeVal = nil end
 	end
 end
 
@@ -126,6 +128,17 @@ local function stackConditionMet(buff, aura)
 		return stacks > buff.stackVal
 	else
 		return stacks < buff.stackVal
+	end
+end
+
+local function timeConditionMet(buff, aura)
+	if not buff or not buff.timeOp or not buff.timeVal then return true end
+	if not aura or not aura.duration or aura.duration <= 0 then return false end
+	local remaining = aura.expirationTime - GetTime()
+	if buff.timeOp == ">" then
+		return remaining > buff.timeVal
+	else
+		return remaining < buff.timeVal
 	end
 end
 
@@ -367,7 +380,7 @@ local function updateBuff(catId, id, changedId)
 		end
 	end
 
-	if aura and not stackConditionMet(buff, aura) then aura = nil end
+	if aura and (not stackConditionMet(buff, aura) or not timeConditionMet(buff, aura)) then aura = nil end
 
 	activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 	local frame = activeBuffFrames[catId][id]
@@ -627,6 +640,8 @@ local function addBuff(catId, id)
 		trackType = "BUFF",
 		stackOp = nil,
 		stackVal = nil,
+		timeOp = nil,
+		timeVal = nil,
 		allowedSpecs = {},
 		allowedClasses = {},
 		allowedRoles = {},
@@ -967,6 +982,32 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 	stackRow:AddChild(editStack)
 
 	wrapper:AddChild(stackRow)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local timeRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	timeRow:SetFullWidth(true)
+	local lblTime = AceGUI:Create("Label")
+	lblTime:SetText(L["buffTrackerShowWhenTime"])
+	lblTime:SetRelativeWidth(0.4)
+	timeRow:AddChild(lblTime)
+
+	local dropTime = addon.functions.createDropdownAce(nil, { [">"] = ">", ["<"] = "<" }, nil, function(self, _, val)
+		buff.timeOp = val
+		scanBuffs()
+	end)
+	dropTime:SetValue(buff.timeOp)
+	dropTime:SetRelativeWidth(0.2)
+	timeRow:AddChild(dropTime)
+
+	local editTime = addon.functions.createEditboxAce(nil, buff.timeVal and tostring(buff.timeVal) or "", function(self, _, text)
+		local num = tonumber(text)
+		buff.timeVal = num
+		scanBuffs()
+	end)
+	editTime:SetRelativeWidth(0.4)
+	timeRow:AddChild(editTime)
+
+	wrapper:AddChild(timeRow)
 	wrapper:AddChild(addon.functions.createSpacerAce())
 
 	local roleDrop = addon.functions.createDropdownAce(L["ShowForRole"], roleNames, nil, function(self, event, key, checked)
