@@ -72,6 +72,10 @@ addon.functions.InitDBValue("buffTrackerSoundsEnabled", {})
 addon.functions.InitDBValue("buffTrackerShowStacks", false)
 addon.functions.InitDBValue("buffTrackerShowTimerText", true)
 addon.functions.InitDBValue("unitFrameAuraIDs", {})
+addon.functions.InitDBValue("unitFrameAuraAnchor", "CENTER")
+addon.functions.InitDBValue("unitFrameAuraDirection", "RIGHT")
+addon.functions.InitDBValue("unitFrameAuraIconSize", 20)
+addon.functions.InitDBValue("unitFrameAuraShowTime", false)
 
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 
