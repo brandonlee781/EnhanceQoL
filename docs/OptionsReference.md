@@ -51,6 +51,8 @@ Each action bar can be set to appear only on mouseover:
 - **Hide floating combat text over your character** (Hide floating combat text (damage and healing) over your character).
 - **Hide floating combat text over your pet** (Hide floating combat text (damage and healing) over your pet).
 - Additional options allow Target, Player or Boss frames to remain hidden until the mouse is over them.
+- **Truncate unit names** and set a **maximum name length**.
+- **Enable frame scale adjustment** with a slider to change the size of compact unit frames.
 
 ## Minimap & Micro Menu
 - **Enable quick switching for loot and active specializations** (Enable quick switching for loot and active specializations on the Minimap).

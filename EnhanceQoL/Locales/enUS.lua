@@ -176,6 +176,10 @@ L["showLeaderIconRaidFrame"] = "Show leader icon on raid-style party frames"
 L["showPartyFrameInSoloContent"] = "Show Party Frames in Solo Content"
 L["hidePlayerFrame"] = "Hide Player Frame"
 L["hideRaidFrameBuffs"] = "Hide buffs on raid-style frames"
+L["unitFrameTruncateNames"] = "Truncate unit names"
+L["unitFrameMaxNameLength"] = "Maximum name length"
+L["unitFrameScaleEnable"] = "Enable frame scale adjustment"
+L["unitFrameScale"] = "Frame scale"
 
 L["ActionbarHideExplain"] = 'Set the action bar to hidden and show on mouseover. This works only when your Action Bar is set to "%s" and "%s" in %s'
 

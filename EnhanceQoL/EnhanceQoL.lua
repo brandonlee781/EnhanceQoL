@@ -1356,6 +1356,42 @@ local function addUnitFrame(container)
 		end, desc)
 		groupCore:AddChild(cbElement)
 	end
+
+	groupCore:AddChild(addon.functions.createSpacerAce())
+
+	local sliderName
+	local cbTruncate = addon.functions.createCheckboxAce(L["unitFrameTruncateNames"], addon.db.unitFrameTruncateNames, function(self, _, v)
+		addon.db.unitFrameTruncateNames = v
+		if sliderName then sliderName:SetDisabled(not v) end
+		addon.functions.updateUnitFrameNames()
+	end)
+	groupCore:AddChild(cbTruncate)
+
+	sliderName = addon.functions.createSliderAce(L["unitFrameMaxNameLength"] .. ": " .. addon.db.unitFrameMaxNameLength, addon.db.unitFrameMaxNameLength, 1, 20, 1, function(self, _, val)
+		addon.db.unitFrameMaxNameLength = val
+		self:SetLabel(L["unitFrameMaxNameLength"] .. ": " .. val)
+		addon.functions.updateUnitFrameNames()
+	end)
+	sliderName:SetDisabled(not addon.db.unitFrameTruncateNames)
+	groupCore:AddChild(sliderName)
+
+	groupCore:AddChild(addon.functions.createSpacerAce())
+
+	local sliderScale
+	local cbScale = addon.functions.createCheckboxAce(L["unitFrameScaleEnable"], addon.db.unitFrameScaleEnabled, function(self, _, v)
+		addon.db.unitFrameScaleEnabled = v
+		if sliderScale then sliderScale:SetDisabled(not v) end
+		addon.functions.updateUnitFrameScale()
+	end)
+	groupCore:AddChild(cbScale)
+
+	sliderScale = addon.functions.createSliderAce(L["unitFrameScale"] .. ": " .. addon.db.unitFrameScale, addon.db.unitFrameScale, 0.5, 2, 0.05, function(self, _, val)
+		addon.db.unitFrameScale = val
+		self:SetLabel(L["unitFrameScale"] .. ": " .. string.format("%.2f", val))
+		addon.functions.updateUnitFrameScale()
+	end)
+	sliderScale:SetDisabled(not addon.db.unitFrameScaleEnabled)
+	groupCore:AddChild(sliderScale)
 end
 
 local function addDynamicFlightFrame(container)
@@ -3155,6 +3191,10 @@ local function initUnitFrame()
 	addon.functions.InitDBValue("hideHitIndicatorPet", false)
 	addon.functions.InitDBValue("hidePlayerFrame", false)
 	addon.functions.InitDBValue("hideRaidFrameBuffs", false)
+	addon.functions.InitDBValue("unitFrameTruncateNames", false)
+	addon.functions.InitDBValue("unitFrameMaxNameLength", addon.variables.unitFrameMaxNameLength)
+	addon.functions.InitDBValue("unitFrameScaleEnabled", false)
+	addon.functions.InitDBValue("unitFrameScale", addon.variables.unitFrameScale)
 	if addon.db["hideHitIndicatorPlayer"] then PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HitIndicator:Hide() end
 
 	if PetHitIndicator then hooksecurefunc(PetHitIndicator, "Show", function(self)
@@ -3183,6 +3223,45 @@ local function initUnitFrame()
 		end
 	end
 	hooksecurefunc("CompactUnitFrame_SetUpFrame", DisableBlizzBuffs)
+	local function ApplyFrameSettings(cuf)
+		if addon.db["unitFrameScaleEnabled"] and addon.db["unitFrameScale"] then cuf:SetScale(addon.db["unitFrameScale"]) end
+		if addon.db["unitFrameTruncateNames"] and addon.db["unitFrameMaxNameLength"] then
+			local name = cuf.name and cuf.name:GetText()
+			if name and #name > addon.db["unitFrameMaxNameLength"] then cuf.name:SetText(strsub(name, 1, addon.db["unitFrameMaxNameLength"])) end
+		end
+	end
+
+	if DefaultCompactUnitFrameSetup then hooksecurefunc("DefaultCompactUnitFrameSetup", ApplyFrameSettings) end
+
+	function addon.functions.updateUnitFrameScale()
+		if not addon.db["unitFrameScaleEnabled"] then return end
+		for i = 1, 5 do
+			local f = _G["CompactPartyFrameMember" .. i]
+			if f then f:SetScale(addon.db["unitFrameScale"]) end
+		end
+		for i = 1, 40 do
+			local f = _G["CompactRaidFrame" .. i]
+			if f then f:SetScale(addon.db["unitFrameScale"]) end
+		end
+	end
+
+	function addon.functions.updateUnitFrameNames()
+		if not addon.db["unitFrameTruncateNames"] then return end
+		for i = 1, 5 do
+			local f = _G["CompactPartyFrameMember" .. i]
+			if f and f.name and f.name:GetText() then
+				local n = f.name:GetText()
+				if #n > addon.db["unitFrameMaxNameLength"] then f.name:SetText(strsub(n, 1, addon.db["unitFrameMaxNameLength"])) end
+			end
+		end
+		for i = 1, 40 do
+			local f = _G["CompactRaidFrame" .. i]
+			if f and f.name and f.name:GetText() then
+				local n = f.name:GetText()
+				if #n > addon.db["unitFrameMaxNameLength"] then f.name:SetText(strsub(n, 1, addon.db["unitFrameMaxNameLength"])) end
+			end
+		end
+	end
 	function addon.functions.updateRaidFrameBuffs()
 		for i = 1, 5 do
 			local f = _G["CompactPartyFrameMember" .. i]
@@ -3195,6 +3274,8 @@ local function initUnitFrame()
 	end
 
 	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
+	if addon.db["unitFrameScaleEnabled"] then addon.functions.updateUnitFrameScale() end
+	if addon.db["unitFrameTruncateNames"] then addon.functions.updateUnitFrameNames() end
 
 	for _, cbData in ipairs(addon.variables.unitFrameNames) do
 		if cbData.var and cbData.name then
