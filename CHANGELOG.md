@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.28.1] – 2025-07-14
+### 🐛 Fixed
+- Fixed a rare issue with *Loot-Toast-Settings*
+
 ## [3.28.0] – 2025-07-14
 ### ✨ Added
 - **Aura Tracker (module)**

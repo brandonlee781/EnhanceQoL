@@ -12,26 +12,24 @@ addon.LootToast = LootToast
 LootToast.enabled = false
 LootToast.frame = LootToast.frame or CreateFrame("Frame")
 
-local function isMount(item)
-	local classID, subClassID = select(12, C_Item.GetItemInfo(item:GetItemLink()))
-	return classID == 15 and subClassID == 5
-end
+local function isPet(classID, subClassID)
+	if classID == 17 then return true end
+	if classID == 15 and subClassID == 2 then return true end
 
-local function isPet(item)
-	local classID = select(12, C_Item.GetItemInfo(item:GetItemLink()))
-	return classID == 17
+	return false
 end
 
 local function passesFilters(item)
-	local quality = select(3, C_Item.GetItemInfo(item:GetItemLink()))
+	local name, _, quality, _, _, _, _, _, itemEquipLoc, _, _, classID, subclassID, _, _, _, _ = C_Item.GetItemInfo(item:GetItemLink())
+
 	local filter = addon.db.lootToastFilters and addon.db.lootToastFilters[quality]
 	if not filter then return false end
 
 	local has = filter.ilvl or filter.mounts or filter.pets
 	if not has then return true end
 
-	if filter.mounts and isMount(item) then return true end
-	if filter.pets and isPet(item) then return true end
+	if filter.mounts and classID == 15 and subclassID == 5 then return true end
+	if filter.pets and isPet(classID, subclassID) then return true end
 
 	if filter.ilvl then
 		local thresholds = addon.db.lootToastItemLevels or {}
