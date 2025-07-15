@@ -1,11 +1,13 @@
 # Changelog
 
 ## [3.28.1] – 2025-07-14
+### 🔄 Changed
+- **Aura Tracker** – several UI elements now respect your current settings (icon size, timer scale, etc.).
 ### 🐛 Fixed
-- Fixed a rare issue with *Loot-Toast-Settings*
-- Fixed an issue with *Creating new Auras* and not selecting the new Category
-- Fixed an issue with *Deleting Categories* and not cleaning the UI
-- Fixed an issue with *Glow of Auras* not changing it's size when icon size changed
+- **Loot Toast** – resolved a rare error when opening the loot-toast settings panel.
+- **Aura Tracker** – newly created auras are now automatically selected after you add their category.
+- **Aura Tracker** – deleting a category immediately clears the right-hand options panel.
+- **Aura Tracker** – glow effect now scales correctly when you change the icon size.
 
 ## [3.28.0] – 2025-07-14
 ### ✨ Added
