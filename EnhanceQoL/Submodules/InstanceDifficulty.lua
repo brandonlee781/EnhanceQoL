@@ -45,10 +45,26 @@ InstanceDifficulty.icons = {
 	LFR = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_LFR.tga",
 }
 
+local nmNames = {
+	[RAID_DIFFICULTY1] = true,
+	[RAID_DIFFICULTY2] = true,
+	[RAID_DIFFICULTY_10PLAYER] = true,
+	[RAID_DIFFICULTY_20PLAYER] = true,
+	[RAID_DIFFICULTY_25PLAYER] = true,
+	[RAID_DIFFICULTY_40PLAYER] = true,
+}
+
+local hcNames = {
+	[RAID_DIFFICULTY3] = true,
+	[RAID_DIFFICULTY4] = true,
+	[RAID_DIFFICULTY_10PLAYER_HEROIC] = true,
+	[RAID_DIFFICULTY_25PLAYER_HEROIC] = true,
+}
+
 local function getShortLabel(difficultyID, difficultyName)
-	if difficultyID == 1 or difficultyID == 3 or difficultyID == 4 or difficultyID == 14 or difficultyID == 33 or difficultyID == 150 then
+	if difficultyID == 1 or difficultyID == 3 or difficultyID == 4 or difficultyID == 14 or difficultyID == 33 or difficultyID == 150 or nmNames[difficultyName] then
 		return "NM"
-	elseif difficultyID == 2 or difficultyID == 5 or difficultyID == 6 or difficultyID == 15 or difficultyID == 205 or difficultyID == 230 then
+	elseif difficultyID == 2 or difficultyID == 5 or difficultyID == 6 or difficultyID == 15 or difficultyID == 205 or difficultyID == 230 or hcNames[difficultyName] then
 		return "HC"
 	elseif difficultyID == 16 or difficultyID == 23 then
 		return "M"
