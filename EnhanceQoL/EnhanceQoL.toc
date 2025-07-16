@@ -37,6 +37,8 @@ libs\AceDB-3.0\lib.xml
 libs\AceConfig-3.0\AceConfig-3.0.xml
 libs\AceDBOptions-3.0\lib.xml
 libs\LibSharedMedia-3.0\lib.xml
+libs\AceSerializer-3.0\AceSerializer-3.0.xml
+libs\AceComm-3.0\AceComm-3.0.xml
 Bindings\Slider.xml
 General\functions.lua
 EnhanceQoL.lua

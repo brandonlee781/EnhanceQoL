@@ -891,6 +891,10 @@ local function getCategoryTree()
 		value = "ADD_CATEGORY",
 		text = "|cff00ff00+ " .. (L["Add Category"] or "Add Category ..."),
 	})
+	table.insert(tree, {
+		value = "IMPORT_CATEGORY",
+		text = "|cff0000ff+ " .. (L["ImportCategory"] or "Import Category ..."),
+	})
 	return tree
 end
 
@@ -1420,6 +1424,34 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 			ensureAnchor(newId)
 			refreshTree(newId)
 			return -- don’t build options for pseudo‑node
+		elseif value == "IMPORT_CATEGORY" then
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY"]
+				or {
+					text = L["ImportCategory"],
+					button1 = ACCEPT,
+					button2 = CANCEL,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+				self.editBox:SetText("")
+				self.editBox:SetFocus()
+			end
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
+				local text = self.editBox:GetText()
+				local id = importCategory(text)
+				if id then
+					refreshTree(id)
+				else
+					print(L["ImportCategoryError"] or "Invalid string")
+				end
+			end
+			StaticPopup_Show("EQOL_IMPORT_CATEGORY")
+			return
 		end
 
 		local catId, _, buffId = strsplit("\001", value)
@@ -1442,36 +1474,6 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	treeGroup:SetCallback("OnDragDrop", function(_, _, src, dst) handleDragDrop(src, dst) end)
 
 	left:AddChild(treeGroup)
-
-	local importBtn = addon.functions.createButtonAce(L["ImportCategory"], 200, function()
-		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY"]
-			or {
-				text = L["ImportCategory"],
-				button1 = ACCEPT,
-				button2 = CANCEL,
-				hasEditBox = true,
-				editBoxWidth = 320,
-				timeout = 0,
-				whileDead = true,
-				hideOnEscape = true,
-				preferredIndex = 3,
-			}
-		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
-			self.editBox:SetText("")
-			self.editBox:SetFocus()
-		end
-		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
-			local text = self.editBox:GetText()
-			local id = importCategory(text)
-			if id then
-				refreshTree(id)
-			else
-				print(L["ImportCategoryError"] or "Invalid string")
-			end
-		end
-		StaticPopup_Show("EQOL_IMPORT_CATEGORY")
-	end)
-	left:AddChild(importBtn)
 
 	local ok = treeGroup:SelectByValue(tostring(selectedCategory))
 	if not ok then
