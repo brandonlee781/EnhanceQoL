@@ -692,7 +692,7 @@ local function updateBuff(catId, id, changedId)
 			if info and info.maxCharges then
 				frame.charges:SetText(info.currentCharges)
 				frame.charges:Show()
-				if buff.showCooldown and info.currentCharges < info.maxCharges then
+				if not aura and buff.showCooldown and info.currentCharges < info.maxCharges then
 					frame.cd:SetCooldown(info.cooldownStartTime, info.cooldownDuration, info.chargeModRate)
 					frame.cd:SetReverse(false)
 					frame.cd:SetScript("OnCooldownDone", CDResetScript)
