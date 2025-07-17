@@ -293,7 +293,7 @@ addon.functions.addToTree(nil, {
 	value = "aura",
 	text = L["Aura"],
 	children = {
-		{ value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
+		-- { value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
 		{ value = "bufftracker", text = L["BuffTracker"] },
 	},
 })
