@@ -50,10 +50,16 @@ local function updateHealthBar()
 	end
 end
 
-local function getAnchor(name)
-	addon.db.personalResourceBarAnchors = addon.db.personalResourceBarAnchors or {}
-	addon.db.personalResourceBarAnchors[name] = addon.db.personalResourceBarAnchors[name] or {}
-	return addon.db.personalResourceBarAnchors[name]
+local function getAnchor(name, spec)
+        local class = addon.variables.unitClass
+        spec = spec or addon.variables.unitSpec
+        addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
+        addon.db.personalResourceBarSettings[class] = addon.db.personalResourceBarSettings[class] or {}
+        addon.db.personalResourceBarSettings[class][spec] = addon.db.personalResourceBarSettings[class][spec] or {}
+        addon.db.personalResourceBarSettings[class][spec][name] = addon.db.personalResourceBarSettings[class][spec][name] or {}
+        local cfg = addon.db.personalResourceBarSettings[class][spec][name]
+        cfg.anchor = cfg.anchor or {}
+        return cfg.anchor
 end
 
 local function createHealthBar()
@@ -67,7 +73,7 @@ local function createHealthBar()
 	healthBar = CreateFrame("StatusBar", "EQOLHealthBar", mainFrame, "BackdropTemplate")
 	healthBar:SetSize(addon.db["personalResourceBarHealthWidth"], addon.db["personalResourceBarHealthHeight"])
 	healthBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-	local anchor = getAnchor("HEALTH")
+        local anchor = getAnchor("HEALTH", addon.variables.unitSpec)
 	healthBar:SetPoint(anchor.point or "TOPLEFT", _G[anchor.relativeFrame] or UIParent, anchor.relativePoint or anchor.point or "BOTTOMLEFT", anchor.x or 0, anchor.y or 0)
 	healthBar:SetBackdrop({
 		bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -90,7 +96,7 @@ local function createHealthBar()
 	healthBar:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		local point, rel, relPoint, xOfs, yOfs = self:GetPoint()
-		local info = getAnchor("HEALTH")
+                local info = getAnchor("HEALTH", addon.variables.unitSpec)
 		info.point = point
 		info.relativeFrame = rel and rel:GetName() or "UIParent"
 		info.relativePoint = relPoint
@@ -252,7 +258,7 @@ local function createPowerBar(type, anchor)
 	local h = settings and settings.height or addon.db["personalResourceBarManaHeight"]
 	bar:SetSize(w, h)
 	bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-	local a = getAnchor(type)
+        local a = getAnchor(type, addon.variables.unitSpec)
 	if a.point then
 		bar:SetPoint(a.point, _G[a.relativeFrame] or UIParent, a.relativePoint or a.point, a.x or 0, a.y or 0)
        elseif anchor then
@@ -282,7 +288,7 @@ local function createPowerBar(type, anchor)
 	bar:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		local point, rel, relPoint, xOfs, yOfs = self:GetPoint()
-		local info = getAnchor(type)
+                local info = getAnchor(type, addon.variables.unitSpec)
 		info.point = point
 		info.relativeFrame = rel and rel:GetName() or "UIParent"
 		info.relativePoint = relPoint

@@ -139,9 +139,8 @@ local function addResourceFrame(container)
 			TargetFrame = "TargetFrame",
 		}
 
-		local function addAnchorOptions(barType, parent)
-			addon.db.personalResourceBarAnchors[barType] = addon.db.personalResourceBarAnchors[barType] or {}
-			local info = addon.db.personalResourceBarAnchors[barType]
+		local function addAnchorOptions(barType, parent, info)
+			info = info or {}
 
 			local header = addon.functions.createLabelAce(barType .. " Anchor")
 			parent:AddChild(header)
@@ -182,16 +181,6 @@ local function addResourceFrame(container)
 			parent:AddChild(addon.functions.createSpacerAce())
 		end
 
-		local anchorGroup = addon.functions.createContainer("InlineGroup", "List")
-		anchorGroup:SetTitle("Bar Anchors")
-		anchorGroup:SetFullWidth(true)
-		groupCore:AddChild(anchorGroup)
-
-		addAnchorOptions("HEALTH", anchorGroup)
-		for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-			addAnchorOptions(pType, anchorGroup)
-		end
-
 		local specTabs = {}
 		for i = 1, C_SpecializationInfo.GetNumSpecializationsForClassID(addon.variables.unitClassID) do
 			local _, specName = GetSpecializationInfoForClassID(addon.variables.unitClassID, i)
@@ -223,6 +212,7 @@ local function addResourceFrame(container)
 							height = addon.db["personalResourceBarManaHeight"],
 							textStyle = real == "MANA" and "PERCENT" or "CURMAX",
 						}
+					dbSpec[real].anchor = dbSpec[real].anchor or {}
 
 					local cfg = dbSpec[real]
 					local label = _G[real] or real
@@ -248,6 +238,8 @@ local function addResourceFrame(container)
 					local drop = addon.functions.createDropdownAce("Text", tList, tOrder, function(self, _, key) cfg.textStyle = key end)
 					drop:SetValue(cfg.textStyle)
 					container:AddChild(drop)
+
+					addAnchorOptions(real, container, cfg.anchor)
 
 					container:AddChild(addon.functions.createSpacerAce())
 				end
