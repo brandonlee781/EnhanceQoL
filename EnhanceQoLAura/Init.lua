@@ -13,6 +13,17 @@ addon.Aura.sounds = {}
 addon.LAura = {} -- Locales for aura
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 
+-- resource bar defaults
+addon.functions.InitDBValue("enableResourceFrame", false)
+addon.functions.InitDBValue("personalResourceBarHealthWidth", 200)
+addon.functions.InitDBValue("personalResourceBarHealthHeight", 20)
+addon.functions.InitDBValue("personalResourceBarManaWidth", 200)
+addon.functions.InitDBValue("personalResourceBarManaHeight", 20)
+
+-- spec specific settings for personal resource bars
+addon.functions.InitDBValue("personalResourceBarSettings", {})
+addon.functions.InitDBValue("personalResourceBarAnchors", {})
+
 addon.functions.InitDBValue("buffTrackerCategories", {
 	[1] = {
 		name = string.format("%s", L["Example"]),
@@ -33,6 +44,7 @@ addon.functions.InitDBValue("buffTrackerSounds", {})
 addon.functions.InitDBValue("buffTrackerSoundsEnabled", {})
 addon.functions.InitDBValue("buffTrackerShowStacks", false)
 addon.functions.InitDBValue("buffTrackerShowTimerText", true)
+addon.functions.InitDBValue("buffTrackerShowCharges", false)
 
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 
@@ -63,6 +75,11 @@ for _, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if buff.showTimerText == nil then
 			buff.showTimerText = addon.db["buffTrackerShowTimerText"]
 			if buff.showTimerText == nil then buff.showTimerText = true end
+		end
+		if buff.showCooldown == nil then buff.showCooldown = false end
+		if buff.showCharges == nil then
+			buff.showCharges = addon.db["buffTrackerShowCharges"]
+			if buff.showCharges == nil then buff.showCharges = false end
 		end
 	end
 end

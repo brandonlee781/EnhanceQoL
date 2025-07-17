@@ -3,13 +3,16 @@
 ## [3.30.0] – 2025-07-16
 ### ✨ Added
 - **Aura Tracker**
-  - **Category Export/Import** – share your aura setups with anyone.  
-    Copy the generated string; your friends simply paste it to import.
-  - **In-game Sharing** – send a clickable chat link to party, instance, raid or guild.  
-    One click opens the import dialog and pulls the auras in.
+  - **Category export/import** – share any aura setup with a single string.  
+    Friends just paste it to import.
+  - **In-game sharing** – send a clickable chat link to party, instance, raid, or guild;  
+    one click opens the import dialog and pulls the auras in.
+  - **Charges display** – optionally show remaining spell charges (requires **Always Shown**).
+  - **Cooldown display** – optionally show remaining cooldown time (requires **Always Shown**).
 ### 🐛 Fixed
-- **Aura Tracker** – resolved a rare database mismatch that could cause errors.
-- **Instance Difficulty** - Some string like MC 40 player were wrong
+- **Aura Tracker** – rare database mismatch on startup.
+- **Instance difficulty** – corrected several mislabeled difficulties (e.g. “MC 40 player”).
+- **Aura Tracker** – auras visible at login but not tracked later are now handled correctly.
 
 ## [3.29.0] – 2025-07-15
 ### ✨ Added

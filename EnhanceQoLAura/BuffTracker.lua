@@ -20,6 +20,7 @@ for _, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if not buff.allowedSpecs then buff.allowedSpecs = {} end
 		if not buff.allowedClasses then buff.allowedClasses = {} end
 		if not buff.allowedRoles then buff.allowedRoles = {} end
+		if buff.showCooldown == nil then buff.showCooldown = false end
 		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
 	end
 	cat.allowedSpecs = nil
@@ -32,12 +33,31 @@ local activeBuffFrames = {}
 local auraInstanceMap = {}
 local altToBase = {}
 local spellToCat = {}
+local chargeSpells = {}
 
 local timedAuras = {}
 local timeTicker
 local refreshTimeTicker
+local rescanTimer
+
+local function scheduleRescan()
+    if rescanTimer then
+        rescanTimer:Cancel()
+    end
+    rescanTimer = C_Timer.NewTimer(0.1, function()
+        rescanTimer = nil
+        addon.Aura.scanBuffs()
+    end)
+end
 
 local LSM = LibStub("LibSharedMedia-3.0")
+local getSpellCooldown = C_Spell and C_Spell.GetSpellCooldown or GetSpellCooldown
+
+local function CDResetScript(self)
+	local icon = self:GetParent().icon
+	icon:SetDesaturated(false)
+	icon:SetAlpha(1)
+end
 
 local function isNumber(val)
 	if type(val) == "number" then return true end
@@ -226,6 +246,7 @@ local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
 local function rebuildAltMapping()
 	wipe(altToBase)
 	wipe(spellToCat)
+	wipe(chargeSpells)
 	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 		for baseId, buff in pairs(cat.buffs or {}) do
 			spellToCat[baseId] = spellToCat[baseId] or {}
@@ -237,6 +258,14 @@ local function rebuildAltMapping()
 					altToBase[altId] = baseId
 					buff.altHash[altId] = true
 				end
+			end
+
+			local info = C_Spell and C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(baseId)
+			if info and info.maxCharges and info.maxCharges > 0 then
+				chargeSpells[baseId] = true
+				buff.hasCharges = true
+			else
+				buff.hasCharges = false
 			end
 		end
 	end
@@ -416,14 +445,21 @@ local function createBuffFrame(icon, parent, size, castOnClick, spellID, showTim
 	count:SetShadowColor(0, 0, 0, 1)
 	frame.count = count
 
-	frame.castOnClick = castOnClick
-	if castOnClick then
-		frame:SetAttribute("type", "spell")
-		frame:SetAttribute("spell", spellID)
-		frame:EnableMouse(true)
-		frame:RegisterForClicks("AnyUp", "AnyDown")
-		frame:SetScript("PostClick", function() C_Timer.After(0.1, addon.Aura.scanBuffs) end)
-	end
+	local charges = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	charges:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
+	charges:SetPoint("CENTER", frame, "TOP", 0, -1)
+	charges:SetShadowOffset(1, -1)
+	charges:SetShadowColor(0, 0, 0, 1)
+	frame.charges = charges
+
+       frame.castOnClick = castOnClick
+       if castOnClick then
+               frame:SetAttribute("type", "spell")
+               frame:SetAttribute("spell", spellID)
+               frame:EnableMouse(true)
+               frame:RegisterForClicks("AnyUp", "AnyDown")
+               frame:SetScript("PostClick", scheduleRescan)
+       end
 
 	return frame
 end
@@ -514,7 +550,9 @@ local function updateBuff(catId, id, changedId)
 		if aura then
 			if aura.duration and aura.duration > 0 then
 				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+				frame.cd:SetReverse(true)
 			else
+				frame.cd:SetReverse(false)
 				frame.cd:Clear()
 			end
 			frame.icon:SetDesaturated(false)
@@ -522,9 +560,30 @@ local function updateBuff(catId, id, changedId)
 			if not wasActive then playBuffSound(catId, id, triggeredId) end
 			frame.isActive = true
 		else
-			frame.cd:Clear()
-			frame.icon:SetDesaturated(true)
-			frame.icon:SetAlpha(0.5)
+			if buff.showCooldown then
+				local spellInfo = getSpellCooldown(id)
+				local cdStart = spellInfo.startTime
+				local cdDur = spellInfo.duration
+				local cdEnable = spellInfo.isEnabled
+				local modRate = spellInfo.modRate
+				frame.cd:SetReverse(false)
+				if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+					frame.cd:SetCooldown(cdStart, cdDur, modRate)
+					frame.icon:SetDesaturated(true)
+					frame.icon:SetAlpha(0.5)
+					frame.cd:SetScript("OnCooldownDone", CDResetScript)
+				else
+					frame.cd:Clear()
+					frame.cd:SetScript("OnCooldownDone", nil)
+					frame.icon:SetDesaturated(false)
+					frame.icon:SetAlpha(1)
+				end
+			else
+				frame.cd:Clear()
+				frame.cd:SetScript("OnCooldownDone", nil)
+				frame.icon:SetDesaturated(true)
+				frame.icon:SetAlpha(0.5)
+			end
 			frame.isActive = false
 		end
 		if buff.glow then
@@ -578,9 +637,25 @@ local function updateBuff(catId, id, changedId)
 				frame.cd:SetHideCountdownNumbers(not showTimer)
 			end
 			frame.icon:SetTexture(icon)
-			frame.icon:SetDesaturated(false)
-			frame.icon:SetAlpha(1)
-			frame.cd:Clear()
+			local cdStart, cdDur, cdEnable, modRate
+			if buff.showCooldown then
+				local spellInfo = getSpellCooldown(id)
+				cdStart = spellInfo.startTime
+				cdDur = spellInfo.duration
+				cdEnable = spellInfo.isEnabled
+				modRate = spellInfo.modRate
+			end
+			if buff.showCooldown and cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+				frame.cd:SetCooldown(cdStart, cdDur, modRate)
+				frame.icon:SetDesaturated(true)
+				frame.icon:SetAlpha(0.5)
+				frame.cd:SetScript("OnCooldownDone", CDResetScript)
+			else
+				frame.cd:Clear()
+				frame.cd:SetScript("OnCooldownDone", nil)
+				frame.icon:SetDesaturated(false)
+				frame.icon:SetAlpha(1)
+			end
 			if shouldSecure then
 				frame:EnableMouse(true)
 				frame:RegisterForClicks("AnyUp", "AnyDown")
@@ -619,6 +694,33 @@ local function updateBuff(catId, id, changedId)
 		else
 			frame.count:Hide()
 		end
+
+		local showCharges = buff and buff.showCharges
+		if showCharges == nil then showCharges = addon.db["buffTrackerShowCharges"] end
+		if not (buff and buff.showAlways) then showCharges = false end
+		if showCharges and buff.hasCharges then
+			local info = C_Spell.GetSpellCharges(id)
+			if info and info.maxCharges then
+				frame.charges:SetText(info.currentCharges)
+				frame.charges:Show()
+				if not aura and buff.showCooldown and info.currentCharges < info.maxCharges then
+					frame.cd:SetCooldown(info.cooldownStartTime, info.cooldownDuration, info.chargeModRate)
+					frame.cd:SetReverse(false)
+					frame.cd:SetScript("OnCooldownDone", CDResetScript)
+					if info.currentCharges == 0 then
+						frame.icon:SetDesaturated(true)
+						frame.icon:SetAlpha(0.5)
+					else
+						frame.icon:SetDesaturated(false)
+						frame.icon:SetAlpha(1)
+					end
+				end
+			else
+				frame.charges:Hide()
+			end
+		else
+			frame.charges:Hide()
+		end
 	end
 end
 
@@ -628,8 +730,8 @@ refreshTimeTicker = function()
 		timeTicker = nil
 	end
 	if next(timedAuras) then
+		local updatedCats = {}
 		timeTicker = C_Timer.NewTicker(1, function()
-			local updatedCats = {}
 			for _, info in pairs(timedAuras) do
 				updateBuff(info.catId, info.buffId)
 				updatedCats[info.catId] = true
@@ -637,6 +739,7 @@ refreshTimeTicker = function()
 			for catId in pairs(updatedCats) do
 				updatePositions(catId)
 			end
+		wipe(updatedCats)
 		end)
 	end
 end
@@ -666,6 +769,19 @@ local function scanBuffs()
 	refreshTimeTicker()
 end
 
+local function collectActiveAuras()
+	for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+		local i = 1
+		local aura = C_UnitAuras.GetAuraDataByIndex("player", i, filter)
+		while aura do
+			local base = altToBase[aura.spellId] or aura.spellId
+			auraInstanceMap[aura.auraInstanceID] = { buffId = base }
+			i = i + 1
+			aura = C_UnitAuras.GetAuraDataByIndex("player", i, filter)
+		end
+	end
+end
+
 addon.Aura.buffAnchors = anchors
 addon.Aura.scanBuffs = scanBuffs
 
@@ -683,6 +799,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		if event == "PLAYER_LOGIN" then
 			addon.Aura.functions.BuildSoundTable()
 			rebuildAltMapping()
+			collectActiveAuras()
 			C_Timer.After(1, scanBuffs)
 			return
 		end
@@ -710,7 +827,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 				auraInstanceMap[inst] = nil
 			end
 
-			local updated = {}
+			local needsLayout = {}
 			for spellId, cId in pairs(changed) do
 				for catId in pairs(spellToCat[spellId] or {}) do
 					local cat = addon.db["buffTrackerCategories"][catId]
@@ -721,12 +838,12 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 						elseif activeBuffFrames[catId] and activeBuffFrames[catId][spellId] then
 							activeBuffFrames[catId][spellId]:Hide()
 						end
-						updated[catId] = true
+						needsLayout[catId] = true
 					end
 				end
 			end
 
-			for catId in pairs(updated) do
+			for catId in pairs(needsLayout) do
 				updatePositions(catId)
 				if anchors[catId] then anchors[catId]:Show() end
 			end
@@ -734,11 +851,87 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		end
 	end
 
+	if event == "SPELL_UPDATE_COOLDOWN" then
+		local changedSpell = ...
+		local needsLayout = {}
+
+		if changedSpell then
+			local baseSpell = altToBase[changedSpell] or changedSpell
+			for catId in pairs(spellToCat[baseSpell] or {}) do
+				local cat = addon.db["buffTrackerCategories"][catId]
+				if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+					local buff = cat.buffs[baseSpell]
+					if buff and buff.showCooldown then
+						updateBuff(catId, baseSpell)
+						needsLayout[catId] = true
+					end
+				end
+			end
+		else
+			for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
+				if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+					for id, buff in pairs(cat.buffs) do
+						if buff.showCooldown then
+							updateBuff(catId, id)
+							needsLayout[catId] = true
+						end
+					end
+				end
+			end
+		end
+
+		for catId in pairs(needsLayout) do
+			updatePositions(catId)
+		end
+		return
+	end
+
+	if event == "SPELL_UPDATE_CHARGES" then
+		local changedSpell = ...
+		local needsLayout = {}
+
+		if changedSpell then
+			local baseSpell = altToBase[changedSpell] or changedSpell
+			if chargeSpells[baseSpell] then
+				for catId in pairs(spellToCat[baseSpell] or {}) do
+					local cat = addon.db["buffTrackerCategories"][catId]
+					if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+						local buff = cat.buffs[baseSpell]
+						if buff and (buff.showCharges or buff.showCooldown) then
+							updateBuff(catId, baseSpell)
+							needsLayout[catId] = true
+						end
+					end
+				end
+			end
+		else
+			for spellId in pairs(chargeSpells) do
+				for catId in pairs(spellToCat[spellId] or {}) do
+					local cat = addon.db["buffTrackerCategories"][catId]
+					if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+						local buff = cat.buffs[spellId]
+						if buff and (buff.showCharges or buff.showCooldown) then
+							updateBuff(catId, spellId)
+							needsLayout[catId] = true
+						end
+					end
+				end
+			end
+		end
+
+		for catId in pairs(needsLayout) do
+			updatePositions(catId)
+		end
+		return
+	end
+
 	scanBuffs()
 end)
 eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
 
 local function addBuff(catId, id)
 	-- get spell name and icon once
@@ -759,6 +952,8 @@ local function addBuff(catId, id)
 		showAlways = false,
 		glow = false,
 		castOnClick = false,
+		showCooldown = false,
+		showCharges = addon.db["buffTrackerShowCharges"] or false,
 		trackType = "BUFF",
 		conditions = { join = "AND", conditions = {} },
 		allowedSpecs = {},
@@ -824,6 +1019,11 @@ local function sanitiseCategory(cat)
 			local def = addon.db["buffTrackerShowTimerText"]
 			if def == nil then def = true end
 			buff.showTimerText = def
+		end
+		if buff.showCharges == nil then
+			local def = addon.db["buffTrackerShowCharges"]
+			if def == nil then def = false end
+			buff.showCharges = def
 		end
 	end
 end
@@ -1190,11 +1390,26 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		wrapper:AddChild(addon.functions.createSpacerAce())
 	end
 
+	local cbCooldown = addon.functions.createCheckboxAce(L["buffTrackerShowCooldown"], buff.showCooldown, function(_, _, val)
+		buff.showCooldown = val
+		scanBuffs()
+	end)
+	local cbCharges = addon.functions.createCheckboxAce(L["buffTrackerShowCharges"], buff.showCharges == nil and addon.db["buffTrackerShowCharges"] or buff.showCharges, function(_, _, val)
+		buff.showCharges = val
+		scanBuffs()
+	end)
+
 	local alwaysCB = addon.functions.createCheckboxAce(L["buffTrackerAlwaysShow"], buff.showAlways, function(_, _, val)
 		buff.showAlways = val
+		cbCooldown:SetDisabled(not val)
+		cbCharges:SetDisabled(not val)
 		scanBuffs()
 	end)
 	wrapper:AddChild(alwaysCB)
+	cbCooldown:SetDisabled(not buff.showAlways)
+	cbCharges:SetDisabled(not buff.showAlways)
+	wrapper:AddChild(cbCooldown)
+	wrapper:AddChild(cbCharges)
 
 	local cbGlow = addon.functions.createCheckboxAce(L["buffTrackerGlow"], buff.glow, function(_, _, val)
 		buff.glow = val
@@ -1450,7 +1665,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteAura"], 150, function()
 		removeBuff(catId, buffId)
-		refreshTree(catId)
+		refreshTree(nil)
 		container:ReleaseChildren()
 	end)
 	wrapper:AddChild(delBtn)
