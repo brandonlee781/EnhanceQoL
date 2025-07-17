@@ -227,7 +227,10 @@ local function addResourceFrame(container)
 
 					local tList = { PERCENT = "Percentage", CURMAX = "Current/Max", CURRENT = "Current" }
 					local tOrder = { "PERCENT", "CURMAX", "CURRENT" }
-					local drop = addon.functions.createDropdownAce("Text", tList, tOrder, function(self, _, key) cfg.textStyle = key end)
+					local drop = addon.functions.createDropdownAce("Text", tList, tOrder, function(self, _, key)
+						cfg.textStyle = key
+						addon.Aura.ResourceBars.Refresh()
+					end)
 					drop:SetValue(cfg.textStyle)
 					container:AddChild(drop)
 
@@ -276,5 +279,3 @@ function addon.Aura.functions.treeCallback(container, group)
 		addon.Aura.scanBuffs()
 	end
 end
-
-
