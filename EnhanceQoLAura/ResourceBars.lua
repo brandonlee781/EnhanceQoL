@@ -11,6 +11,8 @@ addon.Aura = addon.Aura or {}
 local ResourceBars = {}
 addon.Aura.ResourceBars = ResourceBars
 
+local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
+
 local frameAnchor
 local mainFrame
 local healthBar
@@ -73,7 +75,10 @@ local function resolveAnchor(info, type)
 
 	while check and check.GetName and check ~= UIParent and limit > 0 do
 		local fname = check:GetName()
-		if visited[fname] then return UIParent end
+		if visited[fname] then
+			print("|cff00ff98Enhance QoL|r: " .. L["AnchorLoop"]:format(fname))
+			return UIParent
+		end
 		visited[fname] = true
 
 		local bType
@@ -90,7 +95,10 @@ local function resolveAnchor(info, type)
 		limit = limit - 1
 	end
 
-	if limit <= 0 then return UIParent end
+	if limit <= 0 then
+		print("|cff00ff98Enhance QoL|r: " .. L["AnchorLoop"]:format(info.relativeFrame or ""))
+		return UIParent
+	end
 	return frame or UIParent
 end
 
