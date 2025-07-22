@@ -794,23 +794,26 @@ addon.Aura.scanBuffs = scanBuffs
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
-	if event == "PLAYER_LOGIN" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
-		for id, anchor in pairs(anchors) do
-			local cat = getCategory(id)
-			if addon.db["buffTrackerEnabled"][id] and categoryAllowed(cat) then
-				anchor:Show()
-			else
-				anchor:Hide()
-			end
-		end
-		if event == "PLAYER_LOGIN" then
-			addon.Aura.functions.BuildSoundTable()
-			rebuildAltMapping()
-			collectActiveAuras()
-			C_Timer.After(1, scanBuffs)
-			return
-		end
-	end
+        if event == "PLAYER_LOGIN" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+                for id, anchor in pairs(anchors) do
+                        local cat = getCategory(id)
+                        if addon.db["buffTrackerEnabled"][id] and categoryAllowed(cat) then
+                                anchor:Show()
+                        else
+                                anchor:Hide()
+                        end
+                end
+                if event == "PLAYER_LOGIN" then
+                        addon.Aura.functions.BuildSoundTable()
+                        rebuildAltMapping()
+                end
+                if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+                        collectActiveAuras()
+                        firstScan = true
+                        C_Timer.After(1, scanBuffs)
+                        return
+                end
+        end
 
 	if event == "UNIT_AURA" and unit == "player" then
 		local eventInfo = ...
@@ -936,6 +939,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 end)
 eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
