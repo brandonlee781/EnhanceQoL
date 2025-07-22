@@ -549,16 +549,20 @@ local function updateSellMarks()
 				local key = bag .. "_" .. slot
 				if sellMarkLookup[key] then
 					if not itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell = itemButton:CreateTexture(nil, "ARTWORK")
-						itemButton.ItemMarkSell:SetDrawLayer("ARTWORK", 2)
+						itemButton.ItemMarkSell = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
 						itemButton.ItemMarkSell:SetTexture("Interface\\AddOns\\EnhanceQoLVendor\\Art\\sell.tga")
-						itemButton.ItemMarkSell:SetSize(18, 18)
-						itemButton.ItemMarkSell:SetVertexColor(0, 1, 1, .9)
-						itemButton.ItemMarkSell:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 0, 0)
+						itemButton.ItemMarkSell:SetSize(24, 24)
+						itemButton.ItemMarkSell:SetVertexColor(0, 1, 1, 1)
+						itemButton.ItemMarkSell:SetPoint("CENTER", itemButton, "CENTER", 1, 1)
+						itemButton.SellOverlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 6)
+						itemButton.SellOverlay:SetAllPoints()
+						itemButton.SellOverlay:SetColorTexture(1, 0, 0, 0.45)
 					end
 					itemButton.ItemMarkSell:Show()
+					itemButton.SellOverlay:Show()
 				elseif itemButton.ItemMarkSell then
 					itemButton.ItemMarkSell:Hide()
+					itemButton.SellOverlay:Hide()
 				end
 			end
 		end
