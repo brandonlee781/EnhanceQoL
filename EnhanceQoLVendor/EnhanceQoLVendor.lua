@@ -549,12 +549,11 @@ local function updateSellMarks()
 				local key = bag .. "_" .. slot
 				if sellMarkLookup[key] then
 					if not itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell = itemButton:CreateFontString(nil, "ARTWORK")
+						itemButton.ItemMarkSell = itemButton:CreateTexture(nil, "ARTWORK")
 						itemButton.ItemMarkSell:SetDrawLayer("ARTWORK", 2)
-						itemButton.ItemMarkSell:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
-						itemButton.ItemMarkSell:SetPoint("CENTER", itemButton, "CENTER")
-						itemButton.ItemMarkSell:SetText("S")
-						itemButton.ItemMarkSell:SetTextColor(1, 0.82, 0)
+						itemButton.ItemMarkSell:SetTexture("Interface\\AddOns\\EnhanceQoLVendor\\Art\\sell.tga")
+						itemButton.ItemMarkSell:SetSize(14, 14)
+						itemButton.ItemMarkSell:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 0, 0)
 					end
 					itemButton.ItemMarkSell:Show()
 				elseif itemButton.ItemMarkSell then
