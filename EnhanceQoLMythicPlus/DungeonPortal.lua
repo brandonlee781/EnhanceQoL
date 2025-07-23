@@ -133,6 +133,7 @@ local spacing = 15
 local spacingCompendium = 11
 local hSpacing = 30
 local hSpacingCompendium = 10
+local maxButtonsPerRow = 8
 
 local function CreatePortalButtonsWithCooldown(frame, spells)
 	-- Entferne alle bestehenden Buttons
@@ -180,8 +181,8 @@ local function CreatePortalButtonsWithCooldown(frame, spells)
 	end
 
 	-- Berechne dynamische Anzahl der Buttons
-	local totalButtons = #sortedSpells
-	local buttonsPerRow = math.ceil(totalButtons / 2)
+    local totalButtons = #sortedSpells
+    local buttonsPerRow = math.min(maxButtonsPerRow, totalButtons)
 	local totalButtonWidth = (buttonSize * buttonsPerRow) + (spacing * (buttonsPerRow - 1))
 	local frameWidth = math.max(totalButtonWidth + 40, title:GetStringWidth() + 20)
 	local initialSpacing = math.max(0, (frameWidth - totalButtonWidth) / 2)
@@ -453,9 +454,10 @@ local function CreatePortalCompendium(frame, compendium)
 			table.insert(frame.headline, headline)
 		end
 
-		-- Buttons generieren
-		local buttonsPerRow = math.max(1, math.ceil(#sortedSpells))
-		local totalButtonWidth = (buttonSize * buttonsPerRow) + (spacingCompendium * (buttonsPerRow - 1))
+                -- Buttons generieren
+                local buttonsPerRow = math.max(1, #sortedSpells)
+                if section.headline == FAVORITES then buttonsPerRow = math.min(maxButtonsPerRow, buttonsPerRow) end
+                local totalButtonWidth = (buttonSize * buttonsPerRow) + (spacingCompendium * (buttonsPerRow - 1))
 		maxWidth = math.max(maxWidth, totalButtonWidth + 20)
 
 		local index = 0
