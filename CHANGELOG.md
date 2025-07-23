@@ -3,13 +3,15 @@
 ## [3.32.0] – 2025-07-23
 ### ✨ Added
 - **Vendor**
-  - Added option to display a small coin icon on items marked for auto-sell
-  - Added option to show an additional red overlay for clearer visual feedback
-  - Added option to display tooltip information on items marked for auto-sell
+  - Added option to display a small **coin** icon on items marked for auto-sell
+  - Added option to display an additional **red overlay** for clearer visual feedback
+  - Added option to show **tooltip** information on items marked for auto-sell
 ### 🐛 Fixed
 - **Memory usage**
   - Removed obsolete and duplicate function calls
   - Replaced excessive API calls with leaner, more performant alternatives
+- **Aura Tracker**
+  - Fixed a rare issue where some auras marked **“show when missing”** were not visible on login
 
 ## [3.31.0] – 2025-07-16
 ### ✨ Added
