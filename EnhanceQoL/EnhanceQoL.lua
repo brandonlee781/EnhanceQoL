@@ -2370,7 +2370,11 @@ local function addLootFrame(container, d)
 			var = "autoQuickLoot",
 			desc = L["autoQuickLootDesc"],
 			type = "CheckBox",
-			callback = function(self, _, value) addon.db["autoQuickLoot"] = value end,
+			callback = function(self, _, value)
+				addon.db["autoQuickLoot"] = value
+				container:ReleaseChildren()
+				addLootFrame(container)
+			end,
 		},
 		{
 			parent = "",

@@ -1,12 +1,14 @@
 # Changelog
 
-## [3.33.0] – 2025-07-?
+## [3.33.0] – 2025-07-24
 ### ✨ Added
 - **Delve-O-Bot 7001**
-  - Added the teleport item to *Dungeon Compendium*
+  - The teleport item is now listed in the *Dungeon Compendium*.
+- **Quick-loot only while holding SHIFT**
+  - New option: quick-loot triggers only when the **Shift** key is held.
 ### 🔄 Changed
 - **Portal Compendium**
-  - Limited the buttons per row in favorites so it is not to wide
+  - Favourites now have a fixed maximum number of buttons per row, so the window no longer stretches too wide.
 
 ## [3.32.0] – 2025-07-23
 ### ✨ Added
