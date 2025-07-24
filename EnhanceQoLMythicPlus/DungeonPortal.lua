@@ -1193,7 +1193,7 @@ GameTooltip:HookScript("OnShow", function(self)
 					local mapData = C_LFGList.GetActivityInfoTable(searchResultInfo.activityIDs[1])
 					if mapData then
 						if mapIDInfo[mapData.mapID] then selectedMapId = mapIDInfo[mapData.mapID] end
-                                                if mapIDInfo[mapData.mapID] then selectedMapId = mapIDInfo[mapData.mapID] end -- TODO 11.2: use new mapID result
+					end
 				end
 			end
 			CreateRioScore()

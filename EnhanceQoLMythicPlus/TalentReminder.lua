@@ -41,7 +41,7 @@ local function createSeasonInfo()
 					end
 				end
 			end
-                                                local mapName = C_ChallengeMode.GetMapUIInfo(cId) -- TODO 11.2: use mapID returned from GetMapUIInfo
+		end
 	end
 	table.sort(addon.MythicPlus.variables.seasonMapInfo, function(a, b) return a.name < b.name end)
 end
