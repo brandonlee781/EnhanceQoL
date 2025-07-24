@@ -42,3 +42,20 @@ Affected files:
 
 After the patch, refactor these modules to read the new `mapID` return
 instead of maintaining `mapIDInfo`.
+
+### Deprecated Events
+
+The following events have been removed in 11.2:
+
+- PLAYERBANKBAGSLOTS_CHANGED
+- PLAYERREAGENTBANKSLOTS_CHANGED
+- REAGENTBANK_PURCHASED
+- REAGENTBANK_UPDATE
+- VOID_DEPOSIT_WARNING
+- VOID_STORAGE_CONTENTS_UPDATE
+- VOID_STORAGE_DEPOSIT_UPDATE
+- VOID_STORAGE_UPDATE
+- VOID_TRANSFER_DONE
+- VOID_TRANSFER_SUCCESS
+
+No matches were found in this codebase, but this should be re-checked when updating for 11.2.
