@@ -12,6 +12,12 @@ local AceGUI = addon.AceGUI
 
 -- luacheck: globals ChatFrame_OpenChat
 
+local bleedList = {
+	-- Cinderbrew Meatery
+	[441413] = true, -- Shredding Sting
+	[434773] = true, -- mean mug
+}
+
 local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
 
 for _, cat in pairs(addon.db["buffTrackerCategories"]) do
@@ -105,6 +111,14 @@ local roleNames = {
 	TANK = INLINE_TANK_ICON .. " " .. TANK,
 	HEALER = INLINE_HEALER_ICON .. " " .. HEALER,
 	DAMAGER = INLINE_DAMAGER_ICON .. " " .. DAMAGER,
+}
+
+local DebuffBorderColors = {
+	Magic = { 0.2, 0.6, 1 },
+	Curse = { 0.6, 0, 1 },
+	Disease = { 0.6, 0.4, 0 },
+	Poison = { 0, 0.6, 0 },
+	none = { 1, 0, 0 },
 }
 
 local function categoryAllowed(cat)
@@ -420,6 +434,12 @@ local function createBuffFrame(icon, parent, size, castOnClick, spellID, showTim
 	frame:SetSize(size, size)
 	frame:SetFrameStrata("DIALOG")
 
+	local border = frame:CreateTexture(nil, "BORDER")
+	border:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
+	border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
+	border:SetColorTexture(0, 0, 0, 0)
+	frame.border = border
+
 	local tex = frame:CreateTexture(nil, "ARTWORK")
 	tex:SetAllPoints(frame)
 	tex:SetTexture(icon)
@@ -485,6 +505,7 @@ local function updateBuff(catId, id, changedId, firstScan)
 	if firstScan == nil then firstScan = false end
 	local cat = getCategory(catId)
 	local buff = cat and cat.buffs and cat.buffs[id]
+	local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
 	local key = catId .. ":" .. id
 	local before = timedAuras[key] ~= nil
 	if buff and hasTimeCondition(buff.conditions) then
@@ -555,7 +576,7 @@ local function updateBuff(catId, id, changedId, firstScan)
 			if firstScan and aura.expirationTime and aura.expirationTime > 0 and (not aura.duration or aura.duration <= 0) then aura.duration = aura.expirationTime - GetTime() end
 			if aura.duration and aura.duration > 0 then
 				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
-				frame.cd:SetReverse(true)
+				frame.cd:SetReverse(tType == "DEBUFF")
 			else
 				frame.cd:SetReverse(false)
 				frame.cd:Clear()
@@ -621,6 +642,7 @@ local function updateBuff(catId, id, changedId, firstScan)
 			frame.icon:SetAlpha(1)
 			if displayAura.duration and displayAura.duration > 0 then
 				frame.cd:SetCooldown(displayAura.expirationTime - displayAura.duration, displayAura.duration)
+				frame.cd:SetReverse(tType == "DEBUFF")
 			else
 				frame.cd:Clear()
 			end
@@ -727,6 +749,19 @@ local function updateBuff(catId, id, changedId, firstScan)
 			end
 		else
 			frame.charges:Hide()
+		end
+
+		if frame.border then
+			local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
+			if tType == "DEBUFF" and displayAura then
+				if displayAura.dispelName or bleedList[displayAura.spellId] then
+					local dtype = displayAura.dispelName or displayAura.debuffType or "none"
+					local col = DebuffBorderColors[dtype] or DebuffBorderColors.none
+					frame.border:SetColorTexture(col[1], col[2], col[3], 1)
+				end
+			else
+				frame.border:SetColorTexture(0, 0, 0, 0)
+			end
 		end
 	end
 end
@@ -1875,41 +1910,41 @@ for _, ev in ipairs({
 end
 
 local function HandleEQOLLink(link, text, button, frame)
-       local label = link:match("^garrmission:eqolaura:(.+)")
-       if not label then return end
+	local label = link:match("^garrmission:eqolaura:(.+)")
+	if not label then return end
 
-       local pktID = pending[label]
-       if not (pktID and incoming[pktID]) then return end
+	local pktID = pending[label]
+	if not (pktID and incoming[pktID]) then return end
 
-       StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
-               or {
-                       text = L["ImportCategory"],
-                       button1 = ACCEPT,
-                       button2 = CANCEL,
-                       timeout = 0,
-                       whileDead = true,
-                       hideOnEscape = true,
-                       preferredIndex = 3,
-                       OnAccept = function(_, data)
-                               local encoded = incoming[data]
-                               incoming[data] = nil
-                               pending[label] = nil
-                               local newId = importCategory(encoded)
-                               if newId then refreshTree(newId) end
-                       end,
-               }
+	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
+		or {
+			text = L["ImportCategory"],
+			button1 = ACCEPT,
+			button2 = CANCEL,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true,
+			preferredIndex = 3,
+			OnAccept = function(_, data)
+				local encoded = incoming[data]
+				incoming[data] = nil
+				pending[label] = nil
+				local newId = importCategory(encoded)
+				if newId then refreshTree(newId) end
+			end,
+		}
 
-       StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
-               local encoded = incoming[data]
-               local name, count = previewImportCategory(encoded or "")
-               if name then
-                       self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
-               else
-                       self.text:SetText(L["ImportCategory"])
-               end
-       end
+	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+		local encoded = incoming[data]
+		local name, count = previewImportCategory(encoded or "")
+		if name then
+			self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+		else
+			self.text:SetText(L["ImportCategory"])
+		end
+	end
 
-       StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
+	StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
 end
 
 hooksecurefunc("SetItemRef", HandleEQOLLink)
