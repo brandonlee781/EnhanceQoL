@@ -472,6 +472,12 @@ local function createBuffFrame(icon, parent, size, castOnClick, spellID, showTim
 	charges:SetShadowColor(0, 0, 0, 1)
 	frame.charges = charges
 
+	local custom = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	custom:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
+	custom:SetShadowOffset(1, -1)
+	custom:SetShadowColor(0, 0, 0, 1)
+	frame.customText = custom
+
 	frame.castOnClick = castOnClick
 	if castOnClick then
 		frame:SetAttribute("type", "spell")
@@ -751,6 +757,34 @@ local function updateBuff(catId, id, changedId, firstScan)
 			frame.charges:Hide()
 		end
 
+		if buff and buff.customTextEnabled and buff.customText and buff.customText ~= "" then
+			local pos = buff.customTextPosition or "TOP"
+			frame.customText:ClearAllPoints()
+			local margin = 2
+			if pos == "TOP" then
+				frame.customText:SetPoint("BOTTOM", frame, "TOP", 0, margin)
+			elseif pos == "BOTTOM" then
+				frame.customText:SetPoint("TOP", frame, "BOTTOM", 0, -margin)
+			elseif pos == "LEFT" then
+				frame.customText:SetPoint("RIGHT", frame, "LEFT", -margin, 0)
+			else
+				frame.customText:SetPoint("LEFT", frame, "RIGHT", margin, 0)
+			end
+
+			local stack = aura and aura.applications or 0
+			local val = stack
+			if buff.customTextUseStacks then
+				val = stack * (buff.customTextBase or 1)
+				if buff.customTextMin and val < buff.customTextMin then val = buff.customTextMin end
+			end
+			local text = tostring(buff.customText)
+			text = text:gsub("<stack>", tostring(val))
+			frame.customText:SetText(text)
+			frame.customText:Show()
+		else
+			frame.customText:Hide()
+		end
+
 		if frame.border then
 			local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
 			if tType == "DEBUFF" and displayAura then
@@ -1014,6 +1048,12 @@ local function addBuff(catId, id)
 		allowedRoles = {},
 		showStacks = defStacks,
 		showTimerText = defTimer,
+		customTextEnabled = false,
+		customTextPosition = "TOP",
+		customText = "",
+		customTextUseStacks = false,
+		customTextBase = 1,
+		customTextMin = 0,
 	}
 
 	if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
@@ -1083,6 +1123,12 @@ local function sanitiseCategory(cat)
 			if def == nil then def = false end
 			buff.showCharges = def
 		end
+		if buff.customTextEnabled == nil then buff.customTextEnabled = false end
+		if not buff.customTextPosition then buff.customTextPosition = "TOP" end
+		if buff.customText == nil then buff.customText = "" end
+		if buff.customTextUseStacks == nil then buff.customTextUseStacks = false end
+		if buff.customTextBase == nil then buff.customTextBase = 1 end
+		if buff.customTextMin == nil then buff.customTextMin = 0 end
 	end
 end
 
@@ -1490,6 +1536,68 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		end
 	)
 	wrapper:AddChild(cbTimer)
+
+	local cbText = addon.functions.createCheckboxAce(L["buffTrackerShowCustomText"], buff.customTextEnabled, function(_, _, val)
+		buff.customTextEnabled = val
+		container:ReleaseChildren()
+		addon.Aura.functions.buildBuffOptions(container, catId, buffId)
+		scanBuffs()
+	end)
+	wrapper:AddChild(cbText)
+
+	if buff.customTextEnabled then
+		local posDrop = addon.functions.createDropdownAce(L["buffTrackerCustomTextPosition"], { TOP = "TOP", LEFT = "LEFT", RIGHT = "RIGHT", BOTTOM = "BOTTOM" }, nil, function(_, _, val)
+			buff.customTextPosition = val
+			scanBuffs()
+		end)
+		posDrop:SetValue(buff.customTextPosition or "TOP")
+		posDrop:SetRelativeWidth(0.4)
+		wrapper:AddChild(posDrop)
+
+		local txtEdit = addon.functions.createEditboxAce(L["buffTrackerCustomText"], buff.customText or "", function(self, _, text)
+			buff.customText = text
+			scanBuffs()
+		end)
+		txtEdit:SetRelativeWidth(0.6)
+		wrapper:AddChild(txtEdit)
+
+		local cbMult = addon.functions.createCheckboxAce(L["buffTrackerCustomTextMultiply"], buff.customTextUseStacks, function(_, _, val)
+			buff.customTextUseStacks = val
+			container:ReleaseChildren()
+			addon.Aura.functions.buildBuffOptions(container, catId, buffId)
+			scanBuffs()
+		end)
+		wrapper:AddChild(cbMult)
+
+		if buff.customTextUseStacks then
+			local info = AceGUI:Create("Label")
+			info:SetText(L["buffTrackerCustomTextInfo"] or "")
+			info:SetFullWidth(true)
+			info:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
+			wrapper:AddChild(info)
+			wrapper:AddChild(addon.functions.createSpacerAce())
+			local baseEdit = addon.functions.createEditboxAce(L["buffTrackerCustomTextBase"], tostring(buff.customTextBase or 1), function(self, _, text)
+				local num = tonumber(text)
+				if num then buff.customTextBase = num end
+				scanBuffs()
+			end)
+			baseEdit:SetRelativeWidth(0.3)
+			wrapper:AddChild(baseEdit)
+
+			local minEdit = addon.functions.createEditboxAce(L["buffTrackerCustomTextMin"], tostring(buff.customTextMin or 0), function(self, _, text)
+				local num = tonumber(text)
+				if num then
+					buff.customTextMin = num
+				else
+					buff.customTextMin = 0
+				end
+				scanBuffs()
+			end)
+			minEdit:SetRelativeWidth(0.3)
+			wrapper:AddChild(minEdit)
+			wrapper:AddChild(addon.functions.createSpacerAce())
+		end
+	end
 
 	local typeDrop = addon.functions.createDropdownAce(L["TrackType"], { BUFF = L["Buff"], DEBUFF = L["Debuff"] }, nil, function(self, _, val)
 		buff.trackType = val
