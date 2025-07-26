@@ -102,17 +102,17 @@ for _, classInfo in ipairs(classes) do
 end
 
 local roleNames = {
-        TANK = INLINE_TANK_ICON .. " " .. TANK,
-        HEALER = INLINE_HEALER_ICON .. " " .. HEALER,
-        DAMAGER = INLINE_DAMAGER_ICON .. " " .. DAMAGER,
+	TANK = INLINE_TANK_ICON .. " " .. TANK,
+	HEALER = INLINE_HEALER_ICON .. " " .. HEALER,
+	DAMAGER = INLINE_DAMAGER_ICON .. " " .. DAMAGER,
 }
 
 local DebuffBorderColors = {
-    Magic = { 0.2, 0.6, 1 },
-    Curse = { 0.6, 0, 1 },
-    Disease = { 0.6, 0.4, 0 },
-    Poison = { 0, 0.6, 0 },
-    none = { 1, 0, 0 },
+	Magic = { 0.2, 0.6, 1 },
+	Curse = { 0.6, 0, 1 },
+	Disease = { 0.6, 0.4, 0 },
+	Poison = { 0, 0.6, 0 },
+	none = { 1, 0, 0 },
 }
 
 local function categoryAllowed(cat)
@@ -424,15 +424,15 @@ local function createBuffFrame(icon, parent, size, castOnClick, spellID, showTim
 	local frameType = castOnClick and "Button" or "Frame"
 	-- local template = castOnClick and "SecureActionButtonTemplate" or nil
 	local template = nil
-    local frame = CreateFrame(frameType, nil, parent, template)
-    frame:SetSize(size, size)
-    frame:SetFrameStrata("DIALOG")
+	local frame = CreateFrame(frameType, nil, parent, template)
+	frame:SetSize(size, size)
+	frame:SetFrameStrata("DIALOG")
 
-    local border = frame:CreateTexture(nil, "BORDER")
-    border:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
-    border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
-    border:SetColorTexture(0, 0, 0, 0)
-    frame.border = border
+	local border = frame:CreateTexture(nil, "BORDER")
+	border:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
+	border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
+	border:SetColorTexture(0, 0, 0, 0)
+	frame.border = border
 
 	local tex = frame:CreateTexture(nil, "ARTWORK")
 	tex:SetAllPoints(frame)
@@ -719,11 +719,11 @@ local function updateBuff(catId, id, changedId, firstScan)
 		local showCharges = buff and buff.showCharges
 		if showCharges == nil then showCharges = addon.db["buffTrackerShowCharges"] end
 		if not (buff and buff.showAlways) then showCharges = false end
-                if showCharges and buff.hasCharges then
-                        local info = C_Spell.GetSpellCharges(id)
-                        if info and info.maxCharges then
-                                frame.charges:SetText(info.currentCharges)
-                                frame.charges:Show()
+		if showCharges and buff.hasCharges then
+			local info = C_Spell.GetSpellCharges(id)
+			if info and info.maxCharges then
+				frame.charges:SetText(info.currentCharges)
+				frame.charges:Show()
 				if not aura and buff.showCooldown and info.currentCharges < info.maxCharges then
 					frame.cd:SetCooldown(info.cooldownStartTime, info.cooldownDuration, info.chargeModRate)
 					frame.cd:SetReverse(false)
@@ -738,22 +738,22 @@ local function updateBuff(catId, id, changedId, firstScan)
 				end
 			else
 				frame.charges:Hide()
-                        end
-                else
-                        frame.charges:Hide()
-                end
+			end
+		else
+			frame.charges:Hide()
+		end
 
-                if frame.border then
-                        local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
-                        if tType == "DEBUFF" and displayAura then
-                                local dtype = displayAura.dispelName or displayAura.debuffType or "none"
-                                local col = DebuffBorderColors[dtype] or DebuffBorderColors.none
-                                frame.border:SetColorTexture(col[1], col[2], col[3], 1)
-                        else
-                                frame.border:SetColorTexture(0, 0, 0, 0)
-                        end
-                end
-        end
+		if frame.border then
+			local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
+			if tType == "DEBUFF" and displayAura and displayAura.dispelName then
+				local dtype = displayAura.dispelName or displayAura.debuffType or "none"
+				local col = DebuffBorderColors[dtype] or DebuffBorderColors.none
+				frame.border:SetColorTexture(col[1], col[2], col[3], 1)
+			else
+				frame.border:SetColorTexture(0, 0, 0, 0)
+			end
+		end
+	end
 end
 
 refreshTimeTicker = function()
@@ -1900,41 +1900,41 @@ for _, ev in ipairs({
 end
 
 local function HandleEQOLLink(link, text, button, frame)
-       local label = link:match("^garrmission:eqolaura:(.+)")
-       if not label then return end
+	local label = link:match("^garrmission:eqolaura:(.+)")
+	if not label then return end
 
-       local pktID = pending[label]
-       if not (pktID and incoming[pktID]) then return end
+	local pktID = pending[label]
+	if not (pktID and incoming[pktID]) then return end
 
-       StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
-               or {
-                       text = L["ImportCategory"],
-                       button1 = ACCEPT,
-                       button2 = CANCEL,
-                       timeout = 0,
-                       whileDead = true,
-                       hideOnEscape = true,
-                       preferredIndex = 3,
-                       OnAccept = function(_, data)
-                               local encoded = incoming[data]
-                               incoming[data] = nil
-                               pending[label] = nil
-                               local newId = importCategory(encoded)
-                               if newId then refreshTree(newId) end
-                       end,
-               }
+	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
+		or {
+			text = L["ImportCategory"],
+			button1 = ACCEPT,
+			button2 = CANCEL,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true,
+			preferredIndex = 3,
+			OnAccept = function(_, data)
+				local encoded = incoming[data]
+				incoming[data] = nil
+				pending[label] = nil
+				local newId = importCategory(encoded)
+				if newId then refreshTree(newId) end
+			end,
+		}
 
-       StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
-               local encoded = incoming[data]
-               local name, count = previewImportCategory(encoded or "")
-               if name then
-                       self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
-               else
-                       self.text:SetText(L["ImportCategory"])
-               end
-       end
+	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+		local encoded = incoming[data]
+		local name, count = previewImportCategory(encoded or "")
+		if name then
+			self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+		else
+			self.text:SetText(L["ImportCategory"])
+		end
+	end
 
-       StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
+	StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
 end
 
 hooksecurefunc("SetItemRef", HandleEQOLLink)
