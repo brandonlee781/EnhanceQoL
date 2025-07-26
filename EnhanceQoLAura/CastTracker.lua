@@ -21,6 +21,7 @@ local activeBars = {}
 local activeOrder = {}
 local altToBase = {}
 local spellToCat = {} -- [spellID] = { [catId]=true, ... }
+local updateEventRegistration
 
 local function rebuildSpellIndex()
 	wipe(spellToCat)
@@ -153,10 +154,11 @@ local function AcquireBar(catId)
 		bar.status = CreateFrame("StatusBar", nil, bar)
 		bar.status:SetAllPoints()
 		bar.status:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		bar.status:SetFrameLevel(bar:GetFrameLevel())
 		bar.icon = bar:CreateTexture(nil, "ARTWORK")
-		bar.text = bar:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		bar.text:SetPoint("LEFT", 4, 0)
-		bar.time = bar:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		bar.time = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		bar.time:SetPoint("RIGHT", -4, 0)
 		bar.time:SetJustifyH("RIGHT")
 	end
@@ -231,6 +233,7 @@ local function importCategory(encoded)
 	if cat.duration == nil then cat.duration = 0 end
 	if cat.sound == nil then cat.sound = addon.db.castTrackerBarSound or SOUNDKIT.ALARM_CLOCK_WARNING_3 end
 	cat.direction = cat.direction or addon.db.castTrackerBarDirection or "DOWN"
+	if cat.direction ~= "UP" and cat.direction ~= "DOWN" then cat.direction = "DOWN" end
 	cat.spells = cat.spells or {}
 	for sid, sp in pairs(cat.spells) do
 		if type(sp) ~= "table" then
@@ -368,6 +371,7 @@ local function buildCategoryOptions(container, catId)
 	local enableCB = addon.functions.createCheckboxAce(_G.ENABLE, addon.db.castTrackerEnabled[catId], function(self, _, val)
 		addon.db.castTrackerEnabled[catId] = val
 		applyLockState()
+		updateEventRegistration()
 	end)
 	container:AddChild(enableCB)
 
@@ -415,7 +419,7 @@ local function buildCategoryOptions(container, catId)
 	end)
 	container:AddChild(col)
 
-	local dirDrop = addon.functions.createDropdownAce(L["GrowthDirection"], { LEFT = "LEFT", RIGHT = "RIGHT", UP = "UP", DOWN = "DOWN" }, nil, function(self, _, val)
+	local dirDrop = addon.functions.createDropdownAce(L["GrowthDirection"], { UP = "UP", DOWN = "DOWN" }, nil, function(self, _, val)
 		db.direction = val
 		CastTracker.functions.LayoutBars(catId)
 	end)
@@ -537,6 +541,7 @@ local function buildCategoryOptions(container, catId)
 			local text = self.editBox:GetText()
 			local id = importCategory(text)
 			if id then
+				updateEventRegistration()
 				refreshTree(id)
 			else
 				print(L["ImportCategoryError"] or "Invalid string")
@@ -545,6 +550,41 @@ local function buildCategoryOptions(container, catId)
 		StaticPopup_Show("EQOL_IMPORT_CATEGORY_BTN")
 	end)
 	container:AddChild(importBtn)
+
+	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
+		local catName = addon.db.castTrackerCategories[catId].name or ""
+		StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"] = StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"]
+			or {
+				text = L["DeleteCategoryConfirm"],
+				button1 = YES,
+				button2 = CANCEL,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
+		StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"].OnAccept = function()
+			activeBars[catId] = nil
+			activeOrder[catId] = nil
+			framePools[catId] = nil
+			addon.db.castTrackerCategories[catId] = nil
+			addon.db.castTrackerOrder[catId] = nil
+			addon.db.castTrackerEnabled[catId] = nil
+			addon.db.castTrackerLocked[catId] = nil
+			if anchors[catId] then
+				anchors[catId]:Hide()
+				anchors[catId] = nil
+			end
+			rebuildAltMapping()
+			updateEventRegistration()
+			selectedCategory = next(addon.db.castTrackerCategories) or 1
+			refreshTree(selectedCategory)
+			container:ReleaseChildren()
+		end
+		StaticPopup_Show("EQOL_DELETE_CAST_CATEGORY", catName)
+	end)
+	container:AddChild(delBtn)
 end
 
 local function buildSpellOptions(container, catId, spellId)
@@ -650,10 +690,6 @@ function CastTracker.functions.LayoutBars(catId)
 		if i == 1 then
 			if dir == "UP" then
 				bar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, 0)
-			elseif dir == "LEFT" then
-				bar:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, 0)
-			elseif dir == "RIGHT" then
-				bar:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
 			else
 				bar:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
 			end
@@ -661,10 +697,6 @@ function CastTracker.functions.LayoutBars(catId)
 			local prev = order[i - 1]
 			if dir == "UP" then
 				bar:SetPoint("BOTTOMLEFT", prev, "TOPLEFT", 0, 2)
-			elseif dir == "LEFT" then
-				bar:SetPoint("TOPRIGHT", prev, "TOPLEFT", -2, 0)
-			elseif dir == "RIGHT" then
-				bar:SetPoint("TOPLEFT", prev, "TOPRIGHT", 2, 0)
 			else
 				bar:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
 			end
@@ -684,11 +716,13 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId)
 	activeBars[catId] = activeBars[catId] or {}
 	activeOrder[catId] = activeOrder[catId] or {}
 	framePools[catId] = framePools[catId] or {}
-	local bar = activeBars[catId][sourceGUID]
+	local key = sourceGUID .. ":" .. spellId
+	local bar = activeBars[catId][key]
 	if bar then ReleaseBar(catId, bar) end
 	bar = AcquireBar(catId)
-	activeBars[catId][sourceGUID] = bar
-	bar.owner = sourceGUID
+	activeBars[catId][key] = bar
+	bar.owner = key
+	bar.sourceGUID = sourceGUID
 	bar.spellId = spellId
 	bar.catId = catId
 	bar.icon:SetTexture(icon)
@@ -729,30 +763,47 @@ local function HandleCLEU()
 			if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId) end
 		end
 	elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" or subevent == "SPELL_CHANNEL_STOP" then
+		local key = sourceGUID .. ":" .. baseSpell
 		for id, bars in pairs(activeBars) do
-			local bar = bars[sourceGUID]
-			if bar and bar.spellId == baseSpell then ReleaseBar(id, bar) end
+			local bar = bars[key]
+			if bar then ReleaseBar(id, bar) end
 		end
 	elseif subevent == "UNIT_DIED" then
 		for id, bars in pairs(activeBars) do
-			local bar = bars[destGUID]
-			if bar then ReleaseBar(id, bar) end
+			for k, bar in pairs(bars) do
+				if bar.sourceGUID == destGUID then ReleaseBar(id, bar) end
+			end
 		end
 	end
 end
 
 local eventFrame = CreateFrame("Frame")
+updateEventRegistration = function()
+	local active = false
+	for id in pairs(addon.db.castTrackerCategories or {}) do
+		if addon.db.castTrackerEnabled[id] then
+			active = true
+			break
+		end
+	end
+	if active then
+		if not eventFrame:IsEventRegistered("COMBAT_LOG_EVENT_UNFILTERED") then eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED") end
+	else
+		eventFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	end
+end
 
 function CastTracker.functions.Refresh()
 	rebuildAltMapping()
 	for id, cat in pairs(addon.db.castTrackerCategories or {}) do
+		if cat.direction ~= "UP" and cat.direction ~= "DOWN" then cat.direction = "DOWN" end
 		local a = ensureAnchor(id)
 		a:ClearAllPoints()
 		a:SetPoint(cat.anchor.point, UIParent, cat.anchor.point, cat.anchor.x, cat.anchor.y)
 		UpdateActiveBars(id)
 	end
-	eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	eventFrame:SetScript("OnEvent", HandleCLEU)
+	updateEventRegistration()
 	applyLockState()
 end
 
@@ -789,6 +840,7 @@ function CastTracker.functions.addCastTrackerOptions(container)
 			addon.db.castTrackerLocked[newId] = false
 			addon.db.castTrackerOrder[newId] = {}
 			ensureAnchor(newId)
+			updateEventRegistration()
 			refreshTree(newId)
 			return
 		elseif value == "IMPORT_CATEGORY" then
@@ -822,6 +874,7 @@ function CastTracker.functions.addCastTrackerOptions(container)
 				local text = self.editBox:GetText()
 				local id = importCategory(text)
 				if id then
+					updateEventRegistration()
 					refreshTree(id)
 				else
 					print(L["ImportCategoryError"] or "Invalid string")
