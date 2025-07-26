@@ -704,12 +704,13 @@ function CastTracker.functions.LayoutBars(catId)
 	end
 end
 
-function CastTracker.functions.StartBar(spellId, sourceGUID, catId)
+function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCastTime)
 	local spellData = C_Spell.GetSpellInfo(spellId)
 	local name = spellData and spellData.name
 	local icon = spellData and spellData.iconID
-	local castTime = spellData and spellData.castTime
-	castTime = (castTime or 0) / 1000
+       local castTime = spellData and spellData.castTime
+       castTime = (castTime or 0) / 1000
+       if overrideCastTime and overrideCastTime > 0 then castTime = overrideCastTime end
 	local db = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
 	if db.duration and db.duration > 0 then castTime = db.duration end
 	if castTime <= 0 then return end
@@ -754,27 +755,52 @@ CastTracker.functions.BarUpdate = BarUpdate
 CastTracker.functions.UpdateActiveBars = UpdateActiveBars
 
 local function HandleCLEU()
-	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, _, _, spellId = CombatLogGetCurrentEventInfo()
-	local baseSpell = altToBase[spellId] or spellId
-	if subevent == "SPELL_CAST_START" or subevent == "SPELL_CHANNEL_START" then
-		local cats = spellToCat[baseSpell]
-		if not cats then return end
-		for catId in pairs(cats) do
-			if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId) end
-		end
-	elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" or subevent == "SPELL_CHANNEL_STOP" then
-		local key = sourceGUID .. ":" .. baseSpell
-		for id, bars in pairs(activeBars) do
-			local bar = bars[key]
-			if bar then ReleaseBar(id, bar) end
-		end
-	elseif subevent == "UNIT_DIED" then
-		for id, bars in pairs(activeBars) do
-			for k, bar in pairs(bars) do
-				if bar.sourceGUID == destGUID then ReleaseBar(id, bar) end
-			end
-		end
-	end
+       local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, _, _, spellId = CombatLogGetCurrentEventInfo()
+       local baseSpell = altToBase[spellId] or spellId
+       if subevent == "SPELL_CAST_START" then
+               local cats = spellToCat[baseSpell]
+               if not cats then return end
+               for catId in pairs(cats) do
+                       if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId) end
+               end
+       elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
+               local key = sourceGUID .. ":" .. baseSpell
+               for id, bars in pairs(activeBars) do
+                       local bar = bars[key]
+                       if bar then ReleaseBar(id, bar) end
+               end
+       elseif subevent == "UNIT_DIED" then
+               for id, bars in pairs(activeBars) do
+                       for _, bar in pairs(bars) do
+                               if bar.sourceGUID == destGUID then ReleaseBar(id, bar) end
+                       end
+               end
+       end
+end
+
+local function HandleUnitChannelStart(unit, castGUID, spellId)
+       local sourceGUID = UnitGUID(unit)
+       if not sourceGUID then return end
+       local baseSpell = altToBase[spellId] or spellId
+       local cats = spellToCat[baseSpell]
+       if not cats then return end
+       local _, _, _, startTime, endTime = UnitChannelInfo(unit)
+       local castTime = 0
+       if startTime and endTime then castTime = (endTime - startTime) / 1000 end
+       for catId in pairs(cats) do
+               if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime) end
+       end
+end
+
+local function HandleUnitChannelStop(unit, castGUID, spellId)
+       local sourceGUID = UnitGUID(unit)
+       if not sourceGUID then return end
+       local baseSpell = altToBase[spellId] or spellId
+       local key = sourceGUID .. ":" .. baseSpell
+       for id, bars in pairs(activeBars) do
+               local bar = bars[key]
+               if bar then ReleaseBar(id, bar) end
+       end
 end
 
 local eventFrame = CreateFrame("Frame")
@@ -786,11 +812,15 @@ updateEventRegistration = function()
 			break
 		end
 	end
-	if active then
-		if not eventFrame:IsEventRegistered("COMBAT_LOG_EVENT_UNFILTERED") then eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED") end
-	else
-		eventFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	end
+       if active then
+               if not eventFrame:IsEventRegistered("COMBAT_LOG_EVENT_UNFILTERED") then eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED") end
+               if not eventFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_START") then eventFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START") end
+               if not eventFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP") then eventFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP") end
+       else
+               eventFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+               eventFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+               eventFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+       end
 end
 
 function CastTracker.functions.Refresh()
@@ -802,9 +832,17 @@ function CastTracker.functions.Refresh()
 		a:SetPoint(cat.anchor.point, UIParent, cat.anchor.point, cat.anchor.x, cat.anchor.y)
 		UpdateActiveBars(id)
 	end
-	eventFrame:SetScript("OnEvent", HandleCLEU)
-	updateEventRegistration()
-	applyLockState()
+       eventFrame:SetScript("OnEvent", function(_, event, ...)
+               if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+                       HandleCLEU()
+               elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
+                       HandleUnitChannelStart(...)
+               elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+                       HandleUnitChannelStop(...)
+               end
+       end)
+       updateEventRegistration()
+       applyLockState()
 end
 
 function CastTracker.functions.addCastTrackerOptions(container)
