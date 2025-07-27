@@ -23,6 +23,38 @@ local altToBase = {}
 local spellToCat = {} -- [spellID] = { [catId]=true, ... }
 local updateEventRegistration
 
+-- luacheck: globals ChatFrame_OpenChat UnitTokenFromGUID
+
+local function getCastInfo(unit)
+       local name, startC, endC, icon, notInterruptible, spellID, duration, expirationTime, castType
+       if UnitCastingInfo(unit) then
+               name, _, icon, startC, endC, _, _, notInterruptible, spellID = UnitCastingInfo(unit)
+               castType = "cast"
+       elseif UnitChannelInfo(unit) then
+               name, _, icon, startC, endC, _, notInterruptible, spellID = UnitChannelInfo(unit)
+               castType = "channel"
+       end
+       if startC and endC then
+               duration = (endC - startC) / 1000
+               expirationTime = endC / 1000
+       end
+       return name, duration, expirationTime, icon, notInterruptible, spellID, castType
+end
+
+local function GetUnitFromGUID(targetGUID)
+       if not targetGUID then return nil end
+
+       local unit = UnitTokenFromGUID(targetGUID)
+       if unit then return unit end
+
+       for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+               local plateUnit = plate.namePlateUnitToken
+               if plateUnit and UnitGUID(plateUnit) == targetGUID then return plateUnit end
+       end
+
+       return nil
+end
+
 local function rebuildSpellIndex()
 	wipe(spellToCat)
 	for catId, cat in pairs(addon.db.castTrackerCategories or {}) do
@@ -793,8 +825,13 @@ local function HandleCLEU()
        if subevent == "SPELL_CAST_START" then
                local cats = spellToCat[baseSpell]
                if not cats then return end
+               local castTime
+               local unit = GetUnitFromGUID(sourceGUID)
+               if unit then
+                       _, castTime = getCastInfo(unit)
+               end
                for catId in pairs(cats) do
-                       if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId) end
+                       if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime) end
                end
        elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
                local key = sourceGUID .. ":" .. baseSpell
@@ -817,9 +854,8 @@ local function HandleUnitChannelStart(unit, castGUID, spellId)
        local baseSpell = altToBase[spellId] or spellId
        local cats = spellToCat[baseSpell]
        if not cats then return end
-       local _, _, _, startTime, endTime = UnitChannelInfo(unit)
-       local castTime = 0
-       if startTime and endTime then castTime = (endTime - startTime) / 1000 end
+       local _, castTime = getCastInfo(unit)
+       castTime = castTime or 0
        for catId in pairs(cats) do
                if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime) end
        end
