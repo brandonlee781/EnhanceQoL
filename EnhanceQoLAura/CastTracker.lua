@@ -541,44 +541,6 @@ local function buildCategoryOptions(container, catId)
 	end)
 	groupSpells:AddChild(addEdit)
 
-	for _, spellId in ipairs(addon.db.castTrackerOrder[catId] or {}) do
-		if db.spells[spellId] then
-			local line = addon.functions.createContainer("SimpleGroup", "Flow")
-			line:SetFullWidth(true)
-			local info = C_Spell.GetSpellInfo(spellId)
-			local name = info and info.name or tostring(spellId)
-			local tName = db.spells[spellId] and db.spells[spellId].treeName
-			local display = tName and tName ~= "" and tName or name
-			local label = addon.functions.createLabelAce(display .. " (" .. spellId .. ")")
-			label:SetRelativeWidth(0.7)
-			line:AddChild(label)
-			local btn = addon.functions.createButtonAce(L["Remove"], 80, function()
-				local info = C_Spell.GetSpellInfo(spellId)
-				local spellName = info and info.name or tostring(spellId)
-				StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"] = StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"]
-					or {
-						text = L["DeleteSpellConfirm"],
-						button1 = YES,
-						button2 = CANCEL,
-						timeout = 0,
-						whileDead = true,
-						hideOnEscape = true,
-						preferredIndex = 3,
-					}
-				StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"].OnAccept = function()
-					db.spells[spellId] = nil
-					rebuildAltMapping()
-					refreshTree(catId)
-					container:ReleaseChildren()
-					buildCategoryOptions(container, catId)
-				end
-				StaticPopup_Show("EQOL_DELETE_CAST_SPELL", spellName)
-			end)
-			line:AddChild(btn)
-			groupSpells:AddChild(line)
-		end
-	end
-
 	container:AddChild(addon.functions.createSpacerAce())
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
@@ -817,6 +779,7 @@ local function buildSpellOptions(container, catId, spellId)
 	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
 		local info = C_Spell.GetSpellInfo(spellId)
 		local spellName = info and info.name or tostring(spellId)
+		local nameForPopup = (spell.treeName and spell.treeName ~= "") and spell.treeName or spellName
 		StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"] = StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"]
 			or {
 				text = L["DeleteSpellConfirm"],
@@ -833,7 +796,7 @@ local function buildSpellOptions(container, catId, spellId)
 			refreshTree(catId)
 			container:ReleaseChildren()
 		end
-		StaticPopup_Show("EQOL_DELETE_CAST_SPELL", spellName)
+		StaticPopup_Show("EQOL_DELETE_CAST_SPELL", nameForPopup)
 	end)
 	wrapper:AddChild(btn)
 end
