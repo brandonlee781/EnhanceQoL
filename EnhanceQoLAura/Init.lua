@@ -34,6 +34,7 @@ addon.functions.InitDBValue("castTrackerSounds", {})
 addon.functions.InitDBValue("castTrackerSoundsEnabled", {})
 addon.functions.InitDBValue("castTrackerTextSize", 12)
 addon.functions.InitDBValue("castTrackerTextColor", { 1, 1, 1, 1 })
+addon.functions.InitDBValue("castTrackerUseAltSpellIcon", false)
 
 addon.functions.InitDBValue("buffTrackerCategories", {
 	[1] = {
