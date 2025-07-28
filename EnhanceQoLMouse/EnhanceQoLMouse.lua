@@ -12,7 +12,9 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Mouse")
 local AceGUI = addon.AceGUI
 
 local MaxActuationPoint = 1 -- Minimaler Bewegungsabstand für Trail-Elemente
+local MaxActuationPointSq = MaxActuationPoint * MaxActuationPoint
 local duration = 0.3 -- Lebensdauer der Trail-Elemente in Sekunden
+local durationInv = 1 / duration
 local Density = 0.02 -- Zeitdichte für neue Elemente
 local ElementCap = 28 -- Maximale Anzahl von Trail-Elementen
 local PastCursorX, PastCursorY, PresentCursorX, PresentCursorY = 0, 0, 0, 0
@@ -57,7 +59,9 @@ local function applyPreset(presetName)
 	local preset = trailPresets[presetName]
 	if not preset then return end
 	MaxActuationPoint = preset.MaxActuationPoint
+	MaxActuationPointSq = MaxActuationPoint * MaxActuationPoint
 	duration = preset.duration
+	durationInv = 1 / duration
 	Density = preset.Density
 	ElementCap = preset.ElementCap
 
@@ -90,7 +94,7 @@ local function UpdateMouseTrail(delta)
 
 	local dx = PresentCursorX - PastCursorX
 	local dy = PresentCursorY - PastCursorY
-	local actuationPoint = math.sqrt(dx * dx + dy * dy)
+	local distanceSq = dx * dx + dy * dy
 
 	-- Trails updaten (Lebensdauer verkürzen, ggf. Element zurück in Pool)
 	for i = #activeTrailElements, 1, -1 do
@@ -99,10 +103,12 @@ local function UpdateMouseTrail(delta)
 
 		if element.duration <= 0 then
 			element:Hide()
-			table.insert(trailElements, table.remove(activeTrailElements, i))
+			activeTrailElements[i] = activeTrailElements[#activeTrailElements]
+			activeTrailElements[#activeTrailElements] = nil
+			trailElements[#trailElements + 1] = element
 		else
 			-- sanftes Ausblenden oder Skalieren
-			local scale = element.duration / duration
+			local scale = element.duration * durationInv
 			element:SetSize(30 * scale, 30 * scale)
 			-- Position bleibt dieselbe (festgefroren),
 			-- wir könnten aber sogar leicht "nachziehen", wenn gewünscht
@@ -111,13 +117,14 @@ local function UpdateMouseTrail(delta)
 
 	-- Check: genug Zeit vergangen (timeAccumulator >= Density) UND Maus weit genug bewegt?
 
-	if timeAccumulator >= Density and actuationPoint >= MaxActuationPoint then
+	if timeAccumulator >= Density and distanceSq >= MaxActuationPointSq then
 		timeAccumulator = 0 -- Zeit-Akku leeren
 
 		-- Neues Trail-Element
 		if #trailElements > 0 then
-			local element = table.remove(trailElements)
-			table.insert(activeTrailElements, element)
+			local element = trailElements[#trailElements]
+			trailElements[#trailElements] = nil
+			activeTrailElements[#activeTrailElements + 1] = element
 
 			element.duration = duration
 			local scale = UIParent:GetEffectiveScale()
@@ -170,19 +177,19 @@ local function createMouseRing()
 			texture1:SetVertexColor(1, 1, 1, 1)
 		end
 
-               local texture2
-               if not addon.db["mouseRingHideDot"] then
-                       texture2 = imageFrame:CreateTexture(nil, "BACKGROUND")
-                       texture2:SetTexture("Interface\\AddOns\\" .. addonName .. "\\Icons\\Dot.tga")
-                       texture2:SetSize(10, 10)
-                       texture2:SetPoint("CENTER", imageFrame, "CENTER", 0, 0)
-               end
+		local texture2
+		if not addon.db["mouseRingHideDot"] then
+			texture2 = imageFrame:CreateTexture(nil, "BACKGROUND")
+			texture2:SetTexture("Interface\\AddOns\\" .. addonName .. "\\Icons\\Dot.tga")
+			texture2:SetSize(10, 10)
+			texture2:SetPoint("CENTER", imageFrame, "CENTER", 0, 0)
+		end
 
 		imageFrame:Show()
 		addon.mousePointer = imageFrame
-               addon.mousePointer.texture1 = texture1
-               addon.mousePointer.dot = texture2
-       end
+		addon.mousePointer.texture1 = texture1
+		addon.mousePointer.dot = texture2
+	end
 end
 
 local function removeMouseRing()
@@ -200,42 +207,42 @@ local function addGeneralFrame(container)
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCore)
 
-        local data = {
-                {
-                        text = L["mouseRingEnabled"],
-                        var = "mouseRingEnabled",
-                        func = function(self, _, value)
-                                addon.db["mouseRingEnabled"] = value
-                                if value then
-                                        createMouseRing()
-                                else
-                                        removeMouseRing()
-                                end
-                                container:ReleaseChildren()
-                                addGeneralFrame(container)
-                        end,
-                },
-                {
-                        text = L["mouseRingHideDot"],
-                        var = "mouseRingHideDot",
-                        func = function(self, _, value)
-                                addon.db["mouseRingHideDot"] = value
-                                if addon.mousePointer and addon.mousePointer.dot then
-                                        if value then
-                                                addon.mousePointer.dot:Hide()
-                                        else
-                                                addon.mousePointer.dot:Show()
-                                        end
-                                elseif addon.mousePointer and not value then
-                                        local dot = addon.mousePointer:CreateTexture(nil, "BACKGROUND")
-                                        dot:SetTexture("Interface\\AddOns\\" .. addonName .. "\\Icons\\Dot.tga")
-                                        dot:SetSize(10, 10)
-                                        dot:SetPoint("CENTER", addon.mousePointer, "CENTER", 0, 0)
-                                        addon.mousePointer.dot = dot
-                                end
-                        end,
-                },
-        }
+	local data = {
+		{
+			text = L["mouseRingEnabled"],
+			var = "mouseRingEnabled",
+			func = function(self, _, value)
+				addon.db["mouseRingEnabled"] = value
+				if value then
+					createMouseRing()
+				else
+					removeMouseRing()
+				end
+				container:ReleaseChildren()
+				addGeneralFrame(container)
+			end,
+		},
+		{
+			text = L["mouseRingHideDot"],
+			var = "mouseRingHideDot",
+			func = function(self, _, value)
+				addon.db["mouseRingHideDot"] = value
+				if addon.mousePointer and addon.mousePointer.dot then
+					if value then
+						addon.mousePointer.dot:Hide()
+					else
+						addon.mousePointer.dot:Show()
+					end
+				elseif addon.mousePointer and not value then
+					local dot = addon.mousePointer:CreateTexture(nil, "BACKGROUND")
+					dot:SetTexture("Interface\\AddOns\\" .. addonName .. "\\Icons\\Dot.tga")
+					dot:SetSize(10, 10)
+					dot:SetPoint("CENTER", addon.mousePointer, "CENTER", 0, 0)
+					addon.mousePointer.dot = dot
+				end
+			end,
+		},
+	}
 
 	table.sort(data, function(a, b) return a.text < b.text end)
 
