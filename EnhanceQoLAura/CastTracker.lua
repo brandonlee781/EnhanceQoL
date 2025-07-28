@@ -645,6 +645,7 @@ local function buildCategoryOptions(container, catId)
 		StaticPopup_Show("EQOL_DELETE_CAST_CATEGORY", catName)
 	end)
 	container:AddChild(delBtn)
+	container:DoLayout()
 end
 
 local function buildSpellOptions(container, catId, spellId)
@@ -799,6 +800,7 @@ local function buildSpellOptions(container, catId, spellId)
 		StaticPopup_Show("EQOL_DELETE_CAST_SPELL", nameForPopup)
 	end)
 	wrapper:AddChild(btn)
+	container:DoLayout()
 end
 
 local function BarUpdate(self)
