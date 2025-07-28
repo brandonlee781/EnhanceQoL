@@ -659,7 +659,7 @@ local function buildSpellOptions(container, catId, spellId)
 
 	local info = C_Spell.GetSpellInfo(spellId)
 	local name = info and info.name or tostring(spellId)
-	local labelName = spell.treeName or name
+    local labelName = (spell.treeName and spell.treeName ~= "" and spell.treeName) or name
 	local label = addon.functions.createLabelAce(labelName .. " (" .. spellId .. ")")
 	wrapper:AddChild(label)
 
