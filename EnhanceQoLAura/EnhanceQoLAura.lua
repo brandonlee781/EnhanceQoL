@@ -19,6 +19,7 @@ addon.functions.addToTree(nil, {
 	children = {
 		-- { value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
 		{ value = "bufftracker", text = L["BuffTracker"] },
+		{ value = "casttracker", text = L["CastTracker"] or "Cast Tracker" },
 	},
 })
 
@@ -29,5 +30,10 @@ function addon.Aura.functions.treeCallback(container, group)
 	elseif group == "aura\001bufftracker" then
 		addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.Aura.scanBuffs()
+	elseif group == "aura\001casttracker" and addon.Aura.CastTracker and addon.Aura.CastTracker.functions then
+		addon.Aura.CastTracker.functions.addCastTrackerOptions(container)
+
+		-- refresh layout in case options changed
+		if addon.Aura.CastTracker.functions.Refresh then addon.Aura.CastTracker.functions.Refresh() end
 	end
 end

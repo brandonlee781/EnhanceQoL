@@ -1,4 +1,4 @@
--- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName
+-- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName UnitTokenFromGUID
 local addonName, addon = ...
 
 local LDB = LibStub("LibDataBroker-1.1")
@@ -409,25 +409,12 @@ local function CheckItemGems(element, itemLink, emptySocketsCount, key, pdElemen
 end
 
 local function GetUnitFromGUID(targetGUID)
-	if IsInGroup() then
-		for i = 1, 4 do
-			local unit = "party" .. i
-			if UnitGUID(unit) == targetGUID then
-				return unit -- Gibt "partyN" zurück
-			end
-		end
-	end
+        if not targetGUID then return nil end
 
-	if IsInRaid() then
-		for i = 1, 40 do
-			local unit = "raid" .. i
-			if UnitGUID(unit) == targetGUID then
-				return unit -- Gibt "raidN" zurück
-			end
-		end
-	end
+        local unit = UnitTokenFromGUID(targetGUID)
+        if unit then return unit end
 
-	return nil
+        return nil
 end
 
 local function getTooltipInfoFromLink(link)

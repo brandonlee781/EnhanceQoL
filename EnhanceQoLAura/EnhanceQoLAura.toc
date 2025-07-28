@@ -27,3 +27,4 @@ Init.lua
 #ResourceBars.lua
 EnhanceQoLAura.lua
 BuffTracker.lua
+CastTracker.lua
