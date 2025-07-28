@@ -91,11 +91,12 @@ local function UpdateActiveBars(catId)
 	local anchor = ensureAnchor(catId)
 	if anchor then anchor:SetSize(cat.width or 200, cat.height or 20) end
 	for _, bar in pairs(activeBars[catId] or {}) do
-		bar.status:SetStatusBarColor(unpack(cat.color or { 1, 0.5, 0, 1 }))
-		bar.icon:SetSize(cat.height or 20, cat.height or 20)
-		bar:SetSize(cat.width or 200, cat.height or 20)
-	end
-	CastTracker.functions.LayoutBars(catId)
+                bar.status:SetStatusBarColor(unpack(cat.color or { 1, 0.5, 0, 1 }))
+                if bar.background then bar.background:SetColorTexture(0, 0, 0, 1) end
+                bar.icon:SetSize(cat.height or 20, cat.height or 20)
+                bar:SetSize(cat.width or 200, cat.height or 20)
+        end
+        CastTracker.functions.LayoutBars(catId)
 end
 
 ensureAnchor = function(id)
@@ -184,17 +185,21 @@ local function AcquireBar(catId)
 	if not bar then
 		bar = CreateFrame("Frame", nil, ensureAnchor(catId))
 		bar.status = CreateFrame("StatusBar", nil, bar)
-		bar.status:SetAllPoints()
-		bar.status:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-		bar.status:SetFrameLevel(bar:GetFrameLevel())
-		bar.icon = bar:CreateTexture(nil, "ARTWORK")
+                bar.status:SetAllPoints()
+                bar.status:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+                bar.status:SetFrameLevel(bar:GetFrameLevel())
+                bar.background = bar.status:CreateTexture(nil, "BACKGROUND")
+                bar.background:SetAllPoints()
+                bar.background:SetColorTexture(0, 0, 0, 1)
+                bar.icon = bar:CreateTexture(nil, "ARTWORK")
 		bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		bar.text:SetPoint("LEFT", 4, 0)
 		bar.time = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		bar.time:SetPoint("RIGHT", -4, 0)
 		bar.time:SetJustifyH("RIGHT")
-	end
-	bar:SetParent(ensureAnchor(catId))
+        end
+        if bar.background then bar.background:SetColorTexture(0, 0, 0, 1) end
+        bar:SetParent(ensureAnchor(catId))
 	bar:Show()
 	return bar
 end
@@ -753,13 +758,18 @@ local function buildSpellOptions(container, catId, spellId)
 end
 
 local function BarUpdate(self)
-	local now = GetTime()
-	if now >= self.finish then
-		ReleaseBar(self.catId, self)
-		return
-	end
-	self.status:SetValue(now - self.start)
-	self.time:SetFormattedText("%.1f", self.finish - now)
+        local now = GetTime()
+        if now >= self.finish then
+                ReleaseBar(self.catId, self)
+                return
+        end
+        local remaining = self.finish - now
+        if self.castType == "channel" then
+                self.status:SetValue(remaining)
+        else
+                self.status:SetValue(now - self.start)
+        end
+        self.time:SetFormattedText("%.1f", remaining)
 end
 
 function CastTracker.functions.LayoutBars(catId)
@@ -816,7 +826,11 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
                 bar.text:SetText(name)
         end
         bar.status:SetMinMaxValues(0, castTime)
-        bar.status:SetValue(0)
+        if castType == "channel" then
+                bar.status:SetValue(castTime)
+        else
+                bar.status:SetValue(0)
+        end
         bar.status:SetStatusBarColor(unpack(db.color or { 1, 0.5, 0, 1 }))
 	bar.icon:SetSize(db.height or 20, db.height or 20)
 	bar.icon:SetPoint("RIGHT", bar, "LEFT", -2, 0)
