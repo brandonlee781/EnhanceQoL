@@ -30,6 +30,8 @@ addon.functions.InitDBValue("castTrackerBarHeight", 20)
 addon.functions.InitDBValue("castTrackerBarColor", { 1, 0.5, 0, 1 })
 addon.functions.InitDBValue("castTrackerBarSound", SOUNDKIT.ALARM_CLOCK_WARNING_3)
 addon.functions.InitDBValue("castTrackerBarDirection", "DOWN")
+addon.functions.InitDBValue("castTrackerSounds", {})
+addon.functions.InitDBValue("castTrackerSoundsEnabled", {})
 
 addon.functions.InitDBValue("buffTrackerCategories", {
 	[1] = {
@@ -133,6 +135,8 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
         if cat.duration == nil then cat.duration = 0 end
         cat.direction = cat.direction or addon.db.castTrackerBarDirection
         cat.spells = cat.spells or {}
+        addon.db.castTrackerSounds[id] = addon.db.castTrackerSounds[id] or {}
+        addon.db.castTrackerSoundsEnabled[id] = addon.db.castTrackerSoundsEnabled[id] or {}
         for sid, spell in pairs(cat.spells) do
                 if type(spell) ~= "table" then
                         cat.spells[sid] = { altIDs = {} }
@@ -140,8 +144,13 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
                 else
                         spell.altIDs = spell.altIDs or {}
                 end
-                if spell.sound == nil then
-                        spell.sound = cat.sound or addon.db.castTrackerBarSound
+                if spell.sound then
+                        addon.db.castTrackerSounds[id][sid] = spell.sound
+                        addon.db.castTrackerSoundsEnabled[id][sid] = true
+                        spell.sound = nil
+                elseif cat.sound then
+                        addon.db.castTrackerSounds[id][sid] = cat.sound
+                        addon.db.castTrackerSoundsEnabled[id][sid] = true
                 end
                 if spell.customTextEnabled == nil then spell.customTextEnabled = false end
                 if spell.customText == nil then spell.customText = "" end
