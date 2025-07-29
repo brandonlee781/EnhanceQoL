@@ -1242,6 +1242,7 @@ local AceComm = LibStub("AceComm-3.0")
 
 local incoming = {}
 local pending = {}
+local pendingSender = {}
 
 local function getCatName(catId)
 	local cat = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId]
@@ -1279,9 +1280,16 @@ end
 
 local PATTERN = "%[EQOL: ([^%]]+)%]"
 
-local function EQOL_ChatFilter(_, _, msg, ...)
-	local newMsg, hits = msg:gsub(PATTERN, function(label) return ("|Hgarrmission:eqolcast:%s|h|cff00ff88[%s]|h|r"):format(label, label) end)
-	if hits > 0 then return false, newMsg, ... end
+local function EQOL_ChatFilter(_, _, msg, sender, ...)
+        local newMsg, hits = msg:gsub(PATTERN, function(label)
+                local pktID = pendingSender[sender]
+                if pktID then
+                        pending[label] = pktID
+                        pendingSender[sender] = nil
+                end
+                return ("|Hgarrmission:eqolcast:%s|h|cff00ff88[%s]|h|r"):format(label, label)
+        end)
+        if hits > 0 then return false, newMsg, sender, ... end
 end
 
 for _, ev in ipairs({
@@ -1341,10 +1349,11 @@ end
 hooksecurefunc("SetItemRef", HandleEQOLLink)
 
 local function OnComm(prefix, message, dist, sender)
-	if prefix ~= COMM_PREFIX then return end
-	local pktID, payload = message:match("^<(%d+)>(.+)")
-	if not pktID then return end
-	incoming[pktID] = payload
+        if prefix ~= COMM_PREFIX then return end
+        local pktID, payload = message:match("^<(%d+)>(.+)")
+        if not pktID then return end
+        incoming[pktID] = payload
+        pendingSender[sender] = pktID
 end
 
 AceComm:RegisterComm(COMM_PREFIX, OnComm)
