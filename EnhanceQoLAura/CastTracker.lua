@@ -1253,8 +1253,8 @@ ShareCategory = function(catId, targetPlayer)
 	local addonEncoded = exportCategory(catId, "addon")
 	if not addonEncoded then return end
 
-        local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
-        local placeholder = ("[EQOLCT: %s]"):format(label)
+	local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
+	local placeholder = ("[EQOLCT: %s]"):format(label)
 	ChatFrame_OpenChat(placeholder)
 
 	local pktID = tostring(time() * 1000):gsub("%D", "")
@@ -1281,15 +1281,15 @@ end
 local PATTERN = "%[EQOLCT: ([^%]]+)%]"
 
 local function EQOL_ChatFilter(_, _, msg, sender, ...)
-        local newMsg, hits = msg:gsub(PATTERN, function(label)
-                local pktID = pendingSender[sender]
-                if pktID then
-                        pending[label] = pktID
-                        pendingSender[sender] = nil
-                end
-                return ("|Hgarrmission:eqolcast:%s|h|cff00ff88[%s]|h|r"):format(label, label)
-        end)
-        if hits > 0 then return false, newMsg, sender, ... end
+	local newMsg, hits = msg:gsub(PATTERN, function(label)
+		local pktID = pendingSender[sender]
+		if pktID then
+			pending[label] = pktID
+			pendingSender[sender] = nil
+		end
+		return ("|Hgarrmission:eqolcast:%s|h|cff00ff88[%s]|h|r"):format(label, label)
+	end)
+	if hits > 0 then return false, newMsg, sender, ... end
 end
 
 for _, ev in ipairs({
@@ -1349,11 +1349,11 @@ end
 hooksecurefunc("SetItemRef", HandleEQOLLink)
 
 local function OnComm(prefix, message, dist, sender)
-        if prefix ~= COMM_PREFIX then return end
-        local pktID, payload = message:match("^<(%d+)>(.+)")
-        if not pktID then return end
-        incoming[pktID] = payload
-        pendingSender[sender] = pktID
+	if prefix ~= COMM_PREFIX then return end
+	local pktID, payload = message:match("^<(%d+)>(.+)")
+	if not pktID then return end
+	incoming[pktID] = payload
+	pendingSender[sender] = pktID
 end
 
 AceComm:RegisterComm(COMM_PREFIX, OnComm)

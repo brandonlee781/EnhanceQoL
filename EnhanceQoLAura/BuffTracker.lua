@@ -1090,8 +1090,8 @@ local function removeBuff(catId, id)
 		auraInstanceMap[buffInstances[instKey]] = nil
 		buffInstances[instKey] = nil
 	end
-        rebuildAltMapping()
-        scanBuffs()
+	rebuildAltMapping()
+	scanBuffs()
 end
 
 local function clearCategoryData(catId)
@@ -1448,23 +1448,23 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 			for buffId in pairs(addon.db["buffTrackerCategories"][catId].buffs or {}) do
 				addon.db["buffTrackerHidden"][buffId] = nil
 			end
-                       addon.db["buffTrackerCategories"][catId] = nil
-                       addon.db["buffTrackerOrder"][catId] = nil
-                       addon.db["buffTrackerSounds"][catId] = nil
-                       addon.db["buffTrackerSoundsEnabled"][catId] = nil
-                       addon.db["buffTrackerEnabled"][catId] = nil
-                       addon.db["buffTrackerLocked"][catId] = nil
-                       if anchors[catId] then
-                               anchors[catId]:Hide()
-                               anchors[catId] = nil
-                       end
-                       clearCategoryData(catId)
-                       selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
-                       rebuildAltMapping()
-                       scanBuffs()
-                       refreshTree(selectedCategory)
-                       container:ReleaseChildren()
-               end
+			addon.db["buffTrackerCategories"][catId] = nil
+			addon.db["buffTrackerOrder"][catId] = nil
+			addon.db["buffTrackerSounds"][catId] = nil
+			addon.db["buffTrackerSoundsEnabled"][catId] = nil
+			addon.db["buffTrackerEnabled"][catId] = nil
+			addon.db["buffTrackerLocked"][catId] = nil
+			if anchors[catId] then
+				anchors[catId]:Hide()
+				anchors[catId] = nil
+			end
+			clearCategoryData(catId)
+			selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
+			rebuildAltMapping()
+			scanBuffs()
+			refreshTree(selectedCategory)
+			container:ReleaseChildren()
+		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
 	end)
 	core:AddChild(delBtn)
@@ -1991,8 +1991,8 @@ ShareCategory = function(catId, targetPlayer)
 	local addonEncoded = exportCategory(catId, "addon")
 	if not addonEncoded then return end
 
-        local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
-        local placeholder = ("[EQOLBT: %s]"):format(label)
+	local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
+	local placeholder = ("[EQOLBT: %s]"):format(label)
 	ChatFrame_OpenChat(placeholder)
 
 	local pktID = tostring(time() * 1000):gsub("%D", "")
