@@ -25,11 +25,11 @@ This document lists the checkboxes found in EnhanceQoL.lua and briefly explains 
 - **Item level label position in bags** (Choose where the item level text appears on bag icons).
 - **Item level label position on Character Frame** (Choose where the item level text appears on equipment slots).
 - **Enable item filter in bags** (Enable item filter in bags – drag with <kbd>Shift</kbd> to move).
-- **Enable money tracker** (Enable to track your money across all characters): track gold across all characters.
+- **Enable money tracker** (Enable to track your money across all characters): track gold across all characters and show Warband gold.
 - **Display item level on the Bank Frame** (Display item level on the Bank Frame).
 - **Display bind type on bag items** (Display %s (BoE), %s (WuE), and %s (WB) as an addition to item level on items).
 - **Fade profession quality icons during search** (Fade profession quality icons during search and filtering).
-- If the money tracker is enabled: **Show account gold only** (Show account gold only (hide silver and copper)).
+- If the money tracker is enabled: **Show account gold only** (Show Warband gold only (hide silver and copper)).
 
 ## Character & Inspect
 - **Display item level on Character Equipment Frame** (Display item level on Character Equipment Frame).
