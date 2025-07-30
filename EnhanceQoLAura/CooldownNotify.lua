@@ -328,11 +328,27 @@ local function getCategoryTree()
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		local text = cat.name
 		if addon.db.cooldownNotifyEnabled[catId] == false then text = "|cff808080" .. text .. "|r" end
-		table.insert(tree, { value = catId, text = text })
+		local node = { value = catId, text = text, children = {} }
+
+		local spells = {}
+		for id in pairs(cat.spells or {}) do
+			table.insert(spells, id)
+		end
+		table.sort(spells)
+		for _, spellId in ipairs(spells) do
+			local info = C_Spell.GetSpellInfo(spellId)
+			table.insert(node.children, {
+				value = catId .. "\001" .. spellId,
+				text = info and info.name or tostring(spellId),
+				icon = info and info.iconID,
+			})
+		end
+		table.insert(tree, node)
 	end
-	table.insert(tree, { value = "ADD_CATEGORY", text = L["Add Category"] })
-	table.insert(tree, { value = "IMPORT_CATEGORY", text = L["ImportCategory"] })
-	table.sort(tree, function(a, b) return tostring(a.text) < tostring(b.text) end)
+
+	table.sort(tree, function(a, b) return a.value < b.value end)
+	table.insert(tree, { value = "ADD_CATEGORY", text = "|cff00ff00+ " .. (L["Add Category"] or "Add Category") })
+	table.insert(tree, { value = "IMPORT_CATEGORY", text = "|cff00ccff+ " .. (L["ImportCategory"] or "Import Category") })
 	return tree
 end
 
@@ -437,10 +453,66 @@ local function buildCategoryOptions(container, catId)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
 	group:AddChild(shareBtn)
+
+	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
+		local catName = addon.db.cooldownNotifyCategories[catId].name or ""
+		StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"] = StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"]
+			or {
+				text = L["DeleteCategoryConfirm"],
+				button1 = YES,
+				button2 = CANCEL,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
+		StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"].OnAccept = function()
+			addon.db.cooldownNotifyCategories[catId] = nil
+			addon.db.cooldownNotifyEnabled[catId] = nil
+			addon.db.cooldownNotifyLocked[catId] = nil
+			addon.db.cooldownNotifyOrder[catId] = nil
+			addon.db.cooldownNotifySounds[catId] = nil
+			addon.db.cooldownNotifySoundsEnabled[catId] = nil
+			if anchors[catId] then
+				anchors[catId]:Hide()
+				anchors[catId] = nil
+			end
+			addon.db.cooldownNotifySelectedCategory = next(addon.db.cooldownNotifyCategories)
+			applyLockState()
+			refreshTree(addon.db.cooldownNotifySelectedCategory)
+			container:ReleaseChildren()
+		end
+		StaticPopup_Show("EQOL_DELETE_CDN_CATEGORY", catName)
+	end)
+	group:AddChild(delBtn)
+end
+
+local function buildSpellOptions(container, catId, spellId)
+	local cat = addon.db.cooldownNotifyCategories[catId]
+	if not (cat and cat.spells and cat.spells[spellId]) then return end
+
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	wrapper:SetFullWidth(true)
+	container:AddChild(wrapper)
+
+	local info = C_Spell.GetSpellInfo(spellId)
+	local name = info and info.name or tostring(spellId)
+	local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
+	wrapper:AddChild(label)
+
+	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
+		cat.spells[spellId] = nil
+		refreshTree(catId)
+		container:ReleaseChildren()
+	end)
+	wrapper:AddChild(btn)
+	container:DoLayout()
 end
 
 function CN.functions.addCooldownNotifyOptions(container)
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	wrapper:SetFullHeight(true)
 	container:AddChild(wrapper)
 
 	local tree = getCategoryTree()
@@ -502,9 +574,20 @@ function CN.functions.addCooldownNotifyOptions(container)
 			StaticPopup_Show("EQOL_IMPORT_CATEGORY")
 			return
 		end
-		local catId = tonumber(value)
+		local catId, _, spellId = strsplit("\001", value)
+		catId = tonumber(catId)
 		widget:ReleaseChildren()
-		buildCategoryOptions(widget, catId)
+
+		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		scroll:SetFullWidth(true)
+		scroll:SetFullHeight(true)
+		widget:AddChild(scroll)
+
+		if spellId then
+			buildSpellOptions(scroll, catId, tonumber(spellId))
+		else
+			buildCategoryOptions(scroll, catId)
+		end
 	end)
 	wrapper:AddChild(treeGroup)
 	treeGroup:SetFullHeight(true)
