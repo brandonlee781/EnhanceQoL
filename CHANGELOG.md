@@ -1,8 +1,11 @@
 # Changelog
 
-## [3.36.1] – 2025-07-30
+## [3.37.0] – 2025-07-30
+### ✨ Added
+- **Cooldown Notify**
+  - Get a simple popup when your abilities are ready again.
 ### 🐛 Fixed
-- Cooldown check in AuraTracker had a missing variable which impacted the performance
+- Cooldown check in AuraTracker had a missing variable which impacted performance.
 
 ## [3.36.0] – 2025-07-29
 ### ✨ Added
