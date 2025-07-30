@@ -378,23 +378,24 @@ end
 
 local function updatePositions(id)
         local cat = getCategory(id)
-        local anchor = ensureAnchor(id)
-        local point = cat.direction or "RIGHT"
-        local prev = anchor
+       local anchor = ensureAnchor(id)
+       local point = cat.direction or "RIGHT"
+       local spacing = cat.spacing or 2
+       local prev = anchor
         activeBuffFrames[id] = activeBuffFrames[id] or {}
         for _, bid in ipairs(getBuffOrder(id)) do
                 local frame = activeBuffFrames[id][bid]
                 if frame and frame:IsShown() then
                         frame:ClearAllPoints()
-                        if point == "LEFT" then
-                                frame:SetPoint("RIGHT", prev, "LEFT", -2, 0)
-                        elseif point == "UP" then
-                                frame:SetPoint("BOTTOM", prev, "TOP", 0, 2)
-                        elseif point == "DOWN" then
-                                frame:SetPoint("TOP", prev, "BOTTOM", 0, -2)
-                        else
-                                frame:SetPoint("LEFT", prev, "RIGHT", 2, 0)
-                        end
+                       if point == "LEFT" then
+                               frame:SetPoint("RIGHT", prev, "LEFT", -spacing, 0)
+                       elseif point == "UP" then
+                               frame:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
+                       elseif point == "DOWN" then
+                               frame:SetPoint("TOP", prev, "BOTTOM", 0, -spacing)
+                       else
+                               frame:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
+                       end
                         prev = frame
                 end
         end
@@ -1197,8 +1198,9 @@ local function sanitiseCategory(cat)
 	if not cat then return end
 	cat.allowedSpecs = nil
 	cat.allowedClasses = nil
-	cat.allowedRoles = nil
-	for _, buff in pairs(cat.buffs or {}) do
+       cat.allowedRoles = nil
+       if cat.spacing == nil then cat.spacing = 2 end
+       for _, buff in pairs(cat.buffs or {}) do
 		if not buff.altIDs then buff.altIDs = {} end
                 if buff.showAlways == nil then buff.showAlways = false end
                 if buff.glow == nil then buff.glow = false end
@@ -1458,12 +1460,19 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
 	core:AddChild(nameEdit)
 
-	local sizeSlider = addon.functions.createSliderAce(L["buffTrackerIconSizeHeadline"] .. ": " .. cat.size, cat.size, 0, 100, 1, function(self, _, val)
-		cat.size = val
-		self:SetLabel(L["buffTrackerIconSizeHeadline"] .. ": " .. val)
-		applySize(catId)
-	end)
-	core:AddChild(sizeSlider)
+       local sizeSlider = addon.functions.createSliderAce(L["buffTrackerIconSizeHeadline"] .. ": " .. cat.size, cat.size, 0, 100, 1, function(self, _, val)
+                cat.size = val
+                self:SetLabel(L["buffTrackerIconSizeHeadline"] .. ": " .. val)
+                applySize(catId)
+        end)
+        core:AddChild(sizeSlider)
+
+       local spacingSlider = addon.functions.createSliderAce(L["buffTrackerSpacingHeadline"] .. ": " .. (cat.spacing or 2), cat.spacing or 2, 0, 10, 1, function(self, _, val)
+               cat.spacing = val
+               self:SetLabel(L["buffTrackerSpacingHeadline"] .. ": " .. val)
+               updatePositions(catId)
+       end)
+       core:AddChild(spacingSlider)
 
 	local dirDrop = addon.functions.createDropdownAce(L["GrowthDirection"], { LEFT = "LEFT", RIGHT = "RIGHT", UP = "UP", DOWN = "DOWN" }, nil, function(self, _, val)
 		cat.direction = val
@@ -1980,10 +1989,11 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 				point = "CENTER",
 				x = 0,
 				y = 0,
-				size = 50,
-				direction = "RIGHT",
-				buffs = {},
-			}
+                               size = 50,
+                               spacing = 2,
+                               direction = "RIGHT",
+                               buffs = {},
+                       }
 			addon.db["buffTrackerEnabled"][newId] = true
 			addon.db["buffTrackerLocked"][newId] = false
 			addon.db["buffTrackerSounds"][newId] = {}

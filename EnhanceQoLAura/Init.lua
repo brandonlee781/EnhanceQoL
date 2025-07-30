@@ -41,11 +41,12 @@ addon.functions.InitDBValue("buffTrackerCategories", {
 		name = string.format("%s", L["Example"]),
 		point = "CENTER",
 		x = 0,
-		y = 0,
-		size = 36,
-		direction = "RIGHT",
-		buffs = {},
-	},
+                y = 0,
+                size = 36,
+                spacing = 2,
+                direction = "RIGHT",
+                buffs = {},
+        },
 })
 addon.functions.InitDBValue("buffTrackerEnabled", {})
 addon.functions.InitDBValue("buffTrackerLocked", {})
@@ -61,7 +62,8 @@ addon.functions.InitDBValue("buffTrackerShowCharges", false)
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 
 for _, cat in pairs(addon.db["buffTrackerCategories"]) do
-	for _, buff in pairs(cat.buffs or {}) do
+        if cat.spacing == nil then cat.spacing = 2 end
+        for _, buff in pairs(cat.buffs or {}) do
 		if not buff.altIDs then buff.altIDs = {} end
 		if buff.showAlways == nil then buff.showAlways = false end
 		if buff.glow == nil then buff.glow = false end
