@@ -258,6 +258,36 @@ end
 
 local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
 
+
+local function getSortedCategories()
+    local list = {}
+    for id in pairs(addon.db["buffTrackerCategories"]) do
+        table.insert(list, id)
+    end
+    table.sort(list)
+    return list
+end
+
+local function getBuffOrder(catId)
+    local cat = addon.db["buffTrackerCategories"][catId]
+    if not cat then return {} end
+    local orderIndex = {}
+    for idx, bid in ipairs(addon.db["buffTrackerOrder"][catId] or {}) do
+        orderIndex[bid] = idx
+    end
+    local buffIds = {}
+    for id in pairs(cat.buffs or {}) do
+        table.insert(buffIds, id)
+    end
+    table.sort(buffIds, function(a, b)
+        local ia = orderIndex[a] or math.huge
+        local ib = orderIndex[b] or math.huge
+        if ia ~= ib then return ia < ib end
+        return a < b
+    end)
+    return buffIds
+end
+
 local function rebuildAltMapping()
 	wipe(altToBase)
 	wipe(spellToCat)
@@ -343,26 +373,27 @@ local function changeAnchorName(id)
 end
 
 local function updatePositions(id)
-	local cat = getCategory(id)
-	local anchor = ensureAnchor(id)
-	local point = cat.direction or "RIGHT"
-	local prev = anchor
-	activeBuffFrames[id] = activeBuffFrames[id] or {}
-	for _, frame in pairs(activeBuffFrames[id]) do
-		if frame:IsShown() then
-			frame:ClearAllPoints()
-			if point == "LEFT" then
-				frame:SetPoint("RIGHT", prev, "LEFT", -2, 0)
-			elseif point == "UP" then
-				frame:SetPoint("BOTTOM", prev, "TOP", 0, 2)
-			elseif point == "DOWN" then
-				frame:SetPoint("TOP", prev, "BOTTOM", 0, -2)
-			else
-				frame:SetPoint("LEFT", prev, "RIGHT", 2, 0)
-			end
-			prev = frame
-		end
-	end
+        local cat = getCategory(id)
+        local anchor = ensureAnchor(id)
+        local point = cat.direction or "RIGHT"
+        local prev = anchor
+        activeBuffFrames[id] = activeBuffFrames[id] or {}
+        for _, bid in ipairs(getBuffOrder(id)) do
+                local frame = activeBuffFrames[id][bid]
+                if frame and frame:IsShown() then
+                        frame:ClearAllPoints()
+                        if point == "LEFT" then
+                                frame:SetPoint("RIGHT", prev, "LEFT", -2, 0)
+                        elseif point == "UP" then
+                                frame:SetPoint("BOTTOM", prev, "TOP", 0, 2)
+                        elseif point == "DOWN" then
+                                frame:SetPoint("TOP", prev, "BOTTOM", 0, -2)
+                        else
+                                frame:SetPoint("LEFT", prev, "RIGHT", 2, 0)
+                        end
+                        prev = frame
+                end
+        end
 end
 
 local function applyLockState()
@@ -822,31 +853,32 @@ refreshTimeTicker = function()
 end
 
 local function scanBuffs()
-	wipe(timedAuras)
-	wipe(buffInstances)
-	wipe(auraInstanceMap)
-	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
-		if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-			for id in pairs(cat.buffs) do
-				if not addon.db["buffTrackerHidden"][id] then
-					updateBuff(catId, id, nil, firstScan)
-				elseif activeBuffFrames[catId] and activeBuffFrames[catId][id] then
-					activeBuffFrames[catId][id]:Hide()
-				end
-			end
-			updatePositions(catId)
-			if anchors[catId] then anchors[catId]:Show() end
-		else
-			if anchors[catId] then anchors[catId]:Hide() end
-			if activeBuffFrames[catId] then
-				for _, frame in pairs(activeBuffFrames[catId]) do
-					frame:Hide()
-				end
-			end
-		end
-	end
-	refreshTimeTicker()
-	firstScan = false
+        wipe(timedAuras)
+        wipe(buffInstances)
+        wipe(auraInstanceMap)
+        for _, catId in ipairs(getSortedCategories()) do
+                local cat = addon.db["buffTrackerCategories"][catId]
+                if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+                        for _, id in ipairs(getBuffOrder(catId)) do
+                                if not addon.db["buffTrackerHidden"][id] then
+                                        updateBuff(catId, id, nil, firstScan)
+                                elseif activeBuffFrames[catId] and activeBuffFrames[catId][id] then
+                                        activeBuffFrames[catId][id]:Hide()
+                                end
+                        end
+                        updatePositions(catId)
+                        if anchors[catId] then anchors[catId]:Show() end
+                else
+                        if anchors[catId] then anchors[catId]:Hide() end
+                        if activeBuffFrames[catId] then
+                                for _, frame in pairs(activeBuffFrames[catId]) do
+                                        frame:Hide()
+                                end
+                        end
+                end
+        end
+        refreshTimeTicker()
+        firstScan = false
 end
 
 local function collectActiveAuras()
