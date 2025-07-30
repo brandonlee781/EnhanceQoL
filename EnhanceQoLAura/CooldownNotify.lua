@@ -18,7 +18,6 @@ local AceGUI = addon.AceGUI
 
 local cooldowns = {}
 local animating = {}
-local itemSpells = {}
 local treeGroup
 local anchors = {}
 -- store the category id of the cooldown currently shown
@@ -52,7 +51,7 @@ local runtimer = 0
 
 local function IsAnimatingCooldown(name, catId)
 	for _, info in ipairs(animating) do
-		if info[3] == name and info[4] == catId then return true end
+		if info[2] == name and info[3] == catId then return true end
 	end
 	return false
 end
@@ -66,7 +65,7 @@ local function OnUpdate(_, update)
 				local cat = addon.db.cooldownNotifyCategories[cd.catId] or {}
 				local threshold = cat.remainingCooldownWhenNotified or 0
 				if remaining <= threshold then
-					if not IsAnimatingCooldown(cd.name, cd.catId) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId, cd.id }) end
+					if not IsAnimatingCooldown(cd.name, cd.catId) then table.insert(animating, { cd.texture, cd.name, cd.catId, cd.id }) end
 					cooldowns[i] = nil
 				end
 			else
@@ -84,7 +83,7 @@ local function OnUpdate(_, update)
 	if #animating > 0 then
 		runtimer = runtimer + update
 		local info = animating[1]
-		local cat = addon.db.cooldownNotifyCategories[info[4]] or {}
+		local cat = addon.db.cooldownNotifyCategories[info[3]] or {}
 		local fadeInTime = cat.fadeInTime or 0.3
 		local fadeOutTime = cat.fadeOutTime or 0.7
 		local maxAlpha = cat.maxAlpha or 0.7
@@ -100,21 +99,21 @@ local function OnUpdate(_, update)
 			currentCatId = nil
 		else
 			if not DCP.texture:GetTexture() then
-				currentCatId = info[4]
-				if cat.showName and info[3] then
-					local txt = info[3]
+				currentCatId = info[3]
+				if cat.showName and info[2] then
+					local txt = info[2]
 					if cat.customTextEnabled and cat.customText and cat.customText ~= "" then txt = cat.customText end
 					DCP.text:SetText(txt)
 				end
 				DCP.texture:SetTexture(info[1])
-				if info[2] then DCP.texture:SetVertexColor(1, 1, 1) end
+				DCP.texture:SetVertexColor(1, 1, 1)
 				local anch = cat.anchor or {}
 				DCP:SetPoint(anch.point or "CENTER", UIParent, anch.point or "CENTER", anch.x or 0, anch.y or 0)
 				DCP:SetSize(iconSize, iconSize)
 				DCP:Show()
 				local soundKey
-				if addon.db.cooldownNotifySoundsEnabled[info[4]] and addon.db.cooldownNotifySoundsEnabled[info[4]][info[5]] then
-					soundKey = addon.db.cooldownNotifySounds[info[4]] and addon.db.cooldownNotifySounds[info[4]][info[5]]
+				if addon.db.cooldownNotifySoundsEnabled[info[3]] and addon.db.cooldownNotifySoundsEnabled[info[3]][info[4]] then
+					soundKey = addon.db.cooldownNotifySounds[info[3]] and addon.db.cooldownNotifySounds[info[3]][info[4]]
 				end
 				if soundKey then
 					local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
@@ -258,17 +257,6 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 				for sid in pairs(cat.spells or {}) do
 					self:SPELL_UPDATE_COOLDOWN(sid)
 				end
-				for itemID in pairs(cat.items or {}) do
-					local _, itemSpellID = GetItemSpell(itemID)
-					if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
-				end
-				for petName in pairs(cat.pets or {}) do
-					local index = GetPetActionIndexByName(petName)
-					if index then
-						local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
-						if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
-					end
-				end
 			end
 		end
 		return
@@ -276,9 +264,10 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 	local found = false
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		if addon.db.cooldownNotifyEnabled[catId] then
-			if cat.spells and cat.spells[spellID] then
-				local cd = C_Spell.GetSpellCooldown(spellID)
-				if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
+                       -- only handle spells for this category
+                       if cat.spells and cat.spells[spellID] then
+                               local cd = C_Spell.GetSpellCooldown(spellID)
+                               if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
 					local key = spellID .. ":" .. catId
 					cooldowns[key] = {
 						start = cd.startTime,
@@ -289,47 +278,6 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 						id = spellID,
 					}
 					found = true
-				end
-			end
-			for itemID in pairs(cat.items or {}) do
-				local _, itemSpellID = GetItemSpell(itemID)
-				if itemSpellID == spellID then
-					local start, duration, enabled = C_Container.GetItemCooldown(itemID)
-					if enabled ~= 0 and duration and duration > 2 then
-						local texture = select(10, GetItemInfo(itemID))
-						local key = "item:" .. itemID .. ":" .. catId
-						cooldowns[key] = {
-							start = start,
-							duration = duration,
-							texture = texture,
-							name = GetItemInfo(itemID),
-							catId = catId,
-							id = itemID,
-						}
-						found = true
-					end
-				end
-			end
-			for petName in pairs(cat.pets or {}) do
-				local index = GetPetActionIndexByName(petName)
-				if index then
-					local _, _, tex, _, _, _, petSpellID = GetPetActionInfo(index)
-					if petSpellID == spellID then
-						local start, duration, enabled = GetPetActionCooldown(index)
-						if enabled ~= 0 and duration and duration > 2 then
-							local key = "pet:" .. spellID .. ":" .. catId
-							cooldowns[key] = {
-								start = start,
-								duration = duration,
-								texture = tex,
-								name = petName,
-								catId = catId,
-								isPet = true,
-								id = spellID,
-							}
-							found = true
-						end
-					end
 				end
 			end
 		end
@@ -345,17 +293,6 @@ function CN:PLAYER_LOGIN()
 		if addon.db.cooldownNotifyEnabled[catId] then
 			for spellID in pairs(cat.spells or {}) do
 				self:SPELL_UPDATE_COOLDOWN(spellID)
-			end
-			for itemID in pairs(cat.items or {}) do
-				local _, itemSpellID = GetItemSpell(itemID)
-				if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
-			end
-			for petName in pairs(cat.pets or {}) do
-				local index = GetPetActionIndexByName(petName)
-				if index then
-					local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
-					if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
-				end
 			end
 		end
 	end
@@ -502,25 +439,10 @@ local function buildCategoryOptions(container, catId)
 		if firstSpell then
 			tex = C_Spell.GetSpellTexture(firstSpell)
 			name = C_Spell.GetSpellName(firstSpell)
-		else
-			local firstItem = next(cat.items)
-			if firstItem then
-				tex = select(10, GetItemInfo(firstItem))
-				name = GetItemInfo(firstItem)
-			else
-				local firstPet = next(cat.pets)
-				if firstPet then
-					local idx = GetPetActionIndexByName(firstPet)
-					if idx then
-						_, _, tex = GetPetActionInfo(idx)
-					end
-					name = firstPet
-				end
-			end
 		end
 		tex = tex or "Interface\\Icons\\INV_Misc_QuestionMark"
 		name = name or L["Test"] or "Test"
-		table.insert(animating, { tex, false, name, catId, 0 })
+		table.insert(animating, { tex, name, catId, 0 })
 		if not DCP:GetScript("OnUpdate") then
 			DCP:SetScript("OnUpdate", OnUpdate)
 			DCP:Show()
@@ -639,8 +561,6 @@ function CN.functions.addCooldownNotifyOptions(container)
 				animScale = 1.5,
 				showName = true,
 				spells = {},
-				items = {},
-				pets = {},
 			}
 			addon.db.cooldownNotifyEnabled[newId] = true
 			addon.db.cooldownNotifyLocked[newId] = false
@@ -745,8 +665,6 @@ function importCategory(encoded)
 	cat.holdTime = cat.holdTime or 0
 	cat.showName = cat.showName ~= false
 	cat.spells = cat.spells or {}
-	cat.items = cat.items or {}
-	cat.pets = cat.pets or {}
 	local newId = 1
 	for id in pairs(addon.db.cooldownNotifyCategories) do
 		if id >= newId then newId = id + 1 end
