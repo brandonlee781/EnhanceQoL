@@ -53,28 +53,28 @@ local function IsAnimatingCooldownByName(name)
 end
 
 local function OnUpdate(_, update)
-        elapsed = elapsed + update
-        if elapsed > 0.05 then
-                for i, cd in pairs(cooldowns) do
-                        if cd.start then
-                                local remaining = cd.duration - (GetTime() - cd.start)
-                                local cat = addon.db.cooldownNotifyCategories[cd.catId] or {}
-                                local threshold = cat.remainingCooldownWhenNotified or 0
-                                if remaining <= threshold then
-                                        if not IsAnimatingCooldownByName(cd.name) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId }) end
-                                        cooldowns[i] = nil
-                                end
-                        else
-                                cooldowns[i] = nil
-                        end
-                end
-                elapsed = 0
-                if #animating == 0 and next(cooldowns) == nil then
-                        DCP:SetScript("OnUpdate", nil)
-                        DCP:Hide()
-                        return
-                end
-        end
+	elapsed = elapsed + update
+	if elapsed > 0.05 then
+		for i, cd in pairs(cooldowns) do
+			if cd.start then
+				local remaining = cd.duration - (GetTime() - cd.start)
+				local cat = addon.db.cooldownNotifyCategories[cd.catId] or {}
+				local threshold = cat.remainingCooldownWhenNotified or 0
+				if remaining <= threshold then
+					if not IsAnimatingCooldownByName(cd.name) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId }) end
+					cooldowns[i] = nil
+				end
+			else
+				cooldowns[i] = nil
+			end
+		end
+		elapsed = 0
+		if #animating == 0 and next(cooldowns) == nil then
+			DCP:SetScript("OnUpdate", nil)
+			DCP:Hide()
+			return
+		end
+	end
 
 	if #animating > 0 then
 		runtimer = runtimer + update
@@ -208,63 +208,66 @@ local function applyLockState()
 end
 
 function CN:SPELL_UPDATE_COOLDOWN(spellID)
-        if not spellID then return end
-        local found = false
-        for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
-                if addon.db.cooldownNotifyEnabled[catId] then
-                        if cat.spells and cat.spells[spellID] then
-                                local cd = C_Spell.GetSpellCooldown(spellID)
-                                if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
-                                        cooldowns[spellID] = {
-                                                start = cd.startTime,
-                                                duration = cd.duration,
-                                                texture = C_Spell.GetSpellTexture(spellID),
-                                                name = C_Spell.GetSpellName(spellID),
-                                                catId = catId,
-                                        }
-                                        found = true
-                                end
-                        end
-                        for itemID in pairs(cat.items or {}) do
-                                local _, itemSpellID = GetItemSpell(itemID)
-                                if itemSpellID == spellID then
-                                        local start, duration, enabled = C_Container.GetItemCooldown(itemID)
-                                        if enabled ~= 0 and duration and duration > 2 then
-                                                local texture = select(10, GetItemInfo(itemID))
-                                                cooldowns[itemID] = {
-                                                        start = start,
-                                                        duration = duration,
-                                                        texture = texture,
-                                                        name = GetItemInfo(itemID),
-                                                        catId = catId,
-                                                }
-                                                found = true
-                                        end
-                                end
-                        end
-                        for petName in pairs(cat.pets or {}) do
-                                local index = GetPetActionIndexByName(petName)
-                                if index then
-                                        local _, _, tex, _, _, _, petSpellID = GetPetActionInfo(index)
-                                        if petSpellID == spellID then
-                                                local start, duration, enabled = GetPetActionCooldown(index)
-                                                if enabled ~= 0 and duration and duration > 2 then
-                                                        cooldowns[spellID] = {
-                                                                start = start,
-                                                                duration = duration,
-                                                                texture = tex,
-                                                                name = petName,
-                                                                catId = catId,
-                                                                isPet = true,
-                                                        }
-                                                        found = true
-                                                end
-                                        end
-                                end
-                        end
-                end
-        end
-        if found and not DCP:GetScript("OnUpdate") then DCP:SetScript("OnUpdate", OnUpdate) end
+	if not spellID then return end
+	local found = false
+	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+		if addon.db.cooldownNotifyEnabled[catId] then
+			if cat.spells and cat.spells[spellID] then
+				local cd = C_Spell.GetSpellCooldown(spellID)
+				if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
+					cooldowns[spellID] = {
+						start = cd.startTime,
+						duration = cd.duration,
+						texture = C_Spell.GetSpellTexture(spellID),
+						name = C_Spell.GetSpellName(spellID),
+						catId = catId,
+					}
+					found = true
+				end
+			end
+			for itemID in pairs(cat.items or {}) do
+				local _, itemSpellID = GetItemSpell(itemID)
+				if itemSpellID == spellID then
+					local start, duration, enabled = C_Container.GetItemCooldown(itemID)
+					if enabled ~= 0 and duration and duration > 2 then
+						local texture = select(10, GetItemInfo(itemID))
+						cooldowns[itemID] = {
+							start = start,
+							duration = duration,
+							texture = texture,
+							name = GetItemInfo(itemID),
+							catId = catId,
+						}
+						found = true
+					end
+				end
+			end
+			for petName in pairs(cat.pets or {}) do
+				local index = GetPetActionIndexByName(petName)
+				if index then
+					local _, _, tex, _, _, _, petSpellID = GetPetActionInfo(index)
+					if petSpellID == spellID then
+						local start, duration, enabled = GetPetActionCooldown(index)
+						if enabled ~= 0 and duration and duration > 2 then
+							cooldowns[spellID] = {
+								start = start,
+								duration = duration,
+								texture = tex,
+								name = petName,
+								catId = catId,
+								isPet = true,
+							}
+							found = true
+						end
+					end
+				end
+			end
+		end
+	end
+	if found and not DCP:GetScript("OnUpdate") then
+		DCP:SetScript("OnUpdate", OnUpdate)
+		DCP:Show()
+	end
 end
 
 CN.frame = DCP
