@@ -1,9 +1,12 @@
 # Changelog
 
+## [3.37.1] – 2025-07-30
+### ❌ Removed
+- Aura Tracker: Show GCD option
+
 ## [3.37.0] – 2025-07-30
 ### ✨ Added
 - **Aura Tracker**
-  - Option to *Show GCD* on cooldowns
   - Option to change the *Spacing* between the auras
 ### 🐛 Fixed
 - Cooldown check in AuraTracker had a missing variable which impacted the performance
