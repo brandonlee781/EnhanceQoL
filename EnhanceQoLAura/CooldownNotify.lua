@@ -301,10 +301,31 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 			end
 		end
 	end
-	if found and not DCP:GetScript("OnUpdate") then
-		DCP:SetScript("OnUpdate", OnUpdate)
-		DCP:Show()
-	end
+        if found and not DCP:GetScript("OnUpdate") then
+                DCP:SetScript("OnUpdate", OnUpdate)
+                DCP:Show()
+        end
+end
+
+function CN:PLAYER_LOGIN()
+    for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+        if addon.db.cooldownNotifyEnabled[catId] then
+            for spellID in pairs(cat.spells or {}) do
+                self:SPELL_UPDATE_COOLDOWN(spellID)
+            end
+            for itemID in pairs(cat.items or {}) do
+                local _, itemSpellID = GetItemSpell(itemID)
+                if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
+            end
+            for petName in pairs(cat.pets or {}) do
+                local index = GetPetActionIndexByName(petName)
+                if index then
+                    local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
+                    if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
+                end
+            end
+        end
+    end
 end
 
 CN.frame = DCP
@@ -803,6 +824,7 @@ AceComm:RegisterComm(COMM_PREFIX, OnComm)
 
 -- register events
 DCP:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+DCP:RegisterEvent("PLAYER_LOGIN")
 
 for id in pairs(addon.db.cooldownNotifyCategories or {}) do
 	ensureAnchor(id)
