@@ -23,6 +23,8 @@ local treeGroup
 local anchors = {}
 -- store the category id of the cooldown currently shown
 local currentCatId
+-- forward declaration for functions referenced before definition
+local applyAnchor
 
 local DCP = CreateFrame("Frame", nil, UIParent)
 DCP:SetPoint("CENTER")
@@ -229,7 +231,7 @@ local function applySize(id)
 	if DCP:IsShown() and currentCatId == id then DCP:SetSize(cat.iconSize or 75, cat.iconSize or 75) end
 end
 
-local function applyAnchor(id)
+function applyAnchor(id)
 	local cat = addon.db.cooldownNotifyCategories[id]
 	if not cat then return end
 	local anchor = ensureAnchor(id)
@@ -301,31 +303,31 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 			end
 		end
 	end
-        if found and not DCP:GetScript("OnUpdate") then
-                DCP:SetScript("OnUpdate", OnUpdate)
-                DCP:Show()
-        end
+	if found and not DCP:GetScript("OnUpdate") then
+		DCP:SetScript("OnUpdate", OnUpdate)
+		DCP:Show()
+	end
 end
 
 function CN:PLAYER_LOGIN()
-    for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
-        if addon.db.cooldownNotifyEnabled[catId] then
-            for spellID in pairs(cat.spells or {}) do
-                self:SPELL_UPDATE_COOLDOWN(spellID)
-            end
-            for itemID in pairs(cat.items or {}) do
-                local _, itemSpellID = GetItemSpell(itemID)
-                if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
-            end
-            for petName in pairs(cat.pets or {}) do
-                local index = GetPetActionIndexByName(petName)
-                if index then
-                    local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
-                    if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
-                end
-            end
-        end
-    end
+	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+		if addon.db.cooldownNotifyEnabled[catId] then
+			for spellID in pairs(cat.spells or {}) do
+				self:SPELL_UPDATE_COOLDOWN(spellID)
+			end
+			for itemID in pairs(cat.items or {}) do
+				local _, itemSpellID = GetItemSpell(itemID)
+				if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
+			end
+			for petName in pairs(cat.pets or {}) do
+				local index = GetPetActionIndexByName(petName)
+				if index then
+					local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
+					if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
+				end
+			end
+		end
+	end
 end
 
 CN.frame = DCP
