@@ -544,7 +544,7 @@ local function playBuffSound(catId, baseId, altId)
 	if file then PlaySoundFile(file, "Master") end
 end
 
-local function updateBuff(catId, id, changedId, firstScan)
+local function updateBuff(catId, id, changedId, firstScan, gcdInfo)
 	if firstScan == nil then firstScan = false end
 	local cat = getCategory(catId)
 	local buff = cat and cat.buffs and cat.buffs[id]
@@ -631,7 +631,11 @@ local function updateBuff(catId, id, changedId, firstScan)
                else
                         frame.cd:SetReverse(false)
                         if buff.showGCD then
-                                local gcdStart, gcdDur, gcdEnable, gcdRate = getSpellCooldown(61304)
+                                local gInfo = gcdInfo or getSpellCooldown(61304)
+                                local gcdStart = gInfo.startTime
+                                local gcdDur = gInfo.duration
+                                local gcdEnable = gInfo.isEnabled
+                                local gcdRate = gInfo.modRate
                                 if gcdEnable and gcdDur and gcdDur > 0 and gcdStart > 0 then
                                         frame.cd:SetCooldown(gcdStart, gcdDur, gcdRate)
                                         frame.icon:SetDesaturated(true)
@@ -750,7 +754,11 @@ local function updateBuff(catId, id, changedId, firstScan)
                                 modRate = spellInfo.modRate
                         end
                         if buff.showGCD then
-                                local gcdStart, gcdDur, gcdEnable, gcdRate = getSpellCooldown(61304)
+                                local gInfo = gcdInfo or getSpellCooldown(61304)
+                                local gcdStart = gInfo.startTime
+                                local gcdDur = gInfo.duration
+                                local gcdEnable = gInfo.isEnabled
+                                local gcdRate = gInfo.modRate
                                 if gcdEnable and gcdDur and gcdDur > 0 and gcdStart > 0 then
                                         frame.cd:SetCooldown(gcdStart, gcdDur, gcdRate)
                                         frame.icon:SetDesaturated(true)
@@ -1052,14 +1060,23 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
                         end
                 end
 
-                for spellId in pairs(gcdSpells) do
-                        for catId in pairs(spellToCat[spellId] or {}) do
-                                local cat = addon.db["buffTrackerCategories"][catId]
-                                if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-                                        local buff = cat.buffs[spellId]
-                                        if buff and buff.showGCD then
-                                                updateBuff(catId, spellId)
-                                                needsLayout[catId] = true
+                if next(gcdSpells) then
+                        local gcdInfo = getSpellCooldown(61304)
+                        local gcdStart = gcdInfo.startTime
+                        local gcdDur = gcdInfo.duration
+                        local gcdActive = gcdInfo.isEnabled and gcdDur > 0 and gcdStart > 0 and (gcdStart + gcdDur) > GetTime()
+
+                        if gcdActive then
+                                for spellId in pairs(gcdSpells) do
+                                        for catId in pairs(spellToCat[spellId] or {}) do
+                                                local cat = addon.db["buffTrackerCategories"][catId]
+                                                if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+                                                        local buff = cat.buffs[spellId]
+                                                        if buff and buff.showGCD then
+                                                                updateBuff(catId, spellId, nil, nil, gcdInfo)
+                                                                needsLayout[catId] = true
+                                                        end
+                                                end
                                         end
                                 end
                         end
