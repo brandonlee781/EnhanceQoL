@@ -998,7 +998,7 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 		local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
 		if file then
 			PlaySoundFile(file, "Master")
-		else
+		elseif tonumber(soundKey) then
 			PlaySound(soundKey)
 		end
 	end
