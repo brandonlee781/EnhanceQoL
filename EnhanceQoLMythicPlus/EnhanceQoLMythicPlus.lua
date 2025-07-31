@@ -1138,15 +1138,23 @@ local function addTalentFrame(container)
 				addon.MythicPlus.functions.checkLoadout()
 			end,
 		})
-		table.insert(data, {
-			text = L["talentReminderSoundOnDifference"],
-			var = "talentReminderSoundOnDifference",
-			func = function(self, _, value)
-				addon.db["talentReminderSoundOnDifference"] = value
-				addon.MythicPlus.functions.checkLoadout()
-			end,
-		})
-	end
+                table.insert(data, {
+                        text = L["talentReminderSoundOnDifference"],
+                        var = "talentReminderSoundOnDifference",
+                        func = function(self, _, value)
+                                addon.db["talentReminderSoundOnDifference"] = value
+                                addon.MythicPlus.functions.checkLoadout()
+                        end,
+                })
+                table.insert(data, {
+                        text = L["talentReminderShowActiveBuild"],
+                        var = "talentReminderShowActiveBuild",
+                        func = function(self, _, value)
+                                addon.db["talentReminderShowActiveBuild"] = value
+                                addon.MythicPlus.functions.updateActiveTalentText()
+                        end,
+                })
+        end
 
 	for _, cbData in ipairs(data) do
 		local uFunc = function(self, _, value) addon.db[cbData.var] = value end
