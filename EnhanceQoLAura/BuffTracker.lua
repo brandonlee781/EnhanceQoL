@@ -67,6 +67,8 @@ local timeTicker
 local refreshTimeTicker
 local rescanTimer
 local firstScan = true
+local updateBuff
+local updatePositions
 
 local function scheduleRescan()
 	if rescanTimer then rescanTimer:Cancel() end
@@ -416,7 +418,7 @@ local function changeAnchorName(id)
 	anchor.text:SetText(L["DragToPosition"]:format("|cffffd700" .. (cat.name or "") .. "|r"))
 end
 
-local function updatePositions(id)
+function updatePositions(id)
 	local cat = getCategory(id)
 	local anchor = ensureAnchor(id)
 	local point = cat.direction or "RIGHT"
@@ -584,7 +586,7 @@ local function playBuffSound(catId, baseId, altId)
 	if file then PlaySoundFile(file, "Master") end
 end
 
-local function updateBuff(catId, id, changedId, firstScan)
+function updateBuff(catId, id, changedId, firstScan)
 	if firstScan == nil then firstScan = false end
 	local cat = getCategory(catId)
 	local buff = cat and cat.buffs and cat.buffs[id]
