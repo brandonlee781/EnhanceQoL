@@ -92,10 +92,10 @@ local function rebuildAltMapping()
 				cat.spells[baseId] = { altIDs = {} }
 				spell = cat.spells[baseId]
 			end
-                        spell.altIDs = spell.altIDs or {}
-                        spell.altHash = {}
-                        if spell.onlyOnMe == nil then spell.onlyOnMe = false end
-                        for _, altId in ipairs(spell.altIDs) do
+			spell.altIDs = spell.altIDs or {}
+			spell.altHash = {}
+			if spell.onlyOnMe == nil then spell.onlyOnMe = false end
+			for _, altId in ipairs(spell.altIDs) do
 				altToBase[altId] = baseId
 				spell.altHash[altId] = true
 			end
@@ -337,10 +337,10 @@ local function importCategory(encoded)
 		else
 			sp.altIDs = sp.altIDs or {}
 		end
-                if sp.customTextEnabled == nil then sp.customTextEnabled = false end
-                if sp.customText == nil then sp.customText = "" end
-                if sp.treeName == nil then sp.treeName = nil end
-                if sp.onlyOnMe == nil then sp.onlyOnMe = false end
+		if sp.customTextEnabled == nil then sp.customTextEnabled = false end
+		if sp.customText == nil then sp.customText = "" end
+		if sp.treeName == nil then sp.treeName = nil end
+		if sp.onlyOnMe == nil then sp.onlyOnMe = false end
 	end
 	local newId = getNextCategoryId()
 	addon.db.castTrackerCategories[newId] = cat
@@ -577,13 +577,13 @@ local function buildCategoryOptions(container, catId)
 	local addEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
 		local id = tonumber(text)
 		if id then
-                        db.spells[id] = {
-                                altIDs = {},
-                                customTextEnabled = false,
-                                customText = "",
-                                treeName = "",
-                                onlyOnMe = false,
-                        }
+			db.spells[id] = {
+				altIDs = {},
+				customTextEnabled = false,
+				customText = "",
+				treeName = "",
+				onlyOnMe = false,
+			}
 			addon.db.castTrackerSounds[catId] = addon.db.castTrackerSounds[catId] or {}
 			addon.db.castTrackerSoundsEnabled[catId] = addon.db.castTrackerSoundsEnabled[catId] or {}
 			addon.db.castTrackerSounds[catId][id] = addon.db.castTrackerBarSound
@@ -771,12 +771,10 @@ local function buildSpellOptions(container, catId, spellId)
 		container:ReleaseChildren()
 		buildSpellOptions(container, catId, spellId)
 	end)
-        wrapper:AddChild(cbText)
+	wrapper:AddChild(cbText)
 
-        local cbOnMe = addon.functions.createCheckboxAce(L["castTrackerOnlyOnMe"], spell.onlyOnMe, function(_, _, val)
-                spell.onlyOnMe = val
-        end)
-        wrapper:AddChild(cbOnMe)
+	local cbOnMe = addon.functions.createCheckboxAce(L["castTrackerOnlyOnMe"], spell.onlyOnMe, function(_, _, val) spell.onlyOnMe = val end)
+	wrapper:AddChild(cbOnMe)
 
 	if spell.customTextEnabled then
 		local txtEdit = addon.functions.createEditboxAce(L["castTrackerCustomText"], spell.customText or "", function(self, _, text)
@@ -945,11 +943,11 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	local castTime = spellData and spellData.castTime
 	castTime = (castTime or 0) / 1000
 	if overrideCastTime and overrideCastTime > 0 then castTime = overrideCastTime end
-        local db = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
-        if castTime <= 0 then return end
-        local spellInfo = db.spells and db.spells[spellId] or {}
-        if spellInfo.onlyOnMe and destGUID ~= UnitGUID("player") then return end
-        activeBars[catId] = activeBars[catId] or {}
+	local db = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
+	if castTime <= 0 then return end
+	local spellInfo = db.spells and db.spells[spellId] or {}
+	if spellInfo.onlyOnMe and destGUID ~= UnitGUID("player") then return end
+	activeBars[catId] = activeBars[catId] or {}
 	activeOrder[catId] = activeOrder[catId] or {}
 	framePools[catId] = framePools[catId] or {}
 	local key = sourceGUID .. ":" .. spellId
@@ -969,7 +967,7 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	bar.spellId = spellId
 	bar.catId = catId
 	bar.icon:SetTexture(icon)
-        bar.castType = castType or "cast"
+	bar.castType = castType or "cast"
 	if spellInfo.customTextEnabled and spellInfo.customText and spellInfo.customText ~= "" then
 		bar.text:SetText(spellInfo.customText)
 	else
@@ -1028,11 +1026,14 @@ local function HandleCLEU()
 		local unit = GetUnitFromGUID(sourceGUID)
 		if unit then
 			_, castTime = getCastInfo(unit)
+			local tgt = unit .. "target"
+			if UnitExists(tgt) then destGUID = UnitGUID(tgt) end
+			print(spellId, UnitName(tgt))
 		end
-                for catId in pairs(cats) do
-                        local cat = addon.db.castTrackerCategories[catId]
-                        if addon.db.castTrackerEnabled[catId] and categoryAllowed(cat) then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "cast", nil, spellId, destGUID) end
-                end
+		for catId in pairs(cats) do
+			local cat = addon.db.castTrackerCategories[catId]
+			if addon.db.castTrackerEnabled[catId] and categoryAllowed(cat) then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "cast", nil, spellId, destGUID) end
+		end
 	elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
 		local key = sourceGUID .. ":" .. baseSpell
 		local byCat = activeKeyIndex[key]
@@ -1066,7 +1067,7 @@ local function HandleUnitChannelStart(unit, castGUID, spellId)
 		local existing = activeBars[catId] and activeBars[catId][key]
 		local suppress = existing and existing.castType == "cast"
 		local cat = addon.db.castTrackerCategories[catId]
-                if addon.db.castTrackerEnabled[catId] and categoryAllowed(cat) then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "channel", suppress, spellId, nil) end
+		if addon.db.castTrackerEnabled[catId] and categoryAllowed(cat) then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "channel", suppress, spellId, nil) end
 	end
 end
 
