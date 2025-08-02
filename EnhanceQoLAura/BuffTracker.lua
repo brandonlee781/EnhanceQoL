@@ -27,6 +27,11 @@ local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
 local itemBuffsBySlot = {} -- [slot] = { [catId] = buffId, … }
 local equipScanPending = false
 
+-- Weapon enchant helpers
+local enchantBuffsBySlot = {} -- [slot] = { [catId] = buffId, … }
+local enchantScanPending = false
+local cachedEnchantIDs = {} -- [slot] = enchantId
+
 local function registerItemBuff(catId, buffId, slot)
 	itemBuffsBySlot[slot] = itemBuffsBySlot[slot] or {}
 	itemBuffsBySlot[slot][catId] = buffId
@@ -39,6 +44,18 @@ local function unregisterItemBuff(catId, slot)
 	end
 end
 
+local function registerEnchantBuff(catId, buffId, slot)
+	enchantBuffsBySlot[slot] = enchantBuffsBySlot[slot] or {}
+	enchantBuffsBySlot[slot][catId] = buffId
+end
+
+local function unregisterEnchantBuff(catId, slot)
+	if enchantBuffsBySlot[slot] then
+		enchantBuffsBySlot[slot][catId] = nil
+		if not next(enchantBuffsBySlot[slot]) then enchantBuffsBySlot[slot] = nil end
+	end
+end
+
 for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 	for id, buff in pairs(cat.buffs or {}) do
 		if not buff.trackType then buff.trackType = "BUFF" end
@@ -47,7 +64,11 @@ for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if not buff.allowedRoles then buff.allowedRoles = {} end
 		if buff.showCooldown == nil then buff.showCooldown = false end
 		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
-		if buff.trackType == "ITEM" and buff.slot then registerItemBuff(catId, id, buff.slot) end
+		if buff.trackType == "ITEM" and buff.slot then
+			registerItemBuff(catId, id, buff.slot)
+		elseif buff.trackType == "ENCHANT" and buff.slot then
+			registerEnchantBuff(catId, id, buff.slot)
+		end
 	end
 	cat.allowedSpecs = nil
 	cat.allowedClasses = nil
@@ -105,6 +126,44 @@ local function scanTrinketSlots()
 	for catId in pairs(needsLayout) do
 		updatePositions(catId)
 	end
+end
+
+local function scanWeaponEnchants()
+	enchantScanPending = false
+	local mhHas, _, _, mhID, ohHas, _, _, ohID = GetWeaponEnchantInfo()
+	local needsLayout = {}
+
+	if enchantBuffsBySlot[16] then
+		local current = mhHas and mhID or nil
+		if cachedEnchantIDs[16] ~= current then
+			cachedEnchantIDs[16] = current
+			for catId, buffId in pairs(enchantBuffsBySlot[16]) do
+				updateBuff(catId, buffId)
+				needsLayout[catId] = true
+			end
+		end
+	end
+
+	if enchantBuffsBySlot[17] then
+		local current = ohHas and ohID or nil
+		if cachedEnchantIDs[17] ~= current then
+			cachedEnchantIDs[17] = current
+			for catId, buffId in pairs(enchantBuffsBySlot[17]) do
+				updateBuff(catId, buffId)
+				needsLayout[catId] = true
+			end
+		end
+	end
+
+	for catId in pairs(needsLayout) do
+		updatePositions(catId)
+	end
+end
+
+local function scheduleEnchantScan()
+	if enchantScanPending then return end
+	enchantScanPending = true
+	C_Timer.After(0.10, scanWeaponEnchants)
 end
 
 local function scheduleEquipScan()
@@ -1183,6 +1242,11 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		return
 	end
 
+	if event == "UNIT_INVENTORY_CHANGED" and unit == "player" then
+		scheduleEnchantScan()
+		return
+	end
+
 	if event == "PLAYER_EQUIPMENT_CHANGED" then
 		local slot = unit
 		if slot == 13 or slot == 14 then scheduleEquipScan() end
@@ -1199,6 +1263,7 @@ eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
 eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 
 local function addBuff(catId, id)
 	-- get spell name and icon once
@@ -1302,7 +1367,13 @@ local function removeBuff(catId, id)
 	local cat = getCategory(catId)
 	if not cat then return end
 	local buff = cat.buffs[id]
-	if buff and buff.trackType == "ITEM" and buff.slot then unregisterItemBuff(catId, buff.slot) end
+	if buff and buff.slot then
+		if buff.trackType == "ITEM" then
+			unregisterItemBuff(catId, buff.slot)
+		elseif buff.trackType == "ENCHANT" then
+			unregisterEnchantBuff(catId, buff.slot)
+		end
+	end
 	cat.buffs[id] = nil
 	addon.db["buffTrackerHidden"][id] = nil
 	addon.db["buffTrackerSounds"][catId][id] = nil
@@ -1345,7 +1416,11 @@ local function clearCategoryData(catId)
 	end
 	if addon.db["buffTrackerCategories"][catId] then
 		for id, buff in pairs(addon.db["buffTrackerCategories"][catId].buffs or {}) do
-			if buff.trackType == "ITEM" and buff.slot then unregisterItemBuff(catId, buff.slot) end
+			if buff.trackType == "ITEM" and buff.slot then
+				unregisterItemBuff(catId, buff.slot)
+			elseif buff.trackType == "ENCHANT" and buff.slot then
+				unregisterEnchantBuff(catId, buff.slot)
+			end
 		end
 	end
 end
@@ -1438,7 +1513,11 @@ local function importCategory(encoded)
 	addon.db["buffTrackerLocked"][newId] = false
 
 	for id, buff in pairs(cat.buffs or {}) do
-		if buff.trackType == "ITEM" and buff.slot then registerItemBuff(newId, id, buff.slot) end
+		if buff.trackType == "ITEM" and buff.slot then
+			registerItemBuff(newId, id, buff.slot)
+		elseif buff.trackType == "ENCHANT" and buff.slot then
+			registerEnchantBuff(newId, id, buff.slot)
+		end
 	end
 
 	addon.db["buffTrackerSounds"][newId] = {}
@@ -1720,7 +1799,11 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 			-- clean up all buff data for this category
 			for buffId, buff in pairs(addon.db["buffTrackerCategories"][catId].buffs or {}) do
 				addon.db["buffTrackerHidden"][buffId] = nil
-				if buff.trackType == "ITEM" and buff.slot then unregisterItemBuff(catId, buff.slot) end
+				if buff.trackType == "ITEM" and buff.slot then
+					unregisterItemBuff(catId, buff.slot)
+				elseif buff.trackType == "ENCHANT" and buff.slot then
+					unregisterEnchantBuff(catId, buff.slot)
+				end
 			end
 			addon.db["buffTrackerCategories"][catId] = nil
 			addon.db["buffTrackerOrder"][catId] = nil
