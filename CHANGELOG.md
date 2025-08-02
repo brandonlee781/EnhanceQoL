@@ -20,6 +20,7 @@
 - Missing variable check in Aura Tracker’s cooldown logic caused unnecessary CPU usage — fixed.
 - Frame strata of buffs was **too** high.
 - Cast Tracker now only handles mobs currently **in combat** with the player.
+- Truncation of UnitFrame names also effected nameplates
 
 ---
 
