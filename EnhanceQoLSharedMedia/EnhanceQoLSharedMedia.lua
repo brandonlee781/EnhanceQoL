@@ -202,14 +202,42 @@ addon.SharedMedia.sounds = {
 	{ key = "Aura Mastery", label = "EQOL: |cFF000000|rAura Mastery |T135872:16|t", path = voiceoverPath .. "Aura Mastery.ogg" },
 	{ key = "Healthstones", label = "EQOL: |cFF000000|rHealthstones |T538745:16|t", path = voiceoverPath .. "Healthstones.ogg" },
 	{ key = "Big Heal", label = "EQOL: Big Heal", path = voiceoverPath .. "Big Heal.ogg" },
+	{ key = "Battle Res", label = "EQOL: Battle Res", path = voiceoverPath .. "Battle Res.ogg" },
+	{ key = "Bloodlust", label = "EQOL: Bloodlust", path = voiceoverPath .. "Bloodlust.ogg" },
+	{ key = "Cheat Death", label = "EQOL: Cheat Death", path = voiceoverPath .. "Cheat Death.ogg" },
+	{ key = "Combat Res", label = "EQOL: Combat Res", path = voiceoverPath .. "Combat Res.ogg" },
+	{ key = "Flask", label = "EQOL: Flask", path = voiceoverPath .. "Flask.ogg" },
+	{ key = "Fly", label = "EQOL: Fly", path = voiceoverPath .. "Fly.ogg" },
+	{ key = "Food", label = "EQOL: Food", path = voiceoverPath .. "Food.ogg" },
+	{ key = "Sooth", label = "EQOL: |cFF000000|rSooth |T132163:16|t", path = voiceoverPath .. "Sooth.ogg" },
+	{ key = "Wrath", label = "EQOL: |cFF000000|rWrath |T535045:16|t", path = voiceoverPath .. "Wrath.ogg" },
+	{ key = "Purge", label = "EQOL: |cFF000000|rPurge |T136075:16|t", path = voiceoverPath .. "Purge.ogg" },
+	{ key = "Weapon Enchant", label = "EQOL: Weapon Enchant", path = voiceoverPath .. "Weapon Enchant.ogg" },
+	{ key = "Weapon Oil", label = "EQOL: Weapon Oil", path = voiceoverPath .. "Weapon Oil.ogg" },
+	{ key = "Fireblood", label = "EQOL: |cFF000000|rFireblood |T1786406:16|t", path = voiceoverPath .. "Fireblood.ogg" },
+	{ key = "Ancestral Call", label = "EQOL: |cFF000000|rAncestral Call |T2021574:16|t", path = voiceoverPath .. "Ancestral Call.ogg" },
+	{ key = "Blood Fury", label = "EQOL: |cFF000000|rBlood Fury |T135726:16|t", path = voiceoverPath .. "Blood Fury.ogg" },
+	{ key = "Berserking", label = "EQOL: |cFF000000|rBerserking |T135727:16|t", path = voiceoverPath .. "Berserking.ogg" },
+	{ key = "Regeneratin", label = "EQOL: |cFF000000|rRegeneratin |T1850550:16|t", path = voiceoverPath .. "Regeneratin.ogg" },
+	{ key = "Speed", label = "EQOL: Speed", path = voiceoverPath .. "Speed.ogg" },
+	{ key = "Arcane Torrent", label = "EQOL: |cFF000000|rArcane Torrent |T136222:16|t", path = voiceoverPath .. "Arcane Torrent.ogg" },
+	{ key = "Gift of the Naaru", label = "EQOL: |cFF000000|rGift of the Naaru |T135923:16|t", path = voiceoverPath .. "Gift of the Naaru.ogg" },
+	{ key = "Tail Swipe", label = "EQOL: |cFF000000|rTail Swipe |T4622486:16|t", path = voiceoverPath .. "Tail Swipe.ogg" },
+	{ key = "Wing Buffet", label = "EQOL: |cFF000000|rWing Buffet |T4622488:16|t", path = voiceoverPath .. "Wing Buffet.ogg" },
+	{ key = "Escape Artist", label = "EQOL: |cFF000000|rEscape Artist |T132309:16|t", path = voiceoverPath .. "Escape Artist.ogg" },
+	{ key = "Rocket Jump", label = "EQOL: |cFF000000|rRocket Jump |T370769:16|t", path = voiceoverPath .. "Rocket Jump.ogg" },
+	{ key = "Bull Rush", label = "EQOL: |cFF000000|rBull Rush |T1723987:16|t", path = voiceoverPath .. "Bull Rush.ogg" },
+	{ key = "Will to Survive", label = "EQOL: |cFF000000|rWill to Survive |T136129:16|t", path = voiceoverPath .. "Will to Survive.ogg" },
+	{ key = "Haymaker", label = "EQOL: |cFF000000|rHaymaker |T2447782:16|t", path = voiceoverPath .. "Haymaker.ogg" },
+	{ key = "Emergency Failsafe", label = "EQOL: |cFF000000|rEmergency Failsafe |T3192688:16|t", path = voiceoverPath .. "Emergency Failsafe.ogg" },
+	{ key = "Quaking Palm", label = "EQOL: |cFF000000|rQuaking Palm |T572035:16|t", path = voiceoverPath .. "Quaking Palm.ogg" },
+	{ key = "War Stomp", label = "EQOL: |cFF000000|rWar Stomp |T132368:16|t", path = voiceoverPath .. "War Stomp.ogg" },
+	{ key = "Will of the Forsaken", label = "EQOL: |cFF000000|rWill of the Forsaken |T136187:16|t", path = voiceoverPath .. "Will of the Forsaken.ogg" },
+	{ key = "Spatial Rift", label = "EQOL: |cFF000000|rSpatial Rift |T1724004:16|t", path = voiceoverPath .. "Spatial Rift.ogg" },
+	{ key = "Darkflight", label = "EQOL: |cFF000000|rDarkflight |T366937:16|t", path = voiceoverPath .. "Darkflight.ogg" },
 }
 
-
 -- Sort alphabetically, but ignore the leading "EQOL:" prefix (and any following spaces)
-local function labelKey(lbl)
-	return (lbl:gsub("^EQOL:%s*", "")):lower()
-end
+local function labelKey(lbl) return (lbl:gsub("^EQOL:%s*", "")):lower() end
 
-table.sort(addon.SharedMedia.sounds, function(a, b)
-	return labelKey(a.label) < labelKey(b.label)
-end)
+table.sort(addon.SharedMedia.sounds, function(a, b) return labelKey(a.label) < labelKey(b.label) end)

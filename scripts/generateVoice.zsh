@@ -50,7 +50,6 @@ while IFS=';' read -r WORD SPEED PITCH FNAME ICON PNAME || [[ -n "$WORD" ]]; do
   fi
   LABEL_ESCAPED="${LABEL_NAME//\"/\\\"}"
 
-  printf 'LSM:Register("sound", "EQOL: %s", %s .. "%s.ogg")\n' "$LABEL_ESCAPED" "$PATHW" "$BASENAME"
   printf '{ key = "%s", label = "EQOL: %s", path = %s .. "%s.ogg" },\n' "$KEY_NAME" "$LABEL_ESCAPED" "$PATHW" "$BASENAME"
   # Optional: AIFF löschen, damit nur OGG übrig bleibt
   rm "$OUT"
