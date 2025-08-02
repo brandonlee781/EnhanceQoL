@@ -12,6 +12,7 @@
 - **Aura Tracker**
   - New **Spacing** setting to adjust the gap between icons.
   - Now tracks on-use **trinket cooldowns**.
+  - *Show for Difficulty* added to Aura Tracker
 - **Talent Reminder – Build Info**
   - Displays the name of the currently active talent build.
   - Option to show the text **only outside instances**, **only in 5-man/Delves**, or **only in raids**.

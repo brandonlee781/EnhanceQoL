@@ -170,6 +170,37 @@ local roleNames = {
 	DAMAGER = INLINE_DAMAGER_ICON .. " " .. DAMAGER,
 }
 
+local instanceDifficultyGroups = {
+	RAID = { name = LFG_TYPE_RAID, ids = { 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 151 } },
+	NORMAL = { name = PLAYER_DIFFICULTY1, ids = { 1, 150 } },
+	HEROIC = { name = PLAYER_DIFFICULTY2, ids = { 2 } },
+	MYTHIC = { name = PLAYER_DIFFICULTY6, ids = { 23 } },
+	MYTHIC_PLUS = { name = PLAYER_DIFFICULTY_MYTHIC_PLUS, ids = { 8 } },
+	TIMEWALKING = { name = PLAYER_DIFFICULTY_TIMEWALKER, ids = { 24, 33 } },
+	DELVES = { name = DELVES_LABEL, ids = { 208 } },
+	PVP = { name = PVP, ids = { 29, 34 } },
+	SCENARIO = { name = GUILD_CHALLENGE_TYPE4, ids = { 11, 12, 20, 25, 30, 32, 38, 39, 40, 147, 149, 152, 153, 167, 168, 169, 170, 171 } },
+	OUTSIDE = { name = WORLD, ids = { 0 } },
+}
+
+local instanceDifficultyOrder = { "RAID", "NORMAL", "HEROIC", "MYTHIC", "MYTHIC_PLUS", "PVP", "SCENARIO", "TIMEWALKING", "DELVES", "OUTSIDE" }
+local difficultyToGroup = {}
+local instanceDifficultyNames = {}
+for key, info in pairs(instanceDifficultyGroups) do
+	instanceDifficultyNames[key] = info.name
+	for _, id in ipairs(info.ids) do
+		difficultyToGroup[id] = key
+	end
+end
+
+local currentInstanceGroup
+
+local function updateInstanceGroup()
+	local _, _, diffID = GetInstanceInfo()
+	if nil == diffID then diffID = "" end
+	currentInstanceGroup = difficultyToGroup[diffID]
+end
+
 local DebuffBorderColors = {
 	Magic = { 0.2, 0.6, 1 },
 	Curse = { 0.6, 0, 1 },
@@ -210,6 +241,9 @@ local function buffAllowed(buff)
 		local role = UnitGroupRolesAssigned("player")
 		if role == "NONE" then role = addon.variables.unitRole end
 		if not role or not buff.allowedRoles[role] then return false end
+	end
+	if buff.allowedInstances and next(buff.allowedInstances) then
+		if not currentInstanceGroup or not buff.allowedInstances[currentInstanceGroup] then return false end
 	end
 	return true
 end
@@ -339,22 +373,27 @@ local function rebuildAltMapping()
 	wipe(chargeSpells)
 	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 		for baseId, buff in pairs(cat.buffs or {}) do
-			spellToCat[baseId] = spellToCat[baseId] or {}
-			spellToCat[baseId][catId] = true
+			if not buff.allowedInstances or not next(buff.allowedInstances) or (currentInstanceGroup and buff.allowedInstances[currentInstanceGroup]) then
+				spellToCat[baseId] = spellToCat[baseId] or {}
+				spellToCat[baseId][catId] = true
 
-			buff.altHash = {}
-			if buff.altIDs then
-				for _, altId in ipairs(buff.altIDs) do
-					altToBase[altId] = baseId
-					buff.altHash[altId] = true
+				buff.altHash = {}
+				if buff.altIDs then
+					for _, altId in ipairs(buff.altIDs) do
+						altToBase[altId] = baseId
+						buff.altHash[altId] = true
+					end
 				end
-			end
 
-			local info = C_Spell and C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(baseId)
-			if info and info.maxCharges and info.maxCharges > 0 then
-				chargeSpells[baseId] = true
-				buff.hasCharges = true
+				local info = C_Spell and C_Spell.GetSpellCharges and C_Spell.GetSpellCharges(baseId)
+				if info and info.maxCharges and info.maxCharges > 0 then
+					chargeSpells[baseId] = true
+					buff.hasCharges = true
+				else
+					buff.hasCharges = false
+				end
 			else
+				buff.altHash = nil
 				buff.hasCharges = false
 			end
 		end
@@ -591,6 +630,14 @@ function updateBuff(catId, id, changedId, firstScan)
 	local buff = cat and cat.buffs and cat.buffs[id]
 	local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
 	local key = catId .. ":" .. id
+	if buff and not buffAllowed(buff) then
+		if timedAuras[key] then
+			timedAuras[key] = nil
+			if refreshTimeTicker then refreshTimeTicker() end
+		end
+		if activeBuffFrames[catId] and activeBuffFrames[catId][id] then activeBuffFrames[catId][id]:Hide() end
+		return
+	end
 	local before = timedAuras[key] ~= nil
 	if buff and hasTimeCondition(buff.conditions) then
 		timedAuras[key] = { catId = catId, buffId = id }
@@ -598,10 +645,6 @@ function updateBuff(catId, id, changedId, firstScan)
 		timedAuras[key] = nil
 	end
 	if before ~= (timedAuras[key] ~= nil) and refreshTimeTicker then refreshTimeTicker() end
-	if buff and not buffAllowed(buff) then
-		if activeBuffFrames[catId] and activeBuffFrames[catId][id] then activeBuffFrames[catId][id]:Hide() end
-		return
-	end
 
 	if tType == "ITEM" and buff and buff.slot then
 		-- check if the equipped item actually has a usable spell
@@ -963,8 +1006,13 @@ local function scanBuffs()
 		local cat = addon.db["buffTrackerCategories"][catId]
 		if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
 			for _, id in ipairs(getBuffOrder(catId)) do
+				local buff = cat.buffs[id]
 				if not addon.db["buffTrackerHidden"][id] then
-					updateBuff(catId, id, nil, firstScan)
+					if not buff or not buff.allowedInstances or not next(buff.allowedInstances) or (currentInstanceGroup and buff.allowedInstances[currentInstanceGroup]) then
+						updateBuff(catId, id, nil, firstScan)
+					elseif activeBuffFrames[catId] and activeBuffFrames[catId][id] then
+						activeBuffFrames[catId][id]:Hide()
+					end
 				elseif activeBuffFrames[catId] and activeBuffFrames[catId][id] then
 					activeBuffFrames[catId][id]:Hide()
 				end
@@ -1015,11 +1063,14 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 				anchor:Hide()
 			end
 		end
-		if event == "PLAYER_LOGIN" then rebuildAltMapping() end
 		if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-			collectActiveAuras()
 			firstScan = true
-			C_Timer.After(1, scanBuffs)
+			C_Timer.After(1, function()
+				updateInstanceGroup()
+				rebuildAltMapping()
+				collectActiveAuras()
+				scanBuffs()
+			end)
 			return
 		end
 	end
@@ -1175,6 +1226,7 @@ local function addBuff(catId, id)
 		allowedSpecs = {},
 		allowedClasses = {},
 		allowedRoles = {},
+		allowedInstances = {},
 		showStacks = defStacks,
 		showTimerText = defTimer,
 		customTextEnabled = false,
@@ -1224,6 +1276,7 @@ function addon.Aura.functions.addTrinketBuff(catId, slot)
 		allowedSpecs = {},
 		allowedClasses = {},
 		allowedRoles = {},
+		allowedInstances = {},
 		showStacks = false,
 		showTimerText = defTimer,
 		customTextEnabled = false,
@@ -1312,6 +1365,7 @@ local function sanitiseCategory(cat)
 		if not buff.allowedSpecs then buff.allowedSpecs = {} end
 		if not buff.allowedClasses then buff.allowedClasses = {} end
 		if not buff.allowedRoles then buff.allowedRoles = {} end
+		if not buff.allowedInstances then buff.allowedInstances = {} end
 		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
 		if buff.showCooldown == nil then buff.showCooldown = false end
 		if buff.showStacks == nil then
@@ -2007,6 +2061,20 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 	end
 	specDrop:SetRelativeWidth(0.7)
 	wrapper:AddChild(specDrop)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local instDrop = addon.functions.createDropdownAce(L["ShowForDifficulty"], instanceDifficultyNames, instanceDifficultyOrder, function(self, event, key, checked)
+		buff.allowedInstances = buff.allowedInstances or {}
+		buff.allowedInstances[key] = checked or nil
+		rebuildAltMapping()
+		scanBuffs()
+	end)
+	instDrop:SetMultiselect(true)
+	for diff, val in pairs(buff.allowedInstances or {}) do
+		if val then instDrop:SetItemValue(diff, true) end
+	end
+	instDrop:SetRelativeWidth(0.7)
+	wrapper:AddChild(instDrop)
 	wrapper:AddChild(addon.functions.createSpacerAce())
 
 	-- TODO 11.2: Replace IsSpellKnown* check with C_SpellBook.IsSpellInSpellBook
