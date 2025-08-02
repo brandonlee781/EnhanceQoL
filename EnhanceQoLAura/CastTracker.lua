@@ -25,13 +25,13 @@ local altToBase = {}
 local spellToCat = {} -- [spellID] = { [catId]=true, ... }
 
 local function resolveSpellCats(spellId)
-        local base = spellId
-        local cats = spellToCat[base]
-        if not cats then
-                base = altToBase[spellId]
-                if base then cats = spellToCat[base] end
-        end
-        return base or spellId, cats
+	local base = spellId
+	local cats = spellToCat[base]
+	if not cats then
+		base = altToBase[spellId]
+		if base then cats = spellToCat[base] end
+	end
+	return base or spellId, cats
 end
 local updateEventRegistration
 local ReleaseAllBars
@@ -794,14 +794,13 @@ local function buildSpellOptions(container, catId, spellId)
 
 	local cbOnMe = addon.functions.createCheckboxAce(L["castTrackerOnlyOnMe"], spell.onlyOnMe, function(_, _, val) spell.onlyOnMe = val end)
 	wrapper:AddChild(cbOnMe)
-	
+
 	local cbText = addon.functions.createCheckboxAce(L["castTrackerShowCustomText"], spell.customTextEnabled, function(_, _, val)
 		spell.customTextEnabled = val
 		container:ReleaseChildren()
 		buildSpellOptions(container, catId, spellId)
 	end)
 	wrapper:AddChild(cbText)
-
 
 	if spell.customTextEnabled then
 		local txtEdit = addon.functions.createEditboxAce(L["castTrackerCustomText"], spell.customText or "", function(self, _, text)
@@ -1045,9 +1044,9 @@ CastTracker.functions.UpdateActiveBars = UpdateActiveBars
 
 local function HandleCLEU()
 	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, _, _, spellId = CombatLogGetCurrentEventInfo()
-        local baseSpell, cats = resolveSpellCats(spellId)
-        if subevent == "SPELL_CAST_START" then
-                if not cats then return end
+	local baseSpell, cats = resolveSpellCats(spellId)
+	if subevent == "SPELL_CAST_START" then
+		if not cats then return end
 		local castTime
 		local unit = GetUnitFromGUID(sourceGUID)
 		if not unit then return end
@@ -1092,10 +1091,10 @@ local function HandleUnitChannelStart(unit, castGUID, spellId)
 		if actTank then threat = UnitThreatSituation(actTank, unit) end
 	end
 	if not threat or threat == 0 then return end
-        local sourceGUID = UnitGUID(unit)
-        if not sourceGUID then return end
-        local baseSpell, cats = resolveSpellCats(spellId)
-        if not cats then return end
+	local sourceGUID = UnitGUID(unit)
+	if not sourceGUID then return end
+	local baseSpell, cats = resolveSpellCats(spellId)
+	if not cats then return end
 	local _, castTime = getCastInfo(unit)
 	castTime = castTime or 0
 	local key = sourceGUID .. ":" .. baseSpell
@@ -1108,9 +1107,9 @@ local function HandleUnitChannelStart(unit, castGUID, spellId)
 end
 
 local function HandleUnitChannelStop(unit, castGUID, spellId)
-        local sourceGUID = UnitGUID(unit)
-        if not sourceGUID then return end
-        local baseSpell = resolveSpellCats(spellId)
+	local sourceGUID = UnitGUID(unit)
+	if not sourceGUID then return end
+	local baseSpell = resolveSpellCats(spellId)
 	local key = sourceGUID .. ":" .. baseSpell
 	local byCat = activeKeyIndex[key]
 	if byCat then
@@ -1121,9 +1120,9 @@ local function HandleUnitChannelStop(unit, castGUID, spellId)
 end
 
 local function HandleUnitSpellcastStop(unit, castGUID, spellId)
-        local sourceGUID = UnitGUID(unit)
-        if not sourceGUID then return end
-        local baseSpell = resolveSpellCats(spellId)
+	local sourceGUID = UnitGUID(unit)
+	if not sourceGUID then return end
+	local baseSpell = resolveSpellCats(spellId)
 	local key = sourceGUID .. ":" .. baseSpell
 	local byCat = activeKeyIndex[key]
 	if byCat then
