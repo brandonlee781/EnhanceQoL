@@ -171,16 +171,19 @@ local roleNames = {
 }
 
 local instanceDifficultyGroups = {
-	RAID = { name = L["Raid"], ids = { 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 151 } },
-	NORMAL = { name = L["Normal"], ids = { 1, 150 } },
-	HEROIC = { name = L["Heroic"], ids = { 2 } },
-	MYTHIC = { name = L["Mythic"], ids = { 23 } },
-	MYTHIC_PLUS = { name = L["MythicPlus"], ids = { 8 } },
-	TIMEWALKING = { name = L["Timewalking"], ids = { 24, 33 } },
-	DELVES = { name = L["Delves"], ids = { 208 } },
+	RAID = { name = LFG_TYPE_RAID, ids = { 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 151 } },
+	NORMAL = { name = PLAYER_DIFFICULTY1, ids = { 1, 150 } },
+	HEROIC = { name = PLAYER_DIFFICULTY2, ids = { 2 } },
+	MYTHIC = { name = PLAYER_DIFFICULTY6, ids = { 23 } },
+	MYTHIC_PLUS = { name = PLAYER_DIFFICULTY_MYTHIC_PLUS, ids = { 8 } },
+	TIMEWALKING = { name = PLAYER_DIFFICULTY_TIMEWALKER, ids = { 24, 33 } },
+	DELVES = { name = DELVES_LABEL, ids = { 208 } },
+	PVP = { name = PVP, ids = { 29, 34 } },
+	SCENARIO = { name = GUILD_CHALLENGE_TYPE4, ids = { 11, 12, 20, 25, 30, 32, 38, 39, 40, 147, 149, 152, 153, 167, 168, 169, 170, 171 } },
+	OUTSIDE = { name = WORLD, ids = { 0 } },
 }
 
-local instanceDifficultyOrder = { "RAID", "NORMAL", "HEROIC", "MYTHIC", "MYTHIC_PLUS", "TIMEWALKING", "DELVES" }
+local instanceDifficultyOrder = { "RAID", "NORMAL", "HEROIC", "MYTHIC", "MYTHIC_PLUS", "PVP", "SCENARIO", "TIMEWALKING", "DELVES", "OUTSIDE" }
 local difficultyToGroup = {}
 local instanceDifficultyNames = {}
 for key, info in pairs(instanceDifficultyGroups) do
@@ -194,6 +197,7 @@ local currentInstanceGroup
 
 local function updateInstanceGroup()
 	local _, _, diffID = GetInstanceInfo()
+	if nil == diffID then diffID = "" end
 	currentInstanceGroup = difficultyToGroup[diffID]
 end
 
@@ -1060,11 +1064,13 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 			end
 		end
 		if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-			updateInstanceGroup()
-			rebuildAltMapping()
-			collectActiveAuras()
 			firstScan = true
-			C_Timer.After(1, scanBuffs)
+			C_Timer.After(1, function()
+				updateInstanceGroup()
+				rebuildAltMapping()
+				collectActiveAuras()
+				scanBuffs()
+			end)
 			return
 		end
 	end
@@ -2057,7 +2063,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 	wrapper:AddChild(specDrop)
 	wrapper:AddChild(addon.functions.createSpacerAce())
 
-	local instDrop = addon.functions.createDropdownAce(L["ShowForInstance"], instanceDifficultyNames, instanceDifficultyOrder, function(self, event, key, checked)
+	local instDrop = addon.functions.createDropdownAce(L["ShowForDifficulty"], instanceDifficultyNames, instanceDifficultyOrder, function(self, event, key, checked)
 		buff.allowedInstances = buff.allowedInstances or {}
 		buff.allowedInstances[key] = checked or nil
 		rebuildAltMapping()
