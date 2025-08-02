@@ -193,3 +193,4 @@ LSM:Register("sound", "EQOL: |cFF000000|rZephyr |T4630449:16|t", voiceoverPath .
 LSM:Register("sound", "EQOL: |cFF000000|rSlow Fall |T135992:16|t", voiceoverPath .. "Slow Fall.ogg")
 LSM:Register("sound", "EQOL: |cFF000000|rAura Mastery |T135872:16|t", voiceoverPath .. "Aura Mastery.ogg")
 LSM:Register("sound", "EQOL: |cFF000000|rHealthstones |T538745:16|t", voiceoverPath .. "Healthstones.ogg")
+LSM:Register("sound", "EQOL: Big Heal", voiceoverPath .. "Big Heal.ogg")

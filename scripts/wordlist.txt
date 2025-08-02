@@ -43,6 +43,7 @@ Bait;180
 Beam;190;"[[pbas -40]]"
 Bleed;180
 Blue;190;"[[pbas -40]]"
+Big Heal;160;"[[pbas -40]]";Big Heal
 Bommbs;160;"[[pbas -40]]";Bombs
 Boss;180;"[[pbas -60]]"
 Break;180;"[[pbas -60]]"
