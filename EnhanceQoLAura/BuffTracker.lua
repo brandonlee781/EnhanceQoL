@@ -1480,7 +1480,7 @@ end
 
 function addon.Aura.functions.addWeaponEnchantBuff(catId, slot)
 	local icon = GetInventoryItemTexture("player", slot)
-	local itemName = L[slot == 16 and "Mainhand" or "Offhand"]
+	local itemName = slot == 16 and INVTYPE_WEAPONMAINHAND or INVTYPE_WEAPONOFFHAND
 
 	local id = -slot
 	local cat = getCategory(catId)
