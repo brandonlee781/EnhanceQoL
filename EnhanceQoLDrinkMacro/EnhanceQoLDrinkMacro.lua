@@ -9,6 +9,7 @@ else
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_DrinkMacro")
+local LSM = LibStub("LibSharedMedia-3.0")
 
 local function createMacroIfMissing()
 	if GetMacroInfo(drinkMacroName) == nil then CreateMacro(drinkMacroName, "INV_Misc_QuestionMark") end
@@ -117,6 +118,16 @@ local function addDrinkFrame(container)
 				addon.Drinks.functions.updateRole()
 			end,
 		},
+		{
+			text = L["mageFoodReminderSound"],
+			var = "mageFoodReminderSound",
+			func = function(self, _, value)
+				addon.db["mageFoodReminderSound"] = value
+				addon.Drinks.functions.updateRole()
+				container:ReleaseChildren()
+				addDrinkFrame(container)
+			end,
+		},
 	}
 
 	table.sort(data, function(a, b) return a.text < b.text end)
@@ -130,6 +141,44 @@ local function addDrinkFrame(container)
 		if cbData.func then uFunc = cbData.func end
 		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc, cbData.desc)
 		groupCore:AddChild(cbElement)
+	end
+
+	if addon.db["mageFoodReminderSound"] then
+		local cbCustomReminderSound = addon.functions.createCheckboxAce(L["mageFoodReminderUseCustomSound"], addon.db["mageFoodReminderUseCustomSound"], function(self, _, value)
+			addon.db["mageFoodReminderUseCustomSound"] = value
+			container:ReleaseChildren()
+			addDrinkFrame(container)
+		end)
+		groupCore:AddChild(cbCustomReminderSound)
+
+		if addon.db["mageFoodReminderUseCustomSound"] then
+			local soundList = {}
+			if addon.ChatIM and addon.ChatIM.BuildSoundTable and not addon.ChatIM.availableSounds then addon.ChatIM:BuildSoundTable() end
+			local soundTable = (addon.ChatIM and addon.ChatIM.availableSounds) or LSM:HashTable("sound")
+			for name in pairs(soundTable or {}) do
+				soundList[name] = name
+			end
+			local list, order = addon.functions.prepareListForDropdown(soundList)
+			local dropJoin = addon.functions.createDropdownAce(L["mageFoodReminderJoinSound"], list, order, function(self, _, val)
+				addon.db["mageFoodReminderJoinSoundFile"] = val
+				self:SetValue(val)
+				local file = soundTable and soundTable[val]
+				if file then PlaySoundFile(file, "Master") end
+			end)
+			dropJoin:SetValue(addon.db["mageFoodReminderJoinSoundFile"])
+			groupCore:AddChild(dropJoin)
+
+			local dropLeave = addon.functions.createDropdownAce(L["mageFoodReminderLeaveSound"], list, order, function(self, _, val)
+				addon.db["mageFoodReminderLeaveSoundFile"] = val
+				self:SetValue(val)
+				local file = soundTable and soundTable[val]
+				if file then PlaySoundFile(file, "Master") end
+			end)
+			dropLeave:SetValue(addon.db["mageFoodReminderLeaveSoundFile"])
+			groupCore:AddChild(dropLeave)
+
+			groupCore:AddChild(addon.functions.createSpacerAce())
+		end
 	end
 
 	local sliderManaMinimum = addon.functions.createSliderAce(

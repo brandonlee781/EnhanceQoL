@@ -17,18 +17,44 @@ else
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_DrinkMacro")
+local LSM = LibStub("LibSharedMedia-3.0")
 
 -- Enable or disable the food reminder frame
 addon.functions.InitDBValue("mageFoodReminder", false)
 local defaultPos = { point = "TOP", x = 0, y = -100 }
 addon.functions.InitDBValue("mageFoodReminderPos", { point = defaultPos.point, x = defaultPos.x, y = defaultPos.y })
 addon.functions.InitDBValue("mageFoodReminderScale", 1)
+addon.functions.InitDBValue("mageFoodReminderSound", true)
+addon.functions.InitDBValue("mageFoodReminderUseCustomSound", false)
+addon.functions.InitDBValue("mageFoodReminderJoinSoundFile", "")
+addon.functions.InitDBValue("mageFoodReminderLeaveSoundFile", "")
 
 local brButton
 local defaultButtonSize = 60
 local defaultFontSize = 16
 
 local queuedFollower = false
+
+local function playReminderSound(kind)
+	if not addon.db["mageFoodReminderSound"] then return end
+
+	local key
+	if kind == "leave" then
+		key = addon.db["mageFoodReminderLeaveSoundFile"]
+	else
+		key = addon.db["mageFoodReminderJoinSoundFile"]
+	end
+
+	if addon.db["mageFoodReminderUseCustomSound"] then
+		local file = key ~= "" and LSM:HashTable("sound")[key]
+		if file then
+			PlaySoundFile(file, "Master")
+			return
+		end
+	end
+
+	PlaySound(SOUNDKIT.RAID_WARNING)
+end
 
 local function removeBRFrame()
 	if brButton then
@@ -175,6 +201,7 @@ local function hasEnoughMageFood()
 	return false
 end
 
+local soundPlayed = false
 local function checkShow()
 	if not addon.db["mageFoodReminder"] then
 		removeBRFrame()
@@ -185,6 +212,13 @@ local function checkShow()
 	if queuedFollower and IsInLFGDungeon() then
 		if enoughFood then
 			createLeaveFrame()
+			if soundPlayed == false then
+				soundPlayed = true
+				C_Timer.After(0.3, function()
+					playReminderSound("leave")
+					soundPlayed = false
+				end)
+			end
 		else
 			removeBRFrame()
 		end
@@ -201,6 +235,13 @@ local function checkShow()
 	end
 	if not enoughFood then
 		createBRFrame()
+		if soundPlayed == false then
+			soundPlayed = true
+			C_Timer.After(0.3, function()
+				playReminderSound("join")
+				soundPlayed = false
+			end)
+		end
 	else
 		removeBRFrame()
 	end
