@@ -54,7 +54,10 @@ local function applyButtonSettings()
 	brButton:EnableMouse(true)
 	brButton:RegisterForDrag("LeftButton")
 
-	brButton:SetScript("OnDragStart", brButton.StartMoving)
+	brButton:SetScript("OnDragStart", function()
+		if not IsAltKeyDown() then return end
+		brButton:StartMoving()
+	end)
 	brButton:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		local point, _, _, xOfs, yOfs = self:GetPoint()
