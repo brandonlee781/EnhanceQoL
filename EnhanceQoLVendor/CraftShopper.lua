@@ -95,7 +95,8 @@ local function BuildShoppingList()
 	local need = {} -- [itemID] = fehlende Menge
 
 	for _, isRecraft in ipairs(isRecraftTbl) do
-		for _, recipeID in ipairs(C_TradeSkillUI.GetRecipesTracked(isRecraft)) do
+		local recipes = C_TradeSkillUI.GetRecipesTracked(isRecraft) or {}
+		for _, recipeID in ipairs(recipes) do
 			local schem = getSchematic(recipeID, isRecraft)
 			if schem and schem.reagentSlotSchematics then
 				for _, slot in ipairs(schem.reagentSlotSchematics) do
