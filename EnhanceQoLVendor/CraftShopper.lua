@@ -173,7 +173,7 @@ local function ShowPurchasePopup(item, buyWidget)
 	buyWidget:SetDisabled(true)
 
 	local popup = AceGUI:Create("Window")
-	popup:SetTitle("Confirm purchase")
+	popup:SetTitle(L["vendorCraftShopperConfirmPurchase"])
 	popup:SetWidth(250)
 	popup:SetHeight(150)
 	popup:SetLayout("List")
@@ -183,7 +183,7 @@ local function ShowPurchasePopup(item, buyWidget)
 	local text = AceGUI:Create("Label")
 	text:SetFullWidth(true)
 	text:SetJustifyH("CENTER")
-	text:SetText("Waiting for price...")
+	text:SetText(L["vendorCraftShopperWaitingForPrice"])
 	popup:AddChild(text)
 	popup.text = text
 
@@ -199,14 +199,14 @@ local function ShowPurchasePopup(item, buyWidget)
 	popup:AddChild(btnGroup)
 
 	local buyBtn = AceGUI:Create("Button")
-	buyBtn:SetText("Buy now")
+	buyBtn:SetText(L["vendorCraftShopperBuyNow"])
 	buyBtn:SetRelativeWidth(0.5)
 	buyBtn:SetDisabled(true)
 	btnGroup:AddChild(buyBtn)
 	popup.buyBtn = buyBtn
 
 	local cancelBtn = AceGUI:Create("Button")
-	cancelBtn:SetText("Cancel")
+	cancelBtn:SetText(L["vendorCraftShopperCancel"])
 	cancelBtn:SetRelativeWidth(0.5)
 	btnGroup:AddChild(cancelBtn)
 
@@ -217,13 +217,13 @@ local function ShowPurchasePopup(item, buyWidget)
 	popup.spinner = spinner
 
 	popup.remaining = 15
-	timerLabel:SetText(("Time remaining: %ds"):format(popup.remaining))
+	timerLabel:SetText(L["vendorCraftShopperTimeRemaining"]:format(popup.remaining))
 	popup.ticker = C_Timer.NewTicker(1, function()
 		popup.remaining = popup.remaining - 1
 		if popup.remaining <= 0 then
 			cancelBtn:Fire("OnClick")
 		else
-			timerLabel:SetText(("Time remaining: %ds"):format(popup.remaining))
+			timerLabel:SetText(L["vendorCraftShopperTimeRemaining"]:format(popup.remaining))
 		end
 	end)
 
@@ -266,7 +266,7 @@ end
 local function CreateCraftShopperFrame()
 	if addon.Vendor.CraftShopper.frame then return addon.Vendor.CraftShopper.frame end
 	local frame = AceGUI:Create("Window")
-	frame:SetTitle("Craft Shopper")
+	frame:SetTitle(L["vendorCraftShopperTitle"])
 	frame:SetWidth(300)
 	frame:SetHeight(400)
 	frame:SetLayout("List")
@@ -285,14 +285,14 @@ local function CreateCraftShopperFrame()
 	frame:AddChild(filterGroup)
 
 	local missingCheck = AceGUI:Create("CheckBox")
-	missingCheck:SetLabel("Missing only")
+	missingCheck:SetLabel(L["vendorCraftShopperMissingOnly"])
 	missingCheck:SetCallback("OnValueChanged", function() frame:Refresh() end)
 	missingCheck:SetRelativeWidth(0.5)
 	frame.missingOnly = missingCheck
 	filterGroup:AddChild(missingCheck)
 
 	local ahCheck = AceGUI:Create("CheckBox")
-	ahCheck:SetLabel("AH Buyable")
+	ahCheck:SetLabel(L["vendorCraftShopperAHBuyable"])
 	ahCheck:SetRelativeWidth(0.5)
 	ahCheck:SetCallback("OnValueChanged", function() frame:Refresh() end)
 	frame.ahBuyable = ahCheck
@@ -517,7 +517,7 @@ function addon.Vendor.functions.checkList()
 	for _, item in ipairs(addon.Vendor.CraftShopper.items) do
 		if item.ahBuyable then
 			local info = C_Item.GetItemInfo(item.itemID)
-			print(("[%s]   fehlt: %d - Buy in AH"):format(info or ("ItemID " .. item.itemID), item.missing))
+			print(L["vendorCraftShopperCheckListPrint"]:format(info or ("ItemID " .. item.itemID), item.missing))
 		end
 	end
 end
