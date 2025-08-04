@@ -106,7 +106,7 @@ end
 
 local function CreateCraftShopperFrame()
 	if addon.Vendor.CraftShopper.frame then return addon.Vendor.CraftShopper.frame end
-	local frame = AceGUI:Create("Frame")
+	local frame = AceGUI:Create("Window")
 	frame:SetTitle("Craft Shopper")
 	frame:SetWidth(300)
 	frame:SetHeight(400)
@@ -128,11 +128,13 @@ local function CreateCraftShopperFrame()
 	local missingCheck = AceGUI:Create("CheckBox")
 	missingCheck:SetLabel("Missing only")
 	missingCheck:SetCallback("OnValueChanged", function() frame:Refresh() end)
+	missingCheck:SetRelativeWidth(0.5)
 	frame.missingOnly = missingCheck
 	filterGroup:AddChild(missingCheck)
 
 	local ahCheck = AceGUI:Create("CheckBox")
 	ahCheck:SetLabel("AH Buyable")
+	ahCheck:SetRelativeWidth(0.5)
 	ahCheck:SetCallback("OnValueChanged", function() frame:Refresh() end)
 	frame.ahBuyable = ahCheck
 	filterGroup:AddChild(ahCheck)
@@ -146,6 +148,25 @@ local function CreateCraftShopperFrame()
 
 	function frame:Refresh()
 		scroll:ReleaseChildren()
+
+		local rowHeader = AceGUI:Create("SimpleGroup")
+		rowHeader:SetFullWidth(true)
+		rowHeader:SetLayout("Flow")
+		local label = AceGUI:Create("Label")
+		label:SetText(AUCTION_HOUSE_HEADER_ITEM)
+		label:SetRelativeWidth(0.55)
+		rowHeader:AddChild(label)
+
+		local label2 = AceGUI:Create("Label")
+		label2:SetText(NEED)
+		label2:SetRelativeWidth(0.25)
+		rowHeader:AddChild(label2)
+
+		local label3 = AceGUI:Create("Label")
+		label3:SetText("")
+		label3:SetRelativeWidth(0.2)
+		rowHeader:AddChild(label3)
+		scroll:AddChild(rowHeader)
 		local searchText = (search:GetText() or ""):lower()
 		for _, item in ipairs(addon.Vendor.CraftShopper.items) do
 			if not item.hidden and (not missingCheck:GetValue() or item.missing > 0) and (not ahCheck:GetValue() or item.ahBuyable) then
@@ -162,15 +183,18 @@ local function CreateCraftShopperFrame()
 						GameTooltip:SetItemByID(item.itemID)
 						GameTooltip:Show()
 					end)
+					label:SetRelativeWidth(0.55)
 					label:SetCallback("OnLeave", function() GameTooltip:Hide() end)
 					row:AddChild(label)
 
 					local qty = AceGUI:Create("Label")
-					qty:SetText(("%d/%d"):format(item.missing, item.qtyNeeded))
+					qty:SetText(("%d"):format(item.missing))
+					qty:SetRelativeWidth(0.25)
 					row:AddChild(qty)
 
 					local remove = AceGUI:Create("Button")
 					remove:SetText("X")
+					remove:SetRelativeWidth(0.2)
 					remove:SetWidth(20)
 					remove:SetCallback("OnClick", function()
 						item.hidden = true
