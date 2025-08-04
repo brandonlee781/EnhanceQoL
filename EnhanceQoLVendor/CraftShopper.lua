@@ -385,9 +385,7 @@ local function CreateCraftShopperFrame()
 						local itemName, _, quality, _, _, _, _, _, itemEquipLoc, _, _, classID, subclassID = C_Item.GetItemInfo(item.itemID)
 						local qualityFilter = { Enum.AuctionHouseFilter.ExactMatch }
 						local mappedQuality = mapQuality[quality]
-						if mappedQuality then
-							table.insert(qualityFilter, 1, mappedQuality)
-						end
+						if mappedQuality then table.insert(qualityFilter, 1, mappedQuality) end
 						if not itemName then return end
 						local query = {
 							searchString = itemName,
@@ -465,6 +463,10 @@ end
 function addon.Vendor.CraftShopper.DisableCraftShopper()
 	f:UnregisterEvent("TRACKED_RECIPE_UPDATE")
 	UnregisterHeavyEvents()
+	if pendingScan then
+		pendingScan:Cancel()
+		pendingScan = nil
+	end
 	if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
 end
 
