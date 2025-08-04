@@ -9,6 +9,10 @@ else
 	error(parentAddonName .. " is not loaded")
 end
 
+addon.Vendor = addon.Vendor or {}
+addon.Vendor.CraftShopper = addon.Vendor.CraftShopper or {}
+addon.Vendor.CraftShopper.items = addon.Vendor.CraftShopper.items or {}
+
 local RANK_TO_USE = 3 -- 1-3: gewünschter Qualitätsrang
 local isRecraftTbl = { false, true } -- erst normale, dann Recrafts
 
@@ -64,19 +68,20 @@ local function BuildShoppingList()
 		end
 	end
 
-	--  -------- Fehlende Mengen (Inventar vs. Bedarf) berechnen --------
+	local items = {}
 	for itemID, want in pairs(need) do
 		local owned = C_Item.GetItemCount(itemID, true) -- inkl. Bank
 		local missing = math.max(want.qty - owned, 0)
-		if missing > 0 then
-			local canBuy = ""
-			if want.canAHBuy then
-				canBuy = " - Buy in AH"
-				local info = C_Item.GetItemInfo(itemID)
-				print(("[%s]   fehlt: %d%s"):format(info or ("ItemID " .. itemID), missing, canBuy))
-			end
-		end
+		if missing > 0 then table.insert(items, {
+			itemID = itemID,
+			qtyNeeded = want.qty,
+			owned = owned,
+			missing = missing,
+			ahBuyable = want.canAHBuy,
+			hidden = false,
+		}) end
 	end
+	return items
 end
 
 local function Rescan()
@@ -87,7 +92,7 @@ local function Rescan()
 		scanRunning = false
 		return
 	end
-	BuildShoppingList()
+	addon.Vendor.CraftShopper.items = BuildShoppingList()
 	scanRunning = false
 end
 
@@ -111,4 +116,12 @@ f:SetScript("OnEvent", function(_, event, arg1)
 	end
 end)
 
-function addon.Vendor.functions.checkList() BuildShoppingList() end
+function addon.Vendor.functions.checkList()
+	Rescan()
+	for _, item in ipairs(addon.Vendor.CraftShopper.items) do
+		if item.ahBuyable then
+			local info = C_Item.GetItemInfo(item.itemID)
+			print(("[%s]   fehlt: %d - Buy in AH"):format(info or ("ItemID " .. item.itemID), item.missing))
+		end
+	end
+end
