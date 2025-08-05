@@ -25,6 +25,7 @@ local SCAN_DELAY = 0.3
 local pendingScan
 local scanRunning
 local pendingPurchase -- data for a running AH commodities purchase
+local lastPurchaseItemID -- itemID of the last confirmed commodities purchase
 local ahCache = {} -- [itemID] = true/false
 
 local ShowCraftShopperFrameIfNeeded -- forward declaration
@@ -164,20 +165,20 @@ local function ScheduleRescan()
 end
 
 local mapQuality = {
-        [0] = Enum.AuctionHouseFilter.PoorQuality,
-        [1] = Enum.AuctionHouseFilter.CommonQuality,
-        [2] = Enum.AuctionHouseFilter.UncommonQuality,
-        [3] = Enum.AuctionHouseFilter.RareQuality,
-        [4] = Enum.AuctionHouseFilter.EpicQuality,
-        [5] = Enum.AuctionHouseFilter.LegendaryQuality,
-        [6] = Enum.AuctionHouseFilter.ArtifactQuality,
-        [7] = Enum.AuctionHouseFilter.LegendaryCraftedItemOnly,
+	[0] = Enum.AuctionHouseFilter.PoorQuality,
+	[1] = Enum.AuctionHouseFilter.CommonQuality,
+	[2] = Enum.AuctionHouseFilter.UncommonQuality,
+	[3] = Enum.AuctionHouseFilter.RareQuality,
+	[4] = Enum.AuctionHouseFilter.EpicQuality,
+	[5] = Enum.AuctionHouseFilter.LegendaryQuality,
+	[6] = Enum.AuctionHouseFilter.ArtifactQuality,
+	[7] = Enum.AuctionHouseFilter.LegendaryCraftedItemOnly,
 }
 
 -- Only handle generic Auction House errors relevant to commodity purchases.
 local purchaseErrorCodes = {
-        [Enum.AuctionHouseError.NotEnoughMoney] = true,
-        [Enum.AuctionHouseError.ItemNotFound] = true,
+	[Enum.AuctionHouseError.NotEnoughMoney] = true,
+	[Enum.AuctionHouseError.ItemNotFound] = true,
 }
 
 -- Shows a small confirmation window for a pending commodity purchase.
@@ -248,6 +249,7 @@ local function ShowPurchasePopup(item, buyWidget)
 
 	buyBtn:SetCallback("OnClick", function()
 		f:RegisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+		lastPurchaseItemID = item.itemID
 		C_AuctionHouse.ConfirmCommoditiesPurchase(item.itemID, item.missing)
 		if popup.ticker then popup.ticker:Cancel() end
 		popup.frame:Hide()
@@ -561,14 +563,15 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 			f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
 			f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 		end
-       elseif event == "COMMODITY_PRICE_UPDATED" then
-               UpdatePurchasePopup(arg1, arg2)
-       elseif event == "COMMODITY_PURCHASE_FAILED" or (event == "AUCTION_HOUSE_SHOW_ERROR" and purchaseErrorCodes[arg1]) then
-               if pendingPurchase then
-                       f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
-                       f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
-                       f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
-                       f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
+	elseif event == "COMMODITY_PRICE_UPDATED" then
+		UpdatePurchasePopup(arg1, arg2)
+	elseif event == "COMMODITY_PURCHASE_FAILED" or (event == "AUCTION_HOUSE_SHOW_ERROR" and purchaseErrorCodes[arg1]) then
+		lastPurchaseItemID = nil
+		if pendingPurchase then
+			f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
+			f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
+			f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+			f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 			if pendingPurchase.popup.ticker then pendingPurchase.popup.ticker:Cancel() end
 			if pendingPurchase.popup.spinner then pendingPurchase.popup.spinner:Hide() end
 			pendingPurchase.popup.text:SetText(L["vendorCraftShopperPurchaseFailed"])
@@ -581,14 +584,17 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 		f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
 		f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 		f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
-		local itemID = arg1
-		for _, item in ipairs(addon.Vendor.CraftShopper.items) do
-			if item.itemID == itemID then
-				item.hidden = true
-				break
+		local itemID = lastPurchaseItemID
+		lastPurchaseItemID = nil
+		if itemID then
+			for _, item in ipairs(addon.Vendor.CraftShopper.items) do
+				if item.itemID == itemID then
+					item.hidden = true
+					break
+				end
 			end
+			if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame:Refresh() end
 		end
-		if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame:Refresh() end
 		ScheduleRescan()
 	else
 		Rescan()
