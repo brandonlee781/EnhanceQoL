@@ -55,8 +55,9 @@ frame.outputEditBox:SetScript("OnEnterPressed", function(self) self:ClearFocus()
 
 local addedItems = {}
 
+local tooltip = CreateFrame("GameTooltip", "EnhanceQoLQueryTooltip", UIParent, "GameTooltipTemplate")
+
 local function extractManaFromTooltip(itemLink)
-	local tooltip = CreateFrame("GameTooltip", "EnhanceQoLQueryTooltip", UIParent, "GameTooltipTemplate")
 	tooltip:SetOwner(UIParent, "ANCHOR_NONE")
 	tooltip:SetHyperlink(itemLink)
 	local mana = 0
@@ -83,7 +84,6 @@ local function extractManaFromTooltip(itemLink)
 end
 
 local function extractWellFedFromTooltip(itemLink)
-	local tooltip = CreateFrame("GameTooltip", "EnhanceQoLQueryTooltip", UIParent, "GameTooltipTemplate")
 	tooltip:SetOwner(UIParent, "ANCHOR_NONE")
 	tooltip:SetHyperlink(itemLink)
 	local buffFood = "false"
@@ -147,12 +147,13 @@ end)
 
 local function addToSearchResult(itemID)
 	local name, link, quality, level, minLevel, type, subType = C_Item.GetItemInfo(itemID)
+	if not link then return end
 	local mana = extractManaFromTooltip(link)
 	if name and type and subType and minLevel and mana > 0 and type == Enum.ItemClass.Consumable and subType == Enum.ItemConsumableSubclass.Fooddrink then
 		if not addedItems["" .. itemID] then
 			local buffFood = extractWellFedFromTooltip(link)
 			local formattedKey = name:gsub("%s+", "")
-			result = string.format('{ key = "%s", id = %d, requiredLevel = %d, mana = %d, isBuffFood = ' .. buffFood .. " }", formattedKey, itemID, minLevel, mana)
+			local result = string.format('{ key = "%s", id = %d, requiredLevel = %d, mana = %d, isBuffFood = ' .. buffFood .. " }", formattedKey, itemID, minLevel, mana)
 			table.insert(resultsAHSearch, result)
 		end
 	end
@@ -202,10 +203,11 @@ end
 local function onAuctionHouseEvent(self, event, ...)
 	if executeSearch then
 		if event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" then
-			browseResults = C_AuctionHouse.GetBrowseResults()
+			local browseResults = C_AuctionHouse.GetBrowseResults()
+			if not browseResults then return end
 			print(#browseResults)
 			for i = 1, #browseResults do
-				_, link = C_Item.GetItemInfo(browseResults[i].itemKey.itemID)
+				local _, link = C_Item.GetItemInfo(browseResults[i].itemKey.itemID)
 				if nil == link then
 					reSearchList[browseResults[i].itemKey.itemID] = true
 				else
@@ -217,7 +219,7 @@ local function onAuctionHouseEvent(self, event, ...)
 end
 
 local function onGetItemInfoReceived(...)
-	itemID, success = ...
+	local itemID, success = ...
 	if success == true and reSearchList[itemID] == true then addToSearchResult(itemID) end
 end
 

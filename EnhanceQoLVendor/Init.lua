@@ -41,6 +41,7 @@ addon.functions.InitDBValue("vendorAltClickInclude", false)
 addon.functions.InitDBValue("vendorShowSellOverlay", false)
 addon.functions.InitDBValue("vendorShowSellHighContrast", false)
 addon.functions.InitDBValue("vendorShowSellTooltip", false)
+addon.functions.InitDBValue("vendorCraftShopperEnable", false)
 
 for key, value in pairs(addon.Vendor.variables.tabNames) do
 	addon.functions.InitDBValue("vendor" .. value .. "Enable", false)

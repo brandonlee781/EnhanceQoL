@@ -16,9 +16,10 @@ local updateSellMarks
 local tooltipCache = {}
 
 local function inventoryOpen()
-	if ContainerFrameCombinedBags:IsShown() then return true end
-	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-		if frame:IsShown() then return true end
+	if ContainerFrameCombinedBags and ContainerFrameCombinedBags:IsShown() then return true end
+	local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
+	for _, frame in ipairs(frames) do
+		if frame and frame:IsShown() then return true end
 	end
 	return false
 end
@@ -283,9 +284,9 @@ local function addVendorFrame(container, type)
 			lIlvl = addon.Vendor.variables.avgItemLevelEquipped - sValue2
 		end
 
-                labelHeadlineExplain:SetText("|cffffd700" .. L["labelExplainedline"]:format(iqColor, lIlvl, table.concat(text, " " .. L["andWord"] .. " ")) .. "|r")
-                wrapper:DoLayout()
-                updateSellMarks(nil, true)
+		labelHeadlineExplain:SetText("|cffffd700" .. L["labelExplainedline"]:format(iqColor, lIlvl, table.concat(text, " " .. L["andWord"] .. " ")) .. "|r")
+		wrapper:DoLayout()
+		updateSellMarks(nil, true)
 	end
 
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
@@ -361,8 +362,8 @@ local function addVendorFrame(container, type)
 		end
 		local list, order = addon.functions.prepareListForDropdown(expList, true)
 		local dropCrafting = addon.functions.createDropdownAce(L["vendorCraftingExpansions"], list, order, function(self, event, key, checked)
-                        addon.db["vendor" .. value .. "CraftingExpansions"][key] = checked or nil
-                        updateSellMarks(nil, true)
+			addon.db["vendor" .. value .. "CraftingExpansions"][key] = checked or nil
+			updateSellMarks(nil, true)
 		end)
 		dropCrafting:SetMultiselect(true)
 		for id, val in pairs(addon.db["vendor" .. value .. "CraftingExpansions"]) do
@@ -387,7 +388,7 @@ local function addVendorFrame(container, type)
 		groupInfo:SetFullWidth(true)
 		labelHeadlineExplain:SetFullWidth(true)
 	end
-        updateSellMarks(nil, true)
+	updateSellMarks(nil, true)
 end
 
 local function addInExcludeFrame(container, type)
@@ -421,9 +422,9 @@ local function addInExcludeFrame(container, type)
 					addon.db[dbValue][eItem:GetItemID()] = eItem:GetItemName()
 					print(ADD .. ":", eItem:GetItemID(), eItem:GetItemName())
 					local list, order = addon.functions.prepareListForDropdown(addon.db[dbValue])
-                                        dropIncludeList:SetList(list, order)
-                                        dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
-                                        updateSellMarks(nil, true)
+					dropIncludeList:SetList(list, order)
+					dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
+					updateSellMarks(nil, true)
 				end
 				eBox:SetText("")
 			end)
@@ -459,9 +460,9 @@ local function addInExcludeFrame(container, type)
 				addon.db[dbValue][selectedValue] = nil -- Entferne aus der Datenbank
 				-- Aktualisiere die Dropdown-Liste
 				local list, order = addon.functions.prepareListForDropdown(addon.db[dbValue])
-                                dropIncludeList:SetList(list, order)
-                                dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
-                                updateSellMarks(nil, true)
+				dropIncludeList:SetList(list, order)
+				dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
+				updateSellMarks(nil, true)
 			end
 		end
 	end)
@@ -482,6 +483,19 @@ local function addGeneralFrame(container)
 	wrapper:AddChild(groupCore)
 
 	local data = {
+		{
+			text = L["vendorCraftShopperEnable"],
+			var = "vendorCraftShopperEnable",
+			func = function(self, _, checked)
+				addon.db["vendorCraftShopperEnable"] = checked
+				if checked then
+					addon.Vendor.CraftShopper.EnableCraftShopper()
+				else
+					addon.Vendor.CraftShopper.DisableCraftShopper()
+				end
+			end,
+			desc = L["vendorCraftShopperEnableDesc"],
+		},
 		{ text = L["vendorSwapAutoSellShift"], var = "vendorSwapAutoSellShift" },
 		{
 			text = L["vendorOnly12Items"],
@@ -517,8 +531,8 @@ local function addGeneralFrame(container)
 			text = L["vendorShowSellOverlay"],
 			var = "vendorShowSellOverlay",
 			func = function(self, _, checked)
-                                addon.db["vendorShowSellOverlay"] = checked
-                                if inventoryOpen() then updateSellMarks(nil, true) end
+				addon.db["vendorShowSellOverlay"] = checked
+				if inventoryOpen() then updateSellMarks(nil, true) end
 				container:ReleaseChildren()
 				addGeneralFrame(container)
 			end,
@@ -527,8 +541,8 @@ local function addGeneralFrame(container)
 			text = L["vendorShowSellTooltip"],
 			var = "vendorShowSellTooltip",
 			func = function(self, _, checked)
-                                addon.db["vendorShowSellTooltip"] = checked
-                                if inventoryOpen() then updateSellMarks(nil, true) end
+				addon.db["vendorShowSellTooltip"] = checked
+				if inventoryOpen() then updateSellMarks(nil, true) end
 			end,
 		},
 	}
@@ -538,8 +552,8 @@ local function addGeneralFrame(container)
 			text = L["vendorShowSellHighContrast"],
 			var = "vendorShowSellHighContrast",
 			func = function(self, _, checked)
-                                addon.db["vendorShowSellHighContrast"] = checked
-                                if inventoryOpen() then updateSellMarks(nil, true) end
+				addon.db["vendorShowSellHighContrast"] = checked
+				if inventoryOpen() then updateSellMarks(nil, true) end
 			end,
 		})
 	end
@@ -595,26 +609,27 @@ function addon.Vendor.functions.treeCallback(container, group)
 end
 
 function updateSellMarks(_, resetCache)
-        if resetCache then wipe(tooltipCache) end
+	if resetCache then wipe(tooltipCache) end
 
-        local overlay = addon.db["vendorShowSellOverlay"]
-        local tooltip = addon.db["vendorShowSellTooltip"]
+	local overlay = addon.db["vendorShowSellOverlay"]
+	local tooltip = addon.db["vendorShowSellTooltip"]
+	local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
 
-	if not overlay and not tooltip then
-		local frames = { ContainerFrameCombinedBags }
-		for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-			table.insert(frames, frame)
-		end
-
-		for _, frame in ipairs(frames) do
-			if frame and frame:IsShown() then
-				for _, itemButton in frame:EnumerateValidItems() do
-					if itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell:Hide()
-						itemButton.SellOverlay:Hide()
-					end
+	local function clearFrame(frame)
+		if frame and frame:IsShown() then
+			for _, itemButton in frame:EnumerateValidItems() do
+				if itemButton.ItemMarkSell then
+					itemButton.ItemMarkSell:Hide()
+					itemButton.SellOverlay:Hide()
 				end
 			end
+		end
+	end
+
+	if not overlay and not tooltip then
+		clearFrame(ContainerFrameCombinedBags)
+		for _, frame in ipairs(frames) do
+			clearFrame(frame)
 		end
 		wipe(sellMarkLookup)
 		return
@@ -627,12 +642,7 @@ function updateSellMarks(_, resetCache)
 		sellMarkLookup[v.bag .. "_" .. v.slot] = true
 	end
 
-	local frames = { ContainerFrameCombinedBags }
-	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-		table.insert(frames, frame)
-	end
-
-	for _, frame in ipairs(frames) do
+	local function processFrame(frame)
 		if frame and frame:IsShown() then
 			for _, itemButton in frame:EnumerateValidItems() do
 				local bag = itemButton:GetBagID()
@@ -668,6 +678,11 @@ function updateSellMarks(_, resetCache)
 			end
 		end
 	end
+
+	processFrame(ContainerFrameCombinedBags)
+	for _, frame in ipairs(frames) do
+		processFrame(frame)
+	end
 end
 
 local function AltClickHook(self, button)
@@ -696,7 +711,7 @@ local function AltClickHook(self, button)
 						print(REMOVE .. ":", id, name)
 					end
 				end
-                                updateSellMarks(nil, true)
+				updateSellMarks(nil, true)
 			end)
 		end
 	end
@@ -704,9 +719,10 @@ end
 
 hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnModifiedClick", AltClickHook)
 
-hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", updateSellMarks)
-for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-	hooksecurefunc(frame, "UpdateItems", updateSellMarks)
+if ContainerFrameCombinedBags then hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", updateSellMarks) end
+local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
+for _, frame in ipairs(frames) do
+	if frame then hooksecurefunc(frame, "UpdateItems", updateSellMarks) end
 end
 
 if TooltipDataProcessor then

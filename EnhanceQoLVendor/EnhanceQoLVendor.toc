@@ -25,3 +25,4 @@ Init.lua
 locales.xml
 
 EnhanceQoLVendor.lua
+CraftShopper.lua
