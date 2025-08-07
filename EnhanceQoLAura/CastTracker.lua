@@ -643,10 +643,11 @@ local function buildCategoryOptions(container, catId)
 				preferredIndex = 3,
 			}
 		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
 			self:SetFrameStrata("FULLSCREEN_DIALOG")
-			self.editBox:SetText(data)
-			self.editBox:HighlightText()
-			self.editBox:SetFocus()
+			editBox:SetText(data)
+			editBox:HighlightText()
+			editBox:SetFocus()
 		end
 		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
 	end)
@@ -669,8 +670,9 @@ local function buildCategoryOptions(container, catId)
 				preferredIndex = 3,
 			}
 		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].OnShow = function(self)
-			self.editBox:SetText("")
-			self.editBox:SetFocus()
+			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+			editBox:SetText("")
+			editBox:SetFocus()
 			self.text:SetText(L["ImportCategory"])
 		end
 		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].EditBoxOnTextChanged = function(editBox)
@@ -683,7 +685,8 @@ local function buildCategoryOptions(container, catId)
 			end
 		end
 		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].OnAccept = function(self)
-			local text = self.editBox:GetText()
+			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+			local text = editBox:GetText()
 			local id = importCategory(text)
 			if id then
 				updateEventRegistration()
@@ -1255,8 +1258,9 @@ function CastTracker.functions.addCastTrackerOptions(container)
 					preferredIndex = 3,
 				}
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
-				self.editBox:SetText("")
-				self.editBox:SetFocus()
+				local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+				editBox:SetText("")
+				editBox:SetFocus()
 				self.text:SetText(L["ImportCategory"])
 			end
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].EditBoxOnTextChanged = function(editBox)
@@ -1269,7 +1273,8 @@ function CastTracker.functions.addCastTrackerOptions(container)
 				end
 			end
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
-				local text = self.editBox:GetText()
+				local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+				local text = editBox:GetText()
 				local id = importCategory(text)
 				if id then
 					updateEventRegistration()

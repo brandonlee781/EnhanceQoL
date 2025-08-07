@@ -102,9 +102,12 @@ StaticPopupDialogs["EQOL_URL_COPY"] = {
 	hideOnEscape = true,
 	preferredIndex = 3,
 	OnShow = function(self, data)
-		self.editBox:SetText(data or "")
-		self.editBox:SetFocus()
-		self.editBox:HighlightText()
+		local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+		if editBox then
+			editBox:SetText(data or "")
+			editBox:SetFocus()
+			editBox:HighlightText()
+		end
 	end,
 }
 

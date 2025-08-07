@@ -78,7 +78,7 @@ local function skipRolecheck()
 	if addon.db["groupfinderSkipRoleSelectOption"] == 1 then
 		local tank, healer, dps = false, false, false
 		local role = UnitGroupRolesAssigned("player")
-                if role == "NONE" then role = GetSpecializationRole(C_SpecializationInfo.GetSpecialization()) end
+		if role == "NONE" then role = GetSpecializationRole(C_SpecializationInfo.GetSpecialization()) end
 		if role == "TANK" then
 			tank = true
 		elseif role == "DAMAGER" then
@@ -1840,22 +1840,22 @@ local function addBagFrame(container)
 					if frame:IsShown() then addon.functions.updateBags(frame) end
 				end
 				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
-                                if value then
-                                        if BankFrame:IsShown() then
-                                                for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
-                                                        local itemButton = _G["BankFrameItem" .. slot]
-                                                        if itemButton then addon.functions.updateBank(itemButton, -1, slot) end
-                                                end
-                                        end
-                                else
-                                        if BankFrame:IsShown() then
-                                                for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
-                                                        local itemButton = _G["BankFrameItem" .. slot]
-                                                        if itemButton and itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
-                                                end
-                                        end
-                                end
-                                if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+				if value then
+					if BankFrame:IsShown() then
+						for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
+							local itemButton = _G["BankFrameItem" .. slot]
+							if itemButton then addon.functions.updateBank(itemButton, -1, slot) end
+						end
+					end
+				else
+					if BankFrame:IsShown() then
+						for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
+							local itemButton = _G["BankFrameItem" .. slot]
+							if itemButton and itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
+						end
+					end
+				end
+				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
 			end,
 		},
 		{
@@ -1877,22 +1877,22 @@ local function addBagFrame(container)
 			type = "CheckBox",
 			callback = function(self, _, value)
 				addon.db["showIlvlOnBankFrame"] = value
-                                if value then
-                                        if BankFrame:IsShown() then
-                                                for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
-                                                        local itemButton = _G["BankFrameItem" .. slot]
-                                                        if itemButton then addon.functions.updateBank(itemButton, -1, slot) end
-                                                end
-                                        end
-                                else
-                                        if BankFrame:IsShown() then
-                                                for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
-                                                        local itemButton = _G["BankFrameItem" .. slot]
-                                                        if itemButton and itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
-                                                end
-                                        end
-                                end
-                                if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+				if value then
+					if BankFrame:IsShown() then
+						for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
+							local itemButton = _G["BankFrameItem" .. slot]
+							if itemButton then addon.functions.updateBank(itemButton, -1, slot) end
+						end
+					end
+				else
+					if BankFrame:IsShown() then
+						for slot = 1, C_Container.GetContainerNumSlots(BANK_CONTAINER) do
+							local itemButton = _G["BankFrameItem" .. slot]
+							if itemButton and itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
+						end
+					end
+				end
+				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
 			end,
 		},
 		{
@@ -1919,7 +1919,7 @@ local function addBagFrame(container)
 					if frame:IsShown() then addon.functions.updateBags(frame) end
 				end
 				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
-                                if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
 			end,
 		},
 	}
@@ -3328,8 +3328,13 @@ local function initMisc()
 				if self then
 					if addon.db["sellAllJunk"] and self.data and type(self.data) == "table" and self.data.text == SELL_ALL_JUNK_ITEMS_POPUP and self.button1 then
 						self.button1:Click()
-					elseif addon.db["deleteItemFillDialog"] and (self.which == "DELETE_GOOD_ITEM" or self.which == "DELETE_GOOD_QUEST_ITEM") and self.editBox then
-						self.editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
+					elseif
+						addon.db["deleteItemFillDialog"]
+						and (self.which == "DELETE_GOOD_ITEM" or self.which == "DELETE_GOOD_QUEST_ITEM")
+						and (self.editBox or self.GetEditBox and self:GetEditBox())
+					then
+						local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+						editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
 					elseif addon.db["confirmPatronOrderDialog"] and self.data and type(self.data) == "table" and self.data.text == CRAFTING_ORDERS_OWN_REAGENTS_CONFIRMATION and self.button1 then
 						local order = C_CraftingOrders.GetClaimedOrder()
 						if order and order.npcCustomerCreatureID and order.npcCustomerCreatureID > 0 then self.button1:Click() end
@@ -4052,7 +4057,7 @@ local function initUI()
 
 		local _, specIcon
 
-                local curSpec = C_SpecializationInfo.GetSpecialization()
+		local curSpec = C_SpecializationInfo.GetSpecialization()
 
 		if GetLootSpecialization() == 0 and curSpec then
 			_, _, _, specIcon = GetSpecializationInfoForClassID(addon.variables.unitClassID, curSpec)
@@ -4164,9 +4169,9 @@ local function initUI()
 
 		local container = CreateFrame("Frame", nil, lootSpec, "BackdropTemplate")
 		container:SetPoint("TOPLEFT", 10, -10)
-                if nil == C_SpecializationInfo.GetSpecialization() then return end
+		if nil == C_SpecializationInfo.GetSpecialization() then return end
 
-                local _, curSpecName = GetSpecializationInfoForClassID(addon.variables.unitClassID, C_SpecializationInfo.GetSpecialization())
+		local _, curSpecName = GetSpecializationInfoForClassID(addon.variables.unitClassID, C_SpecializationInfo.GetSpecialization())
 		local totalSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(addon.variables.unitClassID)
 		local row = CreateRadioRow(container, 0, string.format(LOOT_SPECIALIZATION_DEFAULT, curSpecName), 0)
 		for i = 1, totalSpecs do
@@ -4994,9 +4999,9 @@ end
 
 local eventHandlers = {
 	["ACTIVE_PLAYER_SPECIALIZATION_CHANGED"] = function(arg1)
-        addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()
+		addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()
 		if addon.variables.unitSpec then
-                   local specId, specName = C_SpecializationInfo.GetSpecializationInfo(addon.variables.unitSpec)
+			local specId, specName = C_SpecializationInfo.GetSpecializationInfo(addon.variables.unitSpec)
 			addon.variables.unitSpecName = specName
 			addon.variables.unitRole = GetSpecializationRole(addon.variables.unitSpec)
 			addon.variables.unitSpecId = specId
@@ -5246,9 +5251,9 @@ local eventHandlers = {
 	end,
 	["PLAYER_LOGIN"] = function()
 		if addon.db["enableMinimapButtonBin"] then addon.functions.toggleButtonSink() end
-        addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()
+		addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()
 		if addon.variables.unitSpec then
-                   local specId, specName = C_SpecializationInfo.GetSpecializationInfo(addon.variables.unitSpec)
+			local specId, specName = C_SpecializationInfo.GetSpecializationInfo(addon.variables.unitSpec)
 			addon.variables.unitSpecName = specName
 			addon.variables.unitRole = GetSpecializationRole(addon.variables.unitSpec)
 			addon.variables.unitSpecId = specId

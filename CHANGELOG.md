@@ -5,6 +5,7 @@
 ### 🐛 Fixed
 
 - Overlapping elements when **Mythic+ Rating** and **Dungeon Teleport** is enableb
+- Changes to EditBoxes in 11.2 broke some features
 
 ---
 
