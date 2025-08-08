@@ -15,6 +15,7 @@ CN.functions = CN.functions or {}
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local AceGUI = addon.AceGUI
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 local cooldowns = {}
 local animating = {}
@@ -74,6 +75,31 @@ DCP.text:SetTextColor(1, 1, 1)
 
 local elapsed = 0
 local runtimer = 0
+
+-- Resolve and play a configured sound from multiple sources (internal table, LibSharedMedia, SOUNDKIT id/name)
+local function playConfiguredSound(key)
+        if not key then return end
+        -- 1) Internal mapping table (string label -> file path)
+        local path = addon.Aura and addon.Aura.sounds and addon.Aura.sounds[key]
+        -- 2) LibSharedMedia lookup (e.g., "BigWigs: Alarm")
+        if not path and LSM and LSM.Fetch then path = LSM:Fetch("sound", key, true) end
+        if path then
+                PlaySoundFile(path, "Master")
+                return
+        end
+        -- 3) Numeric SOUNDKIT id
+        local id = tonumber(key)
+        if id then
+                PlaySound(id, "Master")
+                return
+        end
+        -- 4) SOUNDKIT name constant, e.g., "RAID_WARNING"
+        if type(key) == "string" and SOUNDKIT and SOUNDKIT[key] then
+                PlaySound(SOUNDKIT[key], "Master")
+                return
+        end
+        -- If nothing matched, silently ignore to avoid Lua errors
+end
 
 local function IsAnimatingCooldown(name, catId)
 	for _, info in ipairs(animating) do
@@ -169,14 +195,9 @@ local function OnUpdate(_, update)
 				if addon.db.cooldownNotifySoundsEnabled[info[3]] and addon.db.cooldownNotifySoundsEnabled[info[3]][info[4]] then
 					soundKey = addon.db.cooldownNotifySounds[info[3]] and addon.db.cooldownNotifySounds[info[3]][info[4]]
 				end
-				if soundKey then
-					local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
-					if file then
-						PlaySoundFile(file, "Master")
-					else
-						PlaySound(soundKey)
-					end
-				end
+                               if soundKey then
+                                       playConfiguredSound(soundKey)
+                               end
 			end
 			local alpha = maxAlpha
 			if runtimer < fadeInTime then
