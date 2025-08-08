@@ -33,6 +33,12 @@ local exportCategory
 for _, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 	if cat.useAdvancedTracking == nil then cat.useAdvancedTracking = true end
 	cat.spells = cat.spells or {}
+	local tmp = {}
+	for id in pairs(cat.spells) do
+		local num = tonumber(id)
+		if num then tmp[num] = true end
+	end
+	cat.spells = tmp
 	cat.ignoredSpells = cat.ignoredSpells or {}
 end
 
@@ -343,18 +349,38 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 				(cat.useAdvancedTracking ~= false and cat.spells and cat.spells[spellID])
 				or (cat.useAdvancedTracking == false and playerSpells[spellID] and not (cat.ignoredSpells and cat.ignoredSpells[spellID]))
 			then
-				local cd = C_Spell.GetSpellCooldown(spellID)
-				if cd and cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
-					local key = spellID .. ":" .. catId
-					cooldowns[key] = {
-						start = cd.startTime,
-						duration = cd.duration,
-						texture = C_Spell.GetSpellTexture(spellID),
-						name = C_Spell.GetSpellName(spellID),
-						catId = catId,
-						id = spellID,
-					}
-					found = true
+				if spellID < 0 then
+					local slot = -spellID
+					local start, duration, enabled = GetInventoryItemCooldown("player", slot)
+					if enabled and duration and duration > 2 then
+						local key = spellID .. ":" .. catId
+						local texture = GetInventoryItemTexture("player", slot)
+						local itemID = GetInventoryItemID and GetInventoryItemID("player", slot)
+						local name = itemID and GetItemInfo(itemID)
+						cooldowns[key] = {
+							start = start,
+							duration = duration,
+							texture = texture,
+							name = name,
+							catId = catId,
+							id = spellID,
+						}
+						found = true
+					end
+				else
+					local cd = C_Spell.GetSpellCooldown(spellID)
+					if cd and cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
+						local key = spellID .. ":" .. catId
+						cooldowns[key] = {
+							start = cd.startTime,
+							duration = cd.duration,
+							texture = C_Spell.GetSpellTexture(spellID),
+							name = C_Spell.GetSpellName(spellID),
+							catId = catId,
+							id = spellID,
+						}
+						found = true
+					end
 				end
 			end
 		end
@@ -399,11 +425,22 @@ local function getCategoryTree()
 		end
 		table.sort(spells)
 		for _, spellId in ipairs(spells) do
-			local info = C_Spell.GetSpellInfo(spellId)
+			local text, icon
+			if spellId < 0 then
+				local slot = -spellId
+				local itemID = GetInventoryItemID("player", slot)
+				local name = itemID and GetItemInfo(itemID)
+				text = name or tostring(spellId)
+				icon = GetInventoryItemTexture("player", slot)
+			else
+				local info = C_Spell.GetSpellInfo(spellId)
+				text = info and info.name or tostring(spellId)
+				icon = info and info.iconID
+			end
 			table.insert(node.children, {
 				value = catId .. "\001" .. spellId,
-				text = info and info.name or tostring(spellId),
-				icon = info and info.iconID,
+				text = text,
+				icon = icon,
 			})
 		end
 		table.insert(tree, node)
@@ -562,8 +599,15 @@ local function buildCategoryOptions(container, catId)
 		local tex, name
 		local firstSpell = next(cat.spells)
 		if firstSpell then
-			tex = C_Spell.GetSpellTexture(firstSpell)
-			name = C_Spell.GetSpellName(firstSpell)
+			if firstSpell < 0 then
+				local slot = -firstSpell
+				tex = GetInventoryItemTexture("player", slot)
+				local itemID = GetInventoryItemID("player", slot)
+				name = itemID and GetItemInfo(itemID)
+			else
+				tex = C_Spell.GetSpellTexture(firstSpell)
+				name = C_Spell.GetSpellName(firstSpell)
+			end
 		end
 		tex = tex or "Interface\\Icons\\INV_Misc_QuestionMark"
 		name = name or L["Test"] or "Test"
@@ -631,8 +675,15 @@ local function buildSpellOptions(container, catId, spellId)
 	wrapper:SetFullHeight(true)
 	container:AddChild(wrapper)
 
-	local info = C_Spell.GetSpellInfo(spellId)
-	local name = info and info.name or tostring(spellId)
+	local name
+	if spellId < 0 then
+		local slot = -spellId
+		local itemID = GetInventoryItemID("player", slot)
+		name = (itemID and GetItemInfo(itemID)) or tostring(spellId)
+	else
+		local info = C_Spell.GetSpellInfo(spellId)
+		name = info and info.name or tostring(spellId)
+	end
 	local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
 	wrapper:AddChild(label)
 
@@ -819,6 +870,12 @@ function importCategory(encoded)
 	cat.holdTime = cat.holdTime or 0
 	cat.showName = cat.showName ~= false
 	cat.spells = cat.spells or {}
+	local tmp = {}
+	for id in pairs(cat.spells) do
+		local num = tonumber(id)
+		if num then tmp[num] = true end
+	end
+	cat.spells = tmp
 	cat.ignoredSpells = cat.ignoredSpells or {}
 	local newId = 1
 	for id in pairs(addon.db.cooldownNotifyCategories) do
