@@ -30,6 +30,7 @@ local C_NamePlate_GetNamePlates = C_NamePlate.GetNamePlates
 local unpack = unpack
 local math_floor = math.floor
 local DEFAULT_BAR_COLOR = { 1, 0.5, 0, 1 }
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 local anchors = {}
 local ensureAnchor
@@ -1066,6 +1067,31 @@ function _ensureDriver()
 	end
 end
 
+-- Resolve and play a configured sound from multiple sources (internal table, LSM, SOUNDKIT id/name)
+local function playConfiguredSound(key)
+	if not key then return end
+	-- 1) Internal mapping table (string label -> file path)
+	local path = addon.Aura and addon.Aura.sounds and addon.Aura.sounds[key]
+	-- 2) LibSharedMedia (e.g., "BigWigs: Alarm")
+	if not path and LSM and LSM.Fetch then path = LSM:Fetch("sound", key, true) end
+	if path then
+		PlaySoundFile(path, "Master")
+		return
+	end
+	-- 3) Numeric SOUNDKIT id
+	local id = tonumber(key)
+	if id then
+		PlaySound(id, "Master")
+		return
+	end
+	-- 4) SOUNDKIT name constant, e.g., "RAID_WARNING"
+	if type(key) == "string" and SOUNDKIT and SOUNDKIT[key] then
+		PlaySound(SOUNDKIT[key], "Master")
+		return
+	end
+	-- If nothing matched, silently ignore (avoids Lua errors on bad config)
+end
+
 function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCastTime, castType, suppressSound, triggerId, destGUID)
 	local spellData = C_Spell.GetSpellInfo(spellId)
 	local altSpellData
@@ -1127,17 +1153,9 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 		_ensureDriver()
 	end
 	RequestLayout(catId)
-	local soundKey
 	if not suppressSound and addon.db.castTrackerSoundsEnabled[catId] and addon.db.castTrackerSoundsEnabled[catId][spellId] then
-		soundKey = addon.db.castTrackerSounds[catId] and addon.db.castTrackerSounds[catId][spellId]
-	end
-	if soundKey then
-		local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
-		if file then
-			PlaySoundFile(file, "Master")
-		elseif tonumber(soundKey) then
-			PlaySound(soundKey)
-		end
+		local soundKey = (addon.db.castTrackerSounds[catId] and addon.db.castTrackerSounds[catId][spellId]) or (db and db.sound)
+		if soundKey then playConfiguredSound(soundKey) end
 	end
 end
 
