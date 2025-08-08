@@ -566,6 +566,30 @@ local function buildCategoryOptions(container, catId)
 	spellEdit:SetRelativeWidth(0.6)
 	group:AddChild(spellEdit)
 
+	local trinket13Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(13), 150, function()
+		cat.spells[-13] = true
+		addon.db.cooldownNotifySounds[catId] = addon.db.cooldownNotifySounds[catId] or {}
+		addon.db.cooldownNotifySoundsEnabled[catId] = addon.db.cooldownNotifySoundsEnabled[catId] or {}
+		addon.db.cooldownNotifySounds[catId][-13] = addon.db.cooldownNotifyDefaultSound
+		addon.db.cooldownNotifySoundsEnabled[catId][-13] = false
+		refreshTree(catId)
+		container:ReleaseChildren()
+		buildCategoryOptions(container, catId)
+	end)
+	group:AddChild(trinket13Btn)
+
+	local trinket14Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(14), 150, function()
+		cat.spells[-14] = true
+		addon.db.cooldownNotifySounds[catId] = addon.db.cooldownNotifySounds[catId] or {}
+		addon.db.cooldownNotifySoundsEnabled[catId] = addon.db.cooldownNotifySoundsEnabled[catId] or {}
+		addon.db.cooldownNotifySounds[catId][-14] = addon.db.cooldownNotifyDefaultSound
+		addon.db.cooldownNotifySoundsEnabled[catId][-14] = false
+		refreshTree(catId)
+		container:ReleaseChildren()
+		buildCategoryOptions(container, catId)
+	end)
+	group:AddChild(trinket14Btn)
+
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
 		if not data then return end
