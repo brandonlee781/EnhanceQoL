@@ -793,6 +793,8 @@ local function buildCategoryOptions(container, catId)
 			addon.db.castTrackerCategories[catId] = nil
 			addon.db.castTrackerOrder[catId] = nil
 			addon.db.castTrackerEnabled[catId] = nil
+			addon.db.castTrackerSounds[catId] = nil
+			addon.db.castTrackerSoundsEnabled[catId] = nil
 			addon.db.castTrackerLocked[catId] = nil
 			if anchors[catId] then
 				anchors[catId]:Hide()
