@@ -67,19 +67,23 @@ local function EnsureExtraInfo(resultID)
 
 	for i = 1, info.numMembers do
 		local mData = C_LFGList.GetSearchResultPlayerInfo(resultID, i)
-		if mData.assignedRole == "TANK" then
-			tank = tank + 1
-		elseif mData.assignedRole == "HEALER" then
-			healer = healer + 1
-		elseif mData.assignedRole == "DAMAGER" then
-			dps = dps + 1
+		if mData then
+			if mData.assignedRole == "TANK" then
+				tank = tank + 1
+			elseif mData.assignedRole == "HEALER" then
+				healer = healer + 1
+			elseif mData.assignedRole == "DAMAGER" then
+				dps = dps + 1
+			end
+			if LUST_CLASSES[mData.classFilename] then
+				lust = true
+			elseif BR_CLASSES[mData.classFilename] then
+				br = true
+			end
+			if mData.classFilename == addon.variables.unitClass and mData.specName == addon.variables.unitSpecName then
+				sameSpec = true
+			end
 		end
-		if LUST_CLASSES[mData.classFilename] then
-			lust = true
-		elseif BR_CLASSES[mData.classFilename] then
-			br = true
-		end
-		if mData.classFilename == addon.variables.unitClass and mData.specName == addon.variables.unitSpecName then sameSpec = true end
 	end
 
 	info.groupTankCount = tank
@@ -223,65 +227,91 @@ local function MyCustomFilter(info)
 	return true
 end
 
+local _eqolFiltering = false
+
 local function ApplyEQOLFilters(isInitial)
-	if not drop:IsVisible() then return end
-	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
-	if
-		(not pDb["bloodlustAvailable"] or playerIsLust)
-		and (not pDb["battleResAvailable"] or playerIsBR)
-		and not pDb["partyFit"]
-		and (not pDb["NoSameSpec"] or addon.variables.unitRole ~= "DAMAGER")
-	then
+	if _eqolFiltering then return end
+	_eqolFiltering = true
+
+	-- Basic guards
+	if not drop or not drop:IsVisible() then _eqolFiltering = false; return end
+	if not addon.db["mythicPlusEnableDungeonFilter"] then _eqolFiltering = false; return end
+
+	local panel = LFGListFrame and LFGListFrame.SearchPanel
+	if not panel or panel.categoryID ~= 2 then
 		titleScore1:Hide()
-		return
-	end
-	if GameTooltip:IsShown() then
-		if not addon.eqolTooltipHooked then
-			addon.eqolTooltipHooked = true
-			GameTooltip:HookScript("OnHide", function()
-				addon.eqolTooltipHooked = nil
-				ApplyEQOLFilters(false)
-			end)
-		end
-		return
-	end
-	local panel = LFGListFrame.SearchPanel
-	if panel.categoryID ~= 2 then
-		titleScore1:Hide()
+		_eqolFiltering = false
 		return
 	end
 	local dp = panel.ScrollBox and panel.ScrollBox:GetDataProvider()
-	if not dp then return end
+	if not dp then _eqolFiltering = false; return end
 
-	-- On initial call, record total entries before removal
+	-- Fast exit if nothing to filter (mirrors the old conditions)
+	local needFilter = false
+	if (pDb["bloodlustAvailable"] and not playerIsLust) then needFilter = true end
+	if (pDb["battleResAvailable"] and not playerIsBR) then needFilter = true end
+	if pDb["partyFit"] then needFilter = true end
+	if (pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER") then needFilter = true end
+	if not needFilter then
+		titleScore1:Hide()
+		_eqolFiltering = false
+		return
+	end
+
+	-- On initial call, record the current set of entries
 	if isInitial or not next(initialAllEntries) then
-		initialAllEntries = {}
-		removedResults = {}
+		wipe(initialAllEntries)
+		wipe(removedResults)
 		for _, element in dp:EnumerateEntireRange() do
 			local resultID = element.resultID or element.id
 			if resultID then initialAllEntries[resultID] = true end
 		end
 	end
 
+	-- Build removal list without mutating the provider during enumeration
+	local toRemove = {}
 	for _, element in dp:EnumerateEntireRange() do
 		local resultID = element.resultID or element.id
-		if resultID then
+		if resultID and not removedResults[resultID] then
+			if not SearchInfoCache[resultID] then
+				CacheResultInfo(resultID)
+			end
 			local info = SearchInfoCache[resultID]
-			if info and not removedResults[resultID] and not MyCustomFilter(info) then
-				dp:Remove(element)
-				initialAllEntries[resultID] = false
-				removedResults[resultID] = true
+			if info and not MyCustomFilter(info) then
+				table.insert(toRemove, { elem = element, id = resultID })
 			end
 		end
+	end
+
+	for i = 1, #toRemove do
+		local r = toRemove[i]
+		dp:Remove(r.elem)
+		initialAllEntries[r.id] = false
+		removedResults[r.id] = true
 	end
 
 	local removedCount = 0
 	for _, v in pairs(initialAllEntries) do
 		if v == false then removedCount = removedCount + 1 end
 	end
-	titleScore1:SetFormattedText((L["filteredTextEntries"]):format(removedCount))
-	titleScore1:Show()
-	panel.ScrollBox:FullUpdate(ScrollBoxConstants.UpdateImmediately)
+
+	if removedCount > 0 then
+		titleScore1:SetFormattedText((L["filteredTextEntries"]):format(removedCount))
+		titleScore1:Show()
+	else
+		titleScore1:Hide()
+	end
+
+	-- Refresh the scrollbox (be tolerant if constants differ)
+	if panel.ScrollBox and panel.ScrollBox.FullUpdate then
+		if ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately then
+			panel.ScrollBox:FullUpdate(ScrollBoxConstants.UpdateImmediately)
+		else
+			panel.ScrollBox:FullUpdate()
+		end
+	end
+
+	_eqolFiltering = false
 end
 
 local f
