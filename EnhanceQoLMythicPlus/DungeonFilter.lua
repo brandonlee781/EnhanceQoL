@@ -35,8 +35,8 @@ local BR_CLASSES = { DRUID = true, WARLOCK = true, DEATHKNIGHT = true, PALADIN =
 
 local SearchInfoCache = {}
 
-local scanGen = 0           -- generation counter for pruning the cache
-local toRemove = {}         -- reusable array to avoid reallocations
+local scanGen = 0 -- generation counter for pruning the cache
+local toRemove = {} -- reusable array to avoid reallocations
 
 local function CacheResultInfo(resultID)
 	local info = C_LFGList.GetSearchResultInfo(resultID)
@@ -84,26 +84,22 @@ local function EnsureExtraInfo(resultID, needRoles, needLust, needBR, needSameSp
 			end
 			if (needLust or needBR) and m.classFilename then
 				if needLust and LUST_CLASSES[m.classFilename] then lust = true end
-				if needBR   and BR_CLASSES[m.classFilename]   then br   = true end
+				if needBR and BR_CLASSES[m.classFilename] then br = true end
 			end
-			if needSameSpec and m.classFilename == addon.variables.unitClass and m.specName == addon.variables.unitSpecName then
-				sameSpec = true
-			end
+			if needSameSpec and m.classFilename == addon.variables.unitClass and m.specName == addon.variables.unitSpecName then sameSpec = true end
 			-- Early exit: wenn alle angeforderten Infos schon feststehen
 			local rolesDone = (not needRoles) or ((tank + healer + dps) >= info.numMembers)
-			if rolesDone and (not needLust or lust) and (not needBR or br) and (not needSameSpec or sameSpec) then
-				break
-			end
+			if rolesDone and (not needLust or lust) and (not needBR or br) and (not needSameSpec or sameSpec) then break end
 		end
 	end
 
 	if needRoles then
-		info.groupTankCount   = tank
+		info.groupTankCount = tank
 		info.groupHealerCount = healer
-		info.groupDPSCount    = dps
+		info.groupDPSCount = dps
 	end
-	if needLust     then info.hasLust    = lust end
-	if needBR       then info.hasBR      = br   end
+	if needLust then info.hasLust = lust end
+	if needBR then info.hasBR = br end
 	if needSameSpec then info.hasSameSpec = sameSpec end
 	-- Einmal berechnet reicht pro Generation
 	info.extraCalculated = true
@@ -176,20 +172,18 @@ local function MyCustomFilter(info)
 
 	-- Welche Details brauchen wir wirklich?
 	local NEED_SAMESPEC = (addon.variables.unitRole == "DAMAGER") and pDb["NoSameSpec"] or false
-	local NEED_LUST     = pDb["bloodlustAvailable"] and not partyHasLust
-	local NEED_BR       = pDb["battleResAvailable"] and not partyHasBR
-	local NEED_ROLES    = pDb["partyFit"]
+	local NEED_LUST = pDb["bloodlustAvailable"] and not partyHasLust
+	local NEED_BR = pDb["battleResAvailable"] and not partyHasBR
+	local NEED_ROLES = pDb["partyFit"]
 
-	if NEED_SAMESPEC or NEED_LUST or NEED_BR or NEED_ROLES then
-		info = EnsureExtraInfo(info.searchResultID, NEED_ROLES, NEED_LUST, NEED_BR, NEED_SAMESPEC) or info
-	end
+	if NEED_SAMESPEC or NEED_LUST or NEED_BR or NEED_ROLES then info = EnsureExtraInfo(info.searchResultID, NEED_ROLES, NEED_LUST, NEED_BR, NEED_SAMESPEC) or info end
 
-	local groupTankCount   = info.groupTankCount   or 0
+	local groupTankCount = info.groupTankCount or 0
 	local groupHealerCount = info.groupHealerCount or 0
-	local groupDPSCount    = info.groupDPSCount    or 0
-	local hasLust          = info.hasLust          or false
-	local hasBR            = info.hasBR            or false
-	local hasSameSpec      = info.hasSameSpec      or false
+	local groupDPSCount = info.groupDPSCount or 0
+	local hasLust = info.hasLust or false
+	local hasBR = info.hasBR or false
+	local hasSameSpec = info.hasSameSpec or false
 
 	if NEED_SAMESPEC and hasSameSpec then return false end
 
@@ -256,8 +250,14 @@ local function ApplyEQOLFilters(isInitial)
 	wipe(toRemove)
 
 	-- Basic guards
-	if not drop or not drop:IsVisible() then _eqolFiltering = false; return end
-	if not addon.db["mythicPlusEnableDungeonFilter"] then _eqolFiltering = false; return end
+	if not drop or not drop:IsVisible() then
+		_eqolFiltering = false
+		return
+	end
+	if not addon.db["mythicPlusEnableDungeonFilter"] then
+		_eqolFiltering = false
+		return
+	end
 
 	local panel = LFGListFrame and LFGListFrame.SearchPanel
 	if not panel or panel.categoryID ~= 2 then
@@ -266,14 +266,17 @@ local function ApplyEQOLFilters(isInitial)
 		return
 	end
 	local dp = panel.ScrollBox and panel.ScrollBox:GetDataProvider()
-	if not dp then _eqolFiltering = false; return end
+	if not dp then
+		_eqolFiltering = false
+		return
+	end
 
 	-- Fast exit if nothing to filter (mirrors the old conditions)
 	local needFilter = false
-	if (pDb["bloodlustAvailable"] and not playerIsLust) then needFilter = true end
-	if (pDb["battleResAvailable"] and not playerIsBR) then needFilter = true end
+	if pDb["bloodlustAvailable"] and not playerIsLust then needFilter = true end
+	if pDb["battleResAvailable"] and not playerIsBR then needFilter = true end
 	if pDb["partyFit"] then needFilter = true end
-	if (pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER") then needFilter = true end
+	if pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER" then needFilter = true end
 	if not needFilter then
 		titleScore1:Hide()
 		_eqolFiltering = false
@@ -301,9 +304,7 @@ local function ApplyEQOLFilters(isInitial)
 				SearchInfoCache[resultID].extraCalculated = nil -- Details können sich geändert haben
 			end
 			local info = SearchInfoCache[resultID]
-			if info and not MyCustomFilter(info) then
-				toRemove[#toRemove+1] = { elem = element, id = resultID }
-			end
+			if info and not MyCustomFilter(info) then toRemove[#toRemove + 1] = { elem = element, id = resultID } end
 		end
 	end
 
@@ -337,9 +338,7 @@ local function ApplyEQOLFilters(isInitial)
 
 	-- Prune alte Cache-Einträge, die in diesem Pass nicht gesehen wurden
 	for id, c in pairs(SearchInfoCache) do
-		if c._gen ~= scanGen then
-			SearchInfoCache[id] = nil
-		end
+		if c._gen ~= scanGen then SearchInfoCache[id] = nil end
 	end
 
 	_eqolFiltering = false
