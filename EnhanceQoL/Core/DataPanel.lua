@@ -69,18 +69,38 @@ function DataPanel.Create(id)
 	local panel = { frame = frame, id = id, streams = {}, order = {}, info = info }
 
 	function panel:Refresh()
+		local changed = false
+		if not self.lastOrder or #self.lastOrder ~= #self.order then
+			changed = true
+		else
+			for i, name in ipairs(self.order) do
+				if self.lastOrder[i] ~= name or (self.lastWidths and self.lastWidths[name] ~= self.streams[name].lastWidth) then
+					changed = true
+					break
+				end
+			end
+		end
+		if not changed then return end
+
 		local prev
 		for _, name in ipairs(self.order) do
 			local data = self.streams[name]
 			local btn = data.button
 			btn:ClearAllPoints()
-			btn:SetWidth(data.text:GetStringWidth())
+			btn:SetWidth(data.lastWidth)
 			if prev then
 				btn:SetPoint("LEFT", prev, "RIGHT", 5, 0)
 			else
 				btn:SetPoint("LEFT", self.frame, "LEFT", 5, 0)
 			end
 			prev = btn
+		end
+
+		self.lastOrder = {}
+		self.lastWidths = {}
+		for i, name in ipairs(self.order) do
+			self.lastOrder[i] = name
+			self.lastWidths[name] = self.streams[name].lastWidth
 		end
 	end
 
@@ -91,7 +111,7 @@ function DataPanel.Create(id)
 		local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		text:SetAllPoints()
 		text:SetJustifyH("LEFT")
-		local data = { button = button, text = text }
+		local data = { button = button, text = text, lastWidth = text:GetStringWidth(), lastText = "" }
 		button.slot = data
 		button:SetScript("OnEnter", function(b)
 			local s = b.slot
@@ -116,12 +136,20 @@ function DataPanel.Create(id)
 
 		local function cb(payload)
 			payload = payload or {}
-			data.text:SetText(payload.text or "")
+			local text = payload.text or ""
+			if text ~= data.lastText then
+				data.text:SetText(text)
+				data.lastText = text
+				local width = data.text:GetStringWidth()
+				if width ~= data.lastWidth then
+					data.lastWidth = width
+					self:Refresh()
+				end
+			end
 			data.tooltip = payload.tooltip
 			data.OnMouseEnter = payload.OnMouseEnter
 			data.OnMouseLeave = payload.OnMouseLeave
 			data.OnClick = payload.OnClick
-			self:Refresh()
 		end
 
 		data.unsub = DataHub:Subscribe(name, cb)
