@@ -2897,6 +2897,120 @@ local function addSocialFrame(container)
 	groupCore:AddChild(labelHeadline)
 end
 
+local function buildDatapanelFrame(container)
+	local DataPanel = addon.DataPanel
+	local DataHub = addon.DataHub
+	local panels = DataPanel.List()
+
+	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+	container:AddChild(scroll)
+
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	scroll:AddChild(wrapper)
+
+	-- Panel management controls
+	local controlGroup = addon.functions.createContainer("InlineGroup", "Flow")
+	controlGroup:SetTitle("Panels")
+	wrapper:AddChild(controlGroup)
+
+	local newId = addon.functions.createEditboxAce("Panel ID")
+	newId:SetRelativeWidth(0.4)
+	controlGroup:AddChild(newId)
+
+	local addButton = addon.functions.createButtonAce("Add Panel", 120, function()
+		local id = newId:GetText()
+		if id and id ~= "" then
+			DataPanel.Create(id)
+			container:ReleaseChildren()
+			buildDatapanelFrame(container)
+		end
+	end)
+	addButton:SetRelativeWidth(0.3)
+	controlGroup:AddChild(addButton)
+
+	local panelList, panelOrder = {}, {}
+	for id in pairs(panels) do
+		panelList[id] = id
+		panelOrder[#panelOrder + 1] = id
+	end
+	table.sort(panelOrder)
+
+	local dropRemove = addon.functions.createDropdownAce("Panel", panelList, panelOrder, function(self, _, val) self:SetValue(val) end)
+	dropRemove:SetRelativeWidth(0.4)
+	controlGroup:AddChild(dropRemove)
+
+	local removeButton = addon.functions.createButtonAce("Remove Panel", 120, function()
+		local id = dropRemove:GetValue()
+		if id then
+			DataPanel.Delete(id)
+			container:ReleaseChildren()
+			buildDatapanelFrame(container)
+		end
+	end)
+	removeButton:SetRelativeWidth(0.3)
+	controlGroup:AddChild(removeButton)
+
+	-- Available streams for dropdowns
+	local streamList, streamOrder = {}, {}
+	for name in pairs(DataHub.streams) do
+		streamList[name] = name
+		streamOrder[#streamOrder + 1] = name
+	end
+	table.sort(streamOrder)
+
+	-- Display existing panels
+	for _, id in ipairs(panelOrder) do
+		local panel = DataPanel.Create(id)
+		local info = panel.info
+		local groupPanel = addon.functions.createContainer("InlineGroup", "List")
+		groupPanel:SetTitle(id)
+		wrapper:AddChild(groupPanel)
+
+		local widthSlider = addon.functions.createSliderAce("Width: " .. info.width, info.width, 50, 1000, 1, function(self, _, val)
+			panel.frame:SetWidth(val)
+			self:SetLabel("Width: " .. val)
+		end)
+		groupPanel:AddChild(widthSlider)
+
+		local heightSlider = addon.functions.createSliderAce("Height: " .. info.height, info.height, 10, 500, 1, function(self, _, val)
+			panel.frame:SetHeight(val)
+			self:SetLabel("Height: " .. val)
+		end)
+		groupPanel:AddChild(heightSlider)
+
+		local streams = panels[id] or {}
+		local currentLabel
+		if #streams > 0 then
+			currentLabel = addon.functions.createLabelAce("Streams: " .. table.concat(streams, ", "))
+		else
+			currentLabel = addon.functions.createLabelAce("Streams: none")
+		end
+		currentLabel:SetFullWidth(true)
+		groupPanel:AddChild(currentLabel)
+
+		local addStream = addon.functions.createDropdownAce("Add Stream", streamList, streamOrder, function(self, _, val)
+			panel:AddStream(val)
+			container:ReleaseChildren()
+			buildDatapanelFrame(container)
+		end)
+		groupPanel:AddChild(addStream)
+
+		local removeList, removeOrder = {}, {}
+		for _, s in ipairs(streams) do
+			removeList[s] = s
+			removeOrder[#removeOrder + 1] = s
+		end
+		table.sort(removeOrder)
+
+		local removeStream = addon.functions.createDropdownAce("Remove Stream", removeList, removeOrder, function(self, _, val)
+			panel:RemoveStream(val)
+			container:ReleaseChildren()
+			buildDatapanelFrame(container)
+		end)
+		groupPanel:AddChild(removeStream)
+	end
+end
+
 local function updateBankButtonInfo()
 	if not addon.db["showIlvlOnBankFrame"] then return end
 
@@ -4621,6 +4735,7 @@ local function CreateUI()
 			{ value = "misc", text = L["Misc"] },
 			{ value = "quest", text = L["Quest"] },
 			{ value = "map", text = WORLD_MAP },
+			{ value = "datapanel", text = "Datapanel" },
 			{
 				value = "ui",
 				text = BUG_CATEGORY5,
@@ -4676,6 +4791,8 @@ local function CreateUI()
 			addChatFrame(container)
 		elseif group == "general\001ui\001minimap" then
 			addMinimapFrame(container)
+		elseif group == "general\001datapanel" then
+			buildDatapanelFrame(container)
 		elseif group == "general\001social" then
 			addSocialFrame(container)
 		elseif group == "general\001map" then
@@ -5518,6 +5635,4 @@ registerEvents(frameLoad)
 frameLoad:SetScript("OnEvent", eventHandler)
 
 SLASH_EQOLPANEL1 = "/eqolpanel"
-SlashCmdList.EQOLPANEL = function(msg)
-        EnhanceQoL.DataPanel.SlashHandler(msg or "")
-end
+SlashCmdList.EQOLPANEL = function(msg) EnhanceQoL.DataPanel.SlashHandler(msg or "") end
