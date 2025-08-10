@@ -24,11 +24,13 @@ local function ensureSettings(id)
 	return info
 end
 
+local function round2(v) return math.floor(v * 100 + 0.5) / 100 end
+
 local function savePosition(frame, id)
 	local info = ensureSettings(id)
 	info.point, _, _, info.x, info.y = frame:GetPoint()
-	info.width = frame:GetWidth()
-	info.height = frame:GetHeight()
+	info.width = round2(frame:GetWidth())
+	info.height = round2(frame:GetHeight())
 end
 
 function DataPanel.Create(id)
