@@ -61,6 +61,44 @@ local function addGeneralFrame(container)
 		if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
 	end)
 	groupCore:AddChild(btnReset)
+
+	local groupGroup = addon.functions.createContainer("InlineGroup", "List")
+	groupGroup:SetTitle(L["Groups"])
+	wrapper:AddChild(groupGroup)
+
+	local metricNames = {
+		damagePerFight = L["Damage Per Fight"],
+		damageOverall = L["Damage Overall"],
+		healingPerFight = L["Healing Per Fight"],
+		healingOverall = L["Healing Overall"],
+	}
+	local metricOrder = { "damagePerFight", "damageOverall", "healingPerFight", "healingOverall" }
+
+	for i, cfg in ipairs(addon.db["combatMeterGroups"]) do
+		local row = addon.functions.createContainer("SimpleGroup", "Flow")
+		groupGroup:AddChild(row)
+
+		local label = AceGUI:Create("Label")
+		label:SetText(metricNames[cfg.type] or cfg.type)
+		label:SetWidth(150)
+		row:AddChild(label)
+
+		local btnRemove = addon.functions.createButtonAce(L["Remove"], nil, function()
+			table.remove(addon.db["combatMeterGroups"], i)
+			addon.CombatMeter.functions.rebuildGroups()
+			container:ReleaseChildren()
+			addGeneralFrame(container)
+		end)
+		row:AddChild(btnRemove)
+	end
+
+	local addDrop = addon.functions.createDropdownAce(L["Add Group"], metricNames, metricOrder, function(self, _, val)
+		table.insert(addon.db["combatMeterGroups"], { type = val, point = "CENTER", x = 0, y = 0 })
+		addon.CombatMeter.functions.rebuildGroups()
+		container:ReleaseChildren()
+		addGeneralFrame(container)
+	end)
+	groupGroup:AddChild(addDrop)
 end
 
 function addon.CombatMeter.functions.treeCallback(container, group)
@@ -72,8 +110,5 @@ addon.functions.InitDBValue("combatMeterEnabled", false)
 addon.functions.InitDBValue("combatMeterHistory", {})
 addon.functions.InitDBValue("combatMeterAlwaysShow", false)
 addon.functions.InitDBValue("combatMeterUpdateRate", 0.2)
-addon.functions.InitDBValue("combatMeterFramePoint", "CENTER")
-addon.functions.InitDBValue("combatMeterFrameX", 0)
-addon.functions.InitDBValue("combatMeterFrameY", 0)
 addon.functions.InitDBValue("combatMeterFontSize", 12)
-addon.functions.InitDBValue("combatMeterShowOverall", false)
+addon.functions.InitDBValue("combatMeterGroups", { { type = "damagePerFight", point = "CENTER", x = 0, y = 0 } })
