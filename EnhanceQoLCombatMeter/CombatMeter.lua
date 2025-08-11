@@ -113,12 +113,13 @@ local function handleEvent(self, event, ...)
 		local sourceName = a5
 		local sourceFlags = a6
 		local destGUID = a8
+		local destFlags = a10
 		local missIdx = missAbsorbIdx[subevent]
 		if not (dmgIdx[subevent] or healIdx[subevent] or missIdx or subevent == "SPELL_ABSORBED") then return end
-		if not missIdx and (not sourceGUID or band(sourceFlags or 0, groupMask) == 0) then return end
 
 		local idx = dmgIdx[subevent]
 		if idx then
+			if not sourceGUID or band(sourceFlags or 0, groupMask) == 0 then return end
 			local amount = select(idx, a12, a13, a14, a15, a16, a17, a18, a19, a20)
 			if amount <= 0 then return end
 			local player = acquirePlayer(cm.players, sourceGUID, sourceName)
@@ -130,6 +131,7 @@ local function handleEvent(self, event, ...)
 
 		local hidx = healIdx[subevent]
 		if hidx then
+			if not sourceGUID or band(sourceFlags or 0, groupMask) == 0 then return end
 			local amount = select(hidx[1], a12, a13, a14, a15, a16, a17, a18, a19, a20) - select(hidx[2], a12, a13, a14, a15, a16, a17, a18, a19, a20)
 			if amount <= 0 then return end
 			local player = acquirePlayer(cm.players, sourceGUID, sourceName)
@@ -142,6 +144,7 @@ local function handleEvent(self, event, ...)
 		if missIdx then
 			local missType = select(missIdx[1], a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25)
 			if missType ~= "ABSORB" then return end
+			if not destGUID or band(destFlags or 0, groupMask) == 0 then return end
 			local amount = select(missIdx[2], a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25)
 			if not amount or amount <= 0 then return end
 			local absorberGUID = lastAbsorbSourceByDest[destGUID]
@@ -163,15 +166,14 @@ local function handleEvent(self, event, ...)
 			local absorberGUID = select(n - 7, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25)
 			local absorberName = select(n - 6, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25)
 			local absorberFlags = select(n - 5, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25)
+			if not absorberGUID or band(absorberFlags or 0, groupMask) == 0 then return end
 			local absorbedAmount = select(n, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25) or 0
-			if absorberGUID and band(absorberFlags or 0, groupMask) ~= 0 then
-				lastAbsorbSourceByDest[destGUID] = absorberGUID
-				if absorbedAmount > 0 then
-					local p = acquirePlayer(cm.players, absorberGUID, absorberName)
-					local o = acquirePlayer(cm.overallPlayers, absorberGUID, absorberName)
-					p.healing = p.healing + absorbedAmount
-					o.healing = o.healing + absorbedAmount
-				end
+			lastAbsorbSourceByDest[destGUID] = absorberGUID
+			if absorbedAmount > 0 then
+				local p = acquirePlayer(cm.players, absorberGUID, absorberName)
+				local o = acquirePlayer(cm.overallPlayers, absorberGUID, absorberName)
+				p.healing = p.healing + absorbedAmount
+				o.healing = o.healing + absorbedAmount
 			end
 		end
 	end
