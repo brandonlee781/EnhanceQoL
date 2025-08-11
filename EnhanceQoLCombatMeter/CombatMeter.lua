@@ -76,38 +76,43 @@ local function handleEvent(self, event, ...)
 		local _, subevent, _, sourceGUID, sourceName, sourceFlags, _, _, _, _, _, a12, a13, a14, a15, a16, a17, a18, a19, a20 = CombatLogGetCurrentEventInfo()
 		if not sourceGUID or bit_band(sourceFlags or 0, groupMask) == 0 then return end
 
-		local player = acquirePlayer(addon.CombatMeter.players, sourceGUID, sourceName)
-		local overall = acquirePlayer(addon.CombatMeter.overallPlayers, sourceGUID, sourceName)
+		local dmgIdx = {
+			SWING_DAMAGE = 1,
+			RANGE_DAMAGE = 4,
+			SPELL_DAMAGE = 4,
+			SPELL_PERIODIC_DAMAGE = 4,
+			DAMAGE_SHIELD = 4,
+			DAMAGE_SPLIT = 4,
+			ENVIRONMENTAL_DAMAGE = 2,
+		}
+		local healIdx = {
+			SPELL_HEAL = { 4, 5 },
+			SPELL_PERIODIC_HEAL = { 4, 5 },
+		}
 
-		local amount = 0
-		if subevent == "SWING_DAMAGE" then
-			amount = tonumber(a12) or 0
-			if amount > 0 then
-				player.damage = player.damage + amount
-				overall.damage = overall.damage + amount
-			end
-		elseif subevent == "RANGE_DAMAGE" or subevent == "SPELL_DAMAGE" or subevent == "SPELL_PERIODIC_DAMAGE" or subevent == "DAMAGE_SHIELD" or subevent == "DAMAGE_SPLIT" then
-			amount = tonumber(a15) or 0
-			if amount > 0 then
-				player.damage = player.damage + amount
-				overall.damage = overall.damage + amount
-			end
-		elseif subevent == "ENVIRONMENTAL_DAMAGE" then
-			amount = tonumber(a13) or 0
-			if amount > 0 then
-				player.damage = player.damage + amount
-				overall.damage = overall.damage + amount
-			end
-		elseif subevent == "SPELL_HEAL" or subevent == "SPELL_PERIODIC_HEAL" then
-			amount = tonumber(a15) or 0
-			local overhealing = tonumber(a16) or 0
-			amount = amount - overhealing
-			if amount < 0 then amount = 0 end
-			if amount > 0 then
-				player.healing = player.healing + amount
-				overall.healing = overall.healing + amount
-			end
-		elseif subevent == "SPELL_ABSORBED" then
+		local idx = dmgIdx[subevent]
+		if idx then
+			local amount = select(idx, a12, a13, a14, a15, a16, a17, a18, a19, a20)
+			if amount <= 0 then return end
+			local player = acquirePlayer(addon.CombatMeter.players, sourceGUID, sourceName)
+			local overall = acquirePlayer(addon.CombatMeter.overallPlayers, sourceGUID, sourceName)
+			player.damage = player.damage + amount
+			overall.damage = overall.damage + amount
+			return
+		end
+
+		local hidx = healIdx[subevent]
+		if hidx then
+			local amount = select(hidx[1], a12, a13, a14, a15, a16, a17, a18, a19, a20) - select(hidx[2], a12, a13, a14, a15, a16, a17, a18, a19, a20)
+			if amount <= 0 then return end
+			local player = acquirePlayer(addon.CombatMeter.players, sourceGUID, sourceName)
+			local overall = acquirePlayer(addon.CombatMeter.overallPlayers, sourceGUID, sourceName)
+			player.healing = player.healing + amount
+			overall.healing = overall.healing + amount
+			return
+		end
+
+		if subevent == "SPELL_ABSORBED" then
 			-- Count absorbed damage as effective healing for the absorber (shield caster).
 			-- SPELL_ABSORBED has variable arg layouts; the last 8 fields are stable:
 			-- absorberGUID, absorberName, absorberFlags, absorberRaidFlags,
@@ -117,7 +122,7 @@ local function handleEvent(self, event, ...)
 			local absorberGUID = data[n - 7]
 			local absorberName = data[n - 6]
 			local absorberFlags = data[n - 5]
-			local absorbedAmount = tonumber(data[n]) or 0
+			local absorbedAmount = data[n] or 0
 			if absorbedAmount > 0 and absorberGUID and bit_band(absorberFlags or 0, groupMask) ~= 0 then
 				local p = acquirePlayer(addon.CombatMeter.players, absorberGUID, absorberName)
 				local o = acquirePlayer(addon.CombatMeter.overallPlayers, absorberGUID, absorberName)
