@@ -100,6 +100,9 @@ local function handleEvent(self, event, ...)
 			end
 		elseif subevent == "SPELL_HEAL" or subevent == "SPELL_PERIODIC_HEAL" then
 			amount = tonumber(a15) or 0
+			local overhealing = tonumber(a16) or 0
+			amount = amount - overhealing
+			if amount < 0 then amount = 0 end
 			if amount > 0 then
 				player.healing = player.healing + amount
 				overall.healing = overall.healing + amount
