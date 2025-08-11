@@ -15,6 +15,7 @@ local DEFAULT_MAX_BARS = 8
 local specIcons = {}
 local pendingInspect = {}
 local groupFrames = {}
+local groupUnitsCached = {}
 local ticker
 
 -- font helpers ---------------------------------------------------------------
@@ -383,30 +384,30 @@ end
 addon.CombatMeter.functions.setFontSize = setFontSize
 
 local function buildGroupUnits()
-	local groupUnits = {}
+	wipe(groupUnitsCached)
 	if IsInRaid() then
 		for i = 1, GetNumGroupMembers() do
 			local unit = "raid" .. i
 			local guid = UnitGUID(unit)
-			if guid then groupUnits[guid] = unit end
+			if guid then groupUnitsCached[guid] = unit end
 		end
 	else
 		for i = 1, GetNumGroupMembers() do
 			local unit = "party" .. i
 			local guid = UnitGUID(unit)
-			if guid then groupUnits[guid] = unit end
+			if guid then groupUnitsCached[guid] = unit end
 		end
 		local playerGUID = UnitGUID("player")
-		if playerGUID then groupUnits[playerGUID] = "player" end
+		if playerGUID then groupUnitsCached[playerGUID] = "player" end
 	end
-	return groupUnits
+	return groupUnitsCached
 end
 
 local function UpdateAllFrames()
 	if #groupFrames == 0 then return end
-	local groupUnits = buildGroupUnits()
+	if not next(groupUnitsCached) then buildGroupUnits() end
 	for _, frame in ipairs(groupFrames) do
-		frame:Update(groupUnits)
+		frame:Update(groupUnitsCached)
 	end
 end
 addon.CombatMeter.functions.UpdateBars = UpdateAllFrames
@@ -416,14 +417,15 @@ addon.CombatMeter.uiFrame = controller
 
 controller:SetScript("OnEvent", function(self, event, ...)
 	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
+		buildGroupUnits()
 		if ticker then ticker:Cancel() end
 		ticker = C_Timer.NewTicker(config["combatMeterUpdateRate"], UpdateAllFrames)
 		addon.CombatMeter.ticker = ticker
 		C_Timer.After(0, UpdateAllFrames)
 	elseif event == "INSPECT_READY" then
 		local guid = ...
-		local groupUnits = buildGroupUnits()
-		local unit = groupUnits[guid]
+		if not next(groupUnitsCached) then buildGroupUnits() end
+		local unit = groupUnitsCached[guid]
 		if unit then
 			local specID = GetInspectSpecialization(unit)
 			if specID and specID > 0 then specIcons[guid] = select(4, GetSpecializationInfoByID(specID)) end
@@ -445,9 +447,9 @@ controller:SetScript("OnEvent", function(self, event, ...)
 			end
 		end
 	elseif event == "GROUP_ROSTER_UPDATE" then
-		local groupUnits = buildGroupUnits()
+		buildGroupUnits()
 		for guid in pairs(specIcons) do
-			if not groupUnits[guid] then
+			if not groupUnitsCached[guid] then
 				specIcons[guid] = nil
 				pendingInspect[guid] = nil
 			end
