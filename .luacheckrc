@@ -29,7 +29,7 @@ exclude_files = {
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Dragonflight.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Era.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Cata.lua",
-	".git/**"
+	".git/**",
 }
 ignore = {
 	"11./SLASH_.*", -- Setting an undefined (Slash handler) global variable
@@ -15323,6 +15323,10 @@ globals = {
 	"REALM_STATUS_DOWN",
 	"REALM_STATUS_UP",
 	"Menu",
+	"GAMEMENU_OPTIONS",
+	"LFG_LIST_DIFFICULTY",
+	"GameTooltipText",
+	"WORLD_QUEST_REWARD_FILTERS_GOLD",
 	"REAL_ID",
 	"RECOMMENDED",
 	"RECOVER_CORPSE",

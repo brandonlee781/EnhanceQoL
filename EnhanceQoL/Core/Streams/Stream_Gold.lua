@@ -5,7 +5,6 @@ local L = addon.L
 local AceGUI = addon.AceGUI
 local db
 local stream
-local provider
 
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}

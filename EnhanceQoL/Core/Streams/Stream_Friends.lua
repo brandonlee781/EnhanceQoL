@@ -71,7 +71,7 @@ local function getFriends(stream)
 			local name, _, _, level, _, _, _, _, isOnline, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
 			if isOnline and guid ~= myGuid then
 				numFriendsOnline = numFriendsOnline + 1
-				local unit = name .. "(" .. level .. ")"
+				local unit = { name = name, level = level, class = class }
 				table.insert(tooltipData, unit)
 			end
 		end
@@ -84,7 +84,7 @@ local function getFriends(stream)
 			if info and info.gameAccountInfo then
 				if info.gameAccountInfo.isOnline and info.gameAccountInfo.characterName and info.gameAccountInfo.characterLevel then
 					numFriendsOnline = numFriendsOnline + 1
-					local unit = info.gameAccountInfo.characterName .. "(" .. info.gameAccountInfo.characterLevel .. ")"
+					local unit = { name = info.gameAccountInfo.characterName, level = info.gameAccountInfo.characterLevel, class = info.gameAccountInfo.className }
 					table.insert(tooltipData, unit)
 				end
 			end
@@ -94,7 +94,7 @@ local function getFriends(stream)
 		local friendInfo = C_FriendList.GetFriendInfoByIndex(i)
 		if friendInfo.connected then
 			numFriendsOnline = numFriendsOnline + 1
-			local unit = friendInfo.name .. "(" .. friendInfo.level .. ")"
+			local unit = { name = friendInfo.name, level = friendInfo.level, class = friendInfo.className }
 			table.insert(tooltipData, unit)
 		end
 	end
@@ -121,8 +121,9 @@ local provider = {
 		tip:ClearLines()
 		tip:SetOwner(b, "ANCHOR_TOPLEFT")
 		for _, v in ipairs(tooltipData) do
-			local r, g, b = NORMAL_FONT_COLOR:GetRGB()
-			tip:AddDoubleLine(v.slot, v.dur, r, g, b)
+			local level = v.level
+			if v.class then level = v.class .. " (" .. level .. ")" end
+			tip:AddDoubleLine(v.name, level)
 		end
 		tip:AddLine(L["Right-Click for options"])
 		tip:Show()
@@ -130,12 +131,15 @@ local provider = {
 		local name = tip:GetName()
 		local left1 = _G[name .. "TextLeft1"]
 		local right1 = _G[name .. "TextRight1"]
+		local r, g, b = NORMAL_FONT_COLOR:GetRGB()
 		if left1 then
 			left1:SetFontObject(GameTooltipText)
-			local r, g, b = NORMAL_FONT_COLOR:GetRGB()
 			left1:SetTextColor(r, g, b)
 		end
-		if right1 then right1:SetFontObject(GameTooltipText) end
+		if right1 then
+			right1:SetFontObject(GameTooltipText)
+			right1:SetTextColor(r, g, b)
+		end
 	end,
 }
 
