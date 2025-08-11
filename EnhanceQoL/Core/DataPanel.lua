@@ -143,7 +143,6 @@ function DataPanel.Create(id, name)
 		local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		text:SetAllPoints()
 		text:SetJustifyH("LEFT")
-		text:SetJustifyV("TOP")
 		local data = { button = button, text = text, lastWidth = text:GetStringWidth(), lastText = "" }
 		button.slot = data
 		button:SetScript("OnEnter", function(b)

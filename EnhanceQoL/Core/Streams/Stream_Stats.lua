@@ -6,6 +6,8 @@ local AceGUI = addon.AceGUI
 local db
 local stream
 
+local idx
+
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
 	addon.db.datapanel.stats = addon.db.datapanel.stats or {}
@@ -76,7 +78,7 @@ local function createAceWindow()
 	local frame = AceGUI:Create("Window")
 	aceWindow = frame.frame
 	frame:SetTitle(GAMEMENU_OPTIONS)
-	frame:SetWidth(300)
+	frame:SetWidth(330)
 	frame:SetHeight(500)
 	frame:SetLayout("List")
 
@@ -88,6 +90,17 @@ local function createAceWindow()
 		db.y = yOfs
 	end)
 
+	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+	scroll:SetFullWidth(true)
+	scroll:SetFullHeight(true)
+	frame:AddChild(scroll)
+
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	scroll:AddChild(wrapper)
+
+	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	wrapper:AddChild(groupCore)
+
 	local fontSize = AceGUI:Create("Slider")
 	fontSize:SetLabel("Font size")
 	fontSize:SetSliderValues(8, 32, 1)
@@ -96,7 +109,7 @@ local function createAceWindow()
 		db.fontSize = val
 		addon.DataHub:RequestUpdate(stream)
 	end)
-	frame:AddChild(fontSize)
+	groupCore:AddChild(fontSize)
 
 	local vertical = AceGUI:Create("CheckBox")
 	vertical:SetLabel("Display vertically")
@@ -105,21 +118,58 @@ local function createAceWindow()
 		db.vertical = val and true or false
 		addon.DataHub:RequestUpdate(stream)
 	end)
-	frame:AddChild(vertical)
+	groupCore:AddChild(vertical)
 
-	addStatOptions(frame, "haste", STAT_HASTE or "Haste")
-	addStatOptions(frame, "mastery", STAT_MASTERY or "Mastery")
-	addStatOptions(frame, "versatility", STAT_VERSATILITY or "Versatility")
-	addStatOptions(frame, "crit", STAT_CRITICAL_STRIKE or "Crit")
+	addStatOptions(groupCore, "haste", STAT_HASTE or "Haste")
+	addStatOptions(groupCore, "mastery", STAT_MASTERY or "Mastery")
+	addStatOptions(groupCore, "versatility", STAT_VERSATILITY or "Versatility")
+	addStatOptions(groupCore, "crit", STAT_CRITICAL_STRIKE or "Crit")
 
 	frame.frame:Show()
+	scroll:DoLayout()
+end
+
+local STR = LE_UNIT_STAT_STRENGTH
+local AGI = LE_UNIT_STAT_AGILITY
+local INT = LE_UNIT_STAT_INTELLECT
+
+local NAMES = {
+	[STR] = ITEM_MOD_STRENGTH_SHORT, -- "Strength" (lokalisiert)
+	[AGI] = ITEM_MOD_AGILITY_SHORT, -- "Agility"
+	[INT] = ITEM_MOD_INTELLECT_SHORT, -- "Intellect"
+}
+
+local function GetPlayerPrimaryStatIndex()
+	local spec = C_SpecializationInfo.GetSpecialization()
+	if spec then
+		-- 7. Rückgabewert ist der Primary-Stat (Index, passt direkt in UnitStat)
+		local _, _, _, _, _, _, primaryStat = C_SpecializationInfo.GetSpecializationInfo(spec)
+		if primaryStat == STR or primaryStat == AGI or primaryStat == INT then return primaryStat end
+	end
+	-- Fallback: nimm den höchsten von STR/AGI/INT auf dem Spieler
+	local _, sSTR = UnitStat("player", STR)
+	local _, sAGI = UnitStat("player", AGI)
+	local _, sINT = UnitStat("player", INT)
+	if sSTR >= sAGI and sSTR >= sINT then
+		return STR
+	elseif sAGI >= sINT then
+		return AGI
+	else
+		return INT
+	end
+end
+
+local function GetPlayerPrimaryStat()
+	if not idx then idx = GetPlayerPrimaryStatIndex() end
+	local base, effective = UnitStat("player", idx) -- effective enthält Buffs
+	return (effective or base), idx, (NAMES[idx] or "Primary")
 end
 
 local function formatStat(label, rating, percent)
 	if rating then
-		return ("%s %d"):format(label, rating)
+		return ("%s: %d"):format(label, rating)
 	else
-		return ("%s %.2f%%"):format(label, percent)
+		return ("%s: %.2f%%"):format(label, percent)
 	end
 end
 
@@ -135,6 +185,9 @@ local function checkStats(stream)
 	local size = db.fontSize or 14
 	stream.snapshot.fontSize = size
 	stream.snapshot.tooltip = L["Right-Click for options"]
+
+	local primaryValue, primaryId, primaryName = GetPlayerPrimaryStat()
+	texts[#texts + 1] = ("%s: %d"):format(primaryName, primaryValue)
 
 	if db.haste.enabled then
 		local text
@@ -206,6 +259,18 @@ local provider = {
 		ACTIVE_TALENT_GROUP_CHANGED = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		UPDATE_SHAPESHIFT_FORM = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		PLAYER_ENTERING_WORLD = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		PLAYER_LOGIN = function(stream)
+			C_Timer.After(1, function()
+				idx = GetPlayerPrimaryStatIndex()
+				addon.DataHub:RequestUpdate(stream)
+			end)
+		end,
+		ACTIVE_PLAYER_SPECIALIZATION_CHANGED = function(stream)
+			C_Timer.After(1, function()
+				idx = GetPlayerPrimaryStatIndex()
+				addon.DataHub:RequestUpdate(stream)
+			end)
+		end,
 	},
 	OnClick = function(_, btn)
 		if btn == "RightButton" then createAceWindow() end
