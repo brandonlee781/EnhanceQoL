@@ -86,9 +86,10 @@ end
 local function createGroupFrame(groupConfig)
 	local barHeight = groupConfig.barHeight or DEFAULT_BAR_HEIGHT
 	local barWidth = groupConfig.barWidth or DEFAULT_BAR_WIDTH
+	local frameWidth = barWidth + barHeight + 2
 
 	local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-	frame:SetSize(barWidth, barHeight)
+	frame:SetSize(frameWidth, barHeight)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
 	frame:Hide()
@@ -129,12 +130,12 @@ local function createGroupFrame(groupConfig)
 			bar = CreateFrame("StatusBar", nil, frame, "BackdropTemplate")
 			bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
 			bar:SetHeight(barHeight)
-			bar:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -(16 + (index - 1) * barHeight))
+			bar:SetPoint("TOPLEFT", frame, "TOPLEFT", barHeight + 2, -(16 + (index - 1) * barHeight))
 			bar:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -(16 + (index - 1) * barHeight))
 
-			bar.icon = bar:CreateTexture(nil, "ARTWORK")
+			bar.icon = frame:CreateTexture(nil, "ARTWORK")
 			bar.icon:SetSize(barHeight, barHeight)
-			bar.icon:SetPoint("LEFT", bar, "LEFT")
+			bar.icon:SetPoint("RIGHT", bar, "LEFT", -2, 0)
 
 			-- Right-side fixed columns to keep numbers steady (no jitter)
 			bar.rate = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -156,7 +157,7 @@ local function createGroupFrame(groupConfig)
 
 			-- Name between icon and numeric columns
 			bar.name = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-			bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
+			bar.name:SetPoint("LEFT", bar, "LEFT", 2, 0)
 			bar.name:SetPoint("RIGHT", bar.total, "LEFT", -6, 0)
 			bar.name:SetJustifyH("LEFT")
 			bar.name:SetWordWrap(false)
@@ -345,7 +346,7 @@ local function createGroupFrame(groupConfig)
 				-- ensure name anchors to total when dual columns are used
 				if bar.nameRightAnchorTarget ~= bar.total then
 					bar.name:ClearAllPoints()
-					bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
+					bar.name:SetPoint("LEFT", bar, "LEFT", 2, 0)
 					bar.name:SetPoint("RIGHT", bar.total, "LEFT", -6, 0)
 					bar.nameRightAnchorTarget = bar.total
 				end
@@ -356,7 +357,7 @@ local function createGroupFrame(groupConfig)
 				bar.value:SetText(abbreviateNumber(p.value))
 				if bar.nameRightAnchorTarget ~= bar.value then
 					bar.name:ClearAllPoints()
-					bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
+					bar.name:SetPoint("LEFT", bar, "LEFT", 2, 0)
 					bar.name:SetPoint("RIGHT", bar.value, "LEFT", -6, 0)
 					bar.nameRightAnchorTarget = bar.value
 				end
