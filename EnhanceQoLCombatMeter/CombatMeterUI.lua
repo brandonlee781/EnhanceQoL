@@ -94,6 +94,7 @@ local function createGroupFrame(groupConfig)
 	frame:SetSize(frameWidth, barHeight)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
+	frame:SetClampedToScreen(true)
 	frame:Hide()
 	frame.bars = {}
 	frame.metric = groupConfig.type
