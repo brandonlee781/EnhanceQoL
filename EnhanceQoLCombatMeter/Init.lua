@@ -30,24 +30,31 @@ local function addGeneralFrame(container)
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCore)
 
-        local cbEnabled = addon.functions.createCheckboxAce(L["Enabled"], addon.db["combatMeterEnabled"], function(self, _, value)
-                addon.db["combatMeterEnabled"] = value
-                addon.CombatMeter.functions.toggle(value)
-        end)
-        groupCore:AddChild(cbEnabled)
+	local cbEnabled = addon.functions.createCheckboxAce(L["Enabled"], addon.db["combatMeterEnabled"], function(self, _, value)
+		addon.db["combatMeterEnabled"] = value
+		addon.CombatMeter.functions.toggle(value)
+	end)
+	groupCore:AddChild(cbEnabled)
 
-        local cbAlwaysShow = addon.functions.createCheckboxAce(L["Always Show"], addon.db["combatMeterAlwaysShow"], function(self, _, value)
-                addon.db["combatMeterAlwaysShow"] = value
-                if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
-        end)
-        groupCore:AddChild(cbAlwaysShow)
+	local cbAlwaysShow = addon.functions.createCheckboxAce(L["Always Show"], addon.db["combatMeterAlwaysShow"], function(self, _, value)
+		addon.db["combatMeterAlwaysShow"] = value
+		if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
+	end)
+	groupCore:AddChild(cbAlwaysShow)
 
-        local sliderRate = addon.functions.createSliderAce(L["Update Rate"] .. ": " .. addon.db["combatMeterUpdateRate"], addon.db["combatMeterUpdateRate"], 0.05, 1, 0.05, function(self, _, val)
-                addon.db["combatMeterUpdateRate"] = val
-                addon.CombatMeter.functions.setUpdateRate(val)
-                self:SetLabel(L["Update Rate"] .. ": " .. string.format("%.2f", val))
-        end)
-        groupCore:AddChild(sliderRate)
+	local sliderRate = addon.functions.createSliderAce(L["Update Rate"] .. ": " .. addon.db["combatMeterUpdateRate"], addon.db["combatMeterUpdateRate"], 0.05, 1, 0.05, function(self, _, val)
+		addon.db["combatMeterUpdateRate"] = val
+		addon.CombatMeter.functions.setUpdateRate(val)
+		self:SetLabel(L["Update Rate"] .. ": " .. string.format("%.2f", val))
+	end)
+	groupCore:AddChild(sliderRate)
+
+	local sliderFont = addon.functions.createSliderAce(L["Font Size"] .. ": " .. addon.db["combatMeterFontSize"], addon.db["combatMeterFontSize"], 8, 32, 1, function(self, _, val)
+		addon.db["combatMeterFontSize"] = val
+		if addon.CombatMeter.functions.setFontSize then addon.CombatMeter.functions.setFontSize(val) end
+		self:SetLabel(L["Font Size"] .. ": " .. val)
+	end)
+	groupCore:AddChild(sliderFont)
 
 	local btnReset = addon.functions.createButtonAce(L["Reset"], nil, function()
 		if SlashCmdList and SlashCmdList["EQOLCM"] then SlashCmdList["EQOLCM"]("reset") end
@@ -68,3 +75,4 @@ addon.functions.InitDBValue("combatMeterUpdateRate", 0.2)
 addon.functions.InitDBValue("combatMeterFramePoint", "CENTER")
 addon.functions.InitDBValue("combatMeterFrameX", 0)
 addon.functions.InitDBValue("combatMeterFrameY", 0)
+addon.functions.InitDBValue("combatMeterFontSize", 12)

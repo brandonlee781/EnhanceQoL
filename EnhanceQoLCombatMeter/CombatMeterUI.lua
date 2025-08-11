@@ -65,10 +65,28 @@ local function getBar(index)
 		bar.damage:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
 		bar.healing:SetPoint("RIGHT", bar.damage, "LEFT", -5, 0)
 
+		bar.name:SetTextColor(1, 1, 1)
+		bar.damage:SetTextColor(1, 1, 1)
+		bar.healing:SetTextColor(1, 1, 1)
+
+		local size = config["combatMeterFontSize"]
+		bar.name:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+		bar.damage:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+		bar.healing:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+
 		bars[index] = bar
 	end
 	return bar
 end
+
+local function setFontSize(size)
+	for _, bar in ipairs(bars) do
+		bar.name:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+		bar.damage:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+		bar.healing:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+	end
+end
+addon.CombatMeter.functions.setFontSize = setFontSize
 
 local function abbreviateName(name)
 	name = name or ""
