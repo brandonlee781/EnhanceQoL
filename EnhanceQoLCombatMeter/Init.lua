@@ -111,6 +111,12 @@ local function addGeneralFrame(container)
 			addon.CombatMeter.functions.rebuildGroups()
 		end)
 		groupGroup:AddChild(smb)
+
+		local cbSelf = addon.functions.createCheckboxAce(L["Always Show Self"], cfg.alwaysShowSelf or false, function(self, _, value)
+			cfg.alwaysShowSelf = value
+			addon.CombatMeter.functions.rebuildGroups()
+		end)
+		groupGroup:AddChild(cbSelf)
 	end
 
 	local addDrop = addon.functions.createDropdownAce(L["Add Group"], metricNames, metricOrder, function(self, _, val)
@@ -122,6 +128,7 @@ local function addGeneralFrame(container)
 			barWidth = 210,
 			barHeight = 25,
 			maxBars = 8,
+			alwaysShowSelf = false,
 		})
 		addon.CombatMeter.functions.rebuildGroups()
 		container:ReleaseChildren()
@@ -149,5 +156,6 @@ addon.functions.InitDBValue("combatMeterGroups", {
 		barWidth = 210,
 		barHeight = 25,
 		maxBars = 8,
+		alwaysShowSelf = false,
 	},
 })

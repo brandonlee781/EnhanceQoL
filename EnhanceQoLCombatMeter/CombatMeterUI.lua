@@ -238,8 +238,73 @@ local function createGroupFrame(groupConfig)
 
 		if maxValue == 0 then maxValue = 1 end
 		table.sort(list, function(a, b) return a.value > b.value end)
+		local maxBars = groupConfig.maxBars or DEFAULT_MAX_BARS
+		local playerGUID = UnitGUID("player")
+		if groupConfig.alwaysShowSelf then
+			local found = false
+			for _, entry in ipairs(list) do
+				if entry.guid == playerGUID then
+					found = true
+					break
+				end
+			end
+			if not found then
+				local name = UnitName("player")
+				local value, total
+				if self.metric == "damageOverall" or self.metric == "healingOverall" then
+					local stats = addon.CombatMeter.functions.getOverallStats()
+					local dur = (addon.CombatMeter.functions.getOverallDuration and addon.CombatMeter.functions.getOverallDuration()) or addon.CombatMeter.overallDuration or 0
+					if dur <= 0 then dur = 1 end
+					local p = stats[playerGUID]
+					if p then
+						total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+					else
+						total = 0
+					end
+					value = total / dur
+				else
+					local duration
+					if addon.CombatMeter.inCombat then
+						duration = GetTime() - addon.CombatMeter.fightStartTime
+					else
+						duration = addon.CombatMeter.fightDuration
+					end
+					if duration <= 0 then duration = 1 end
+					local data = addon.CombatMeter.players[playerGUID]
+					if data then
+						if self.metric == "dps" then
+							total = data.damage
+							value = data.damage / duration
+						else
+							total = data.healing
+							value = data.healing / duration
+						end
+					else
+						total = 0
+						value = 0
+					end
+				end
+				if value > maxValue then maxValue = value end
+				table.insert(list, { guid = playerGUID, name = name, value = value, total = total })
+			end
+			if #list > maxBars then
+				local playerIndex
+				for i, entry in ipairs(list) do
+					if entry.guid == playerGUID then
+						playerIndex = i
+						break
+					end
+				end
+				if playerIndex and playerIndex > maxBars then
+					list[playerIndex], list[maxBars] = list[maxBars], list[playerIndex]
+				end
+				while #list > maxBars do
+					table.remove(list)
+				end
+			end
+		end
 
-		local displayCount = math.min(#list, groupConfig.maxBars or DEFAULT_MAX_BARS)
+		local displayCount = math.min(#list, maxBars)
 		for i = 1, displayCount do
 			local p = list[i]
 			local bar = getBar(i)
