@@ -1137,17 +1137,20 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	activeKeyIndex[key] = activeKeyIndex[key] or {}
 	activeKeyIndex[key][catId] = bar
 	activeSourceIndex[sourceGUID] = activeSourceIndex[sourceGUID] or {}
-	activeSourceIndex[sourceGUID][catId] = activeSourceIndex[sourceGUID][catId] or {}
-	activeSourceIndex[sourceGUID][catId][key] = bar
-	bar.sourceGUID = sourceGUID
-	bar.spellId = spellId
-	bar.catId = catId
-	bar.icon:SetTexture(icon)
-	bar.castType = castType or "cast"
-	if spellInfo.customTextEnabled and spellInfo.customText and spellInfo.customText ~= "" then
-		bar.text:SetText(spellInfo.customText)
-	else
-		if altSpellData and altSpellData.name then
+        activeSourceIndex[sourceGUID][catId] = activeSourceIndex[sourceGUID][catId] or {}
+        activeSourceIndex[sourceGUID][catId][key] = bar
+        bar.sourceGUID = sourceGUID
+        bar.spellId = spellId
+        bar.catId = catId
+        if bar._icon ~= icon then
+                bar.icon:SetTexture(icon)
+                bar._icon = icon
+        end
+        bar.castType = castType or "cast"
+        if spellInfo.customTextEnabled and spellInfo.customText and spellInfo.customText ~= "" then
+                bar.text:SetText(spellInfo.customText)
+        else
+                if altSpellData and altSpellData.name then
 			bar.text:SetText(altSpellData.name)
 		else
 			bar.text:SetText(name)
