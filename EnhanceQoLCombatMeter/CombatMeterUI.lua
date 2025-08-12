@@ -24,6 +24,11 @@ local lastMaxValue = 0
 local EPSILON = 0.01
 local tinsert, tsort = table.insert, table.sort
 
+local POW10 = { [0] = 1 }
+for i = 1, 6 do
+	POW10[i] = POW10[i - 1] * 10
+end
+
 local function sortByValueDesc(a, b) return a.value > b.value end
 
 local function scheduleInspectRetry(guid, unit)
@@ -90,7 +95,7 @@ local function abbreviateNumber(n, decimals, trimZeros)
 		return sign .. tostring(math.floor(n + 0.5))
 	end
 
-	local pow = 10 ^ decimals
+	local pow = POW10[decimals] or 10 ^ decimals
 	val = math.floor(val * pow + 0.5) / pow
 
 	-- Carry: 999.995k -> 1.00m, etc.
