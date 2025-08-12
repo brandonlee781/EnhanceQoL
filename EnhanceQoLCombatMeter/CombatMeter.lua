@@ -214,12 +214,6 @@ end
 
 frame:SetScript("OnEvent", handleEvent)
 
-function cm.functions.getOverallStats()
-	local duration = cm.overallDuration
-	if duration <= 0 then duration = 1 end
-	return cm.overallPlayers, duration
-end
-
 function cm.functions.toggle(enabled)
 	if enabled then
 		frame:RegisterEvent("PLAYER_REGEN_DISABLED")
