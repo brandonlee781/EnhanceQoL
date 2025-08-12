@@ -80,7 +80,7 @@ local function releasePlayers(players)
 	end
 end
 
-local function rebuildPetOwnerFromRoster()
+local function fullRebuildPetOwners()
 	wipe(petOwner)
 	if IsInRaid() then
 		for i = 1, GetNumGroupMembers() do
@@ -100,6 +100,17 @@ local function rebuildPetOwnerFromRoster()
 	end
 end
 
+local function updatePetOwner(unit)
+	if not unit then return end
+	local owner = UnitGUID(unit)
+	if not owner then return end
+	for pguid, oguid in pairs(petOwner) do
+		if oguid == owner then petOwner[pguid] = nil end
+	end
+	local pguid = UnitGUID(unit .. "pet")
+	if pguid then petOwner[pguid] = owner end
+end
+
 local frame = CreateFrame("Frame")
 cm.frame = frame
 
@@ -112,12 +123,12 @@ local dmgIdx = {
 	DAMAGE_SPLIT = 4,
 }
 
-local function handleEvent(self, event)
+local function handleEvent(self, event, unit)
 	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
 		cm.inCombat = true
 		cm.fightStartTime = GetTime()
 		releasePlayers(cm.players)
-		rebuildPetOwnerFromRoster()
+		fullRebuildPetOwners()
 	elseif event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END" then
 		if not cm.inCombat then return end
 		cm.inCombat = false
@@ -138,8 +149,10 @@ local function handleEvent(self, event)
 		hist[#hist + 1] = fight
 		local MAX = 30
 		if #hist > MAX then table.remove(hist, 1) end
-	elseif event == "GROUP_ROSTER_UPDATE" or event == "UNIT_PET" or event == "PLAYER_ENTERING_WORLD" then
-		rebuildPetOwnerFromRoster()
+	elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+		fullRebuildPetOwners()
+	elseif event == "UNIT_PET" then
+		updatePetOwner(unit)
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not cm.inCombat then return end
 
