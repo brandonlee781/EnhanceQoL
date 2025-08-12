@@ -46,8 +46,6 @@ local function resolveOwner(srcGUID, srcName, srcFlags)
 	return srcGUID, (ownerNameCache[srcGUID] or srcName)
 end
 
-local lastAbsorbSourceByDest = {}
-
 local function acquirePlayer(tbl, guid, name)
 	local players = tbl
 	local player = players[guid]
@@ -163,7 +161,6 @@ local function handleCLEU(timestamp, subevent, hideCaster, sourceGUID, sourceNam
 		local start = argc - 8
 		local absorberGUID, absorberName, absorberFlags, _, spellName, _, _, absorbedAmount, absorbedCritical = select(start, ...)
 		if not absorberGUID or type(absorberFlags) ~= "number" or band(absorberFlags, groupMask) == 0 then return end
-		lastAbsorbSourceByDest[destGUID] = { guid = absorberGUID, name = absorberName }
 		if not absorbedAmount or absorbedAmount <= 0 then return end
 		local ownerGUID, ownerName = resolveOwner(absorberGUID, absorberName, absorberFlags)
 		local p = acquirePlayer(cm.players, ownerGUID, ownerName)
@@ -179,7 +176,6 @@ local function handleEvent(self, event)
 		cm.inCombat = true
 		cm.fightStartTime = GetTime()
 		releasePlayers(cm.players)
-		wipe(lastAbsorbSourceByDest)
 		rebuildPetOwnerFromRoster()
 	elseif event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END" then
 		if not cm.inCombat then return end
