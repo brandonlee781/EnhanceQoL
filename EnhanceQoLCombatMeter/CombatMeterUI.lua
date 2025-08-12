@@ -19,6 +19,9 @@ local groupUnitsCached = {}
 local classByGUID = {}
 local shortNameCache = {}
 local ticker
+local tickerRate = config["combatMeterUpdateRate"] or 0.3
+local lastMaxValue = 0
+local EPSILON = 0.01
 local tinsert, tsort = table.insert, table.sort
 
 local function sortByValueDesc(a, b) return a.value > b.value end
@@ -475,6 +478,7 @@ local function createGroupFrame(groupConfig)
 			self:SetHeight(newHeight)
 			self._h = newHeight
 		end
+		return maxValue
 	end
 
 	return frame
@@ -510,9 +514,23 @@ end
 local function UpdateAllFrames()
 	if #groupFrames == 0 then return end
 	if not next(groupUnitsCached) then buildGroupUnits() end
+	local maxValue = 0
 	for _, frame in ipairs(groupFrames) do
-		frame:Update(groupUnitsCached)
+		local frameMax = frame:Update(groupUnitsCached)
+		if frameMax and frameMax > maxValue then maxValue = frameMax end
 	end
+	if math.abs(maxValue - lastMaxValue) < EPSILON then
+		if ticker then
+			ticker:Cancel()
+			ticker = nil
+			addon.CombatMeter.ticker = nil
+			C_Timer.After(tickerRate, function()
+				ticker = C_Timer.NewTicker(tickerRate, UpdateAllFrames)
+				addon.CombatMeter.ticker = ticker
+			end)
+		end
+	end
+	lastMaxValue = maxValue
 end
 addon.CombatMeter.functions.UpdateBars = UpdateAllFrames
 
@@ -539,6 +557,8 @@ controller:SetScript("OnEvent", function(self, event, ...)
 		if ticker then ticker:Cancel() end
 		buildGroupUnits()
 		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or config["combatMeterUpdateRate"]
+		tickerRate = hz
+		lastMaxValue = 0
 		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
 		addon.CombatMeter.ticker = ticker
 		C_Timer.After(0, UpdateAllFrames)
@@ -599,6 +619,8 @@ function addon.CombatMeter.functions.setUpdateRate(rate)
 	if ticker then
 		ticker:Cancel()
 		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or rate
+		tickerRate = hz
+		lastMaxValue = 0
 		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
 		addon.CombatMeter.ticker = ticker
 	end
