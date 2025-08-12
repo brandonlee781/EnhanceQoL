@@ -13,6 +13,7 @@ addon.LCombatMeter = {}
 
 local AceGUI = addon.AceGUI
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_CombatMeter")
+local TEXTURE_PATH = "Interface\\AddOns\\EnhanceQoLCombatMeter\\Texture\\"
 
 addon.variables.statusTable.groups["combatmeter"] = true
 addon.functions.addToTree(nil, {
@@ -68,8 +69,99 @@ local function addGeneralFrame(container)
 	end)
 	groupCore:AddChild(sliderNameLength)
 
+	local barTextures = {
+		["Interface\\TARGETINGFRAME\\UI-StatusBar"] = "Classic Gradient (Blizzard)",
+		["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
+		["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
+		[TEXTURE_PATH .. "eqol_base_flat_8x8.tga"] = "EQoL: Flat (AddOn)",
+	}
+	local barOrder = {
+		"Interface\\TARGETINGFRAME\\UI-StatusBar",
+		"Interface\\Buttons\\WHITE8x8",
+		"Interface\\Tooltips\\UI-Tooltip-Background",
+		TEXTURE_PATH .. "eqol_base_flat_8x8.tga",
+	}
+	local dropBarTexture = addon.functions.createDropdownAce(L["Bar Texture"], barTextures, barOrder, function(_, _, key)
+		addon.db["combatMeterBarTexture"] = key
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+	end)
+	dropBarTexture:SetValue(addon.db["combatMeterBarTexture"] or (TEXTURE_PATH .. "eqol_base_flat_8x8.tga"))
+	groupCore:AddChild(dropBarTexture)
+
+	local dropOverlayTex, dropOverlayBlend, sliderOverlayAlpha
+	local cbOverlay = addon.functions.createCheckboxAce(L["Use Overlay"], addon.db["combatMeterUseOverlay"], function(_, _, value)
+		addon.db["combatMeterUseOverlay"] = value
+		if dropOverlayTex then dropOverlayTex:SetDisabled(not value) end
+		if dropOverlayBlend then dropOverlayBlend:SetDisabled(not value) end
+		if sliderOverlayAlpha then sliderOverlayAlpha:SetDisabled(not value) end
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+	end)
+	groupCore:AddChild(cbOverlay)
+
+	local overlayTextures = {
+		[TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga"] = "Gradient", -- default
+		[TEXTURE_PATH .. "eqol_overlay_vidro_512x64.tga"] = "Gloss/Vidro",
+		[TEXTURE_PATH .. "eqol_overlay_stripes_512x64.tga"] = "Stripes",
+		[TEXTURE_PATH .. "eqol_overlay_noise_512x64.tga"] = "Noise",
+	}
+	local overlayOrder = {
+		TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga",
+		TEXTURE_PATH .. "eqol_overlay_vidro_512x64.tga",
+		TEXTURE_PATH .. "eqol_overlay_stripes_512x64.tga",
+		TEXTURE_PATH .. "eqol_overlay_noise_512x64.tga",
+	}
+	local defaultBlendByTexture = {
+		[TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga"] = "ADD",
+		[TEXTURE_PATH .. "eqol_overlay_vidro_512x64.tga"] = "ADD",
+		[TEXTURE_PATH .. "eqol_overlay_stripes_512x64.tga"] = "MOD",
+		[TEXTURE_PATH .. "eqol_overlay_noise_512x64.tga"] = "BLEND",
+	}
+	dropOverlayTex = addon.functions.createDropdownAce(L["Overlay Texture"], overlayTextures, overlayOrder, function(_, _, key)
+		addon.db["combatMeterOverlayTexture"] = key
+		addon.db["combatMeterOverlayBlend"] = defaultBlendByTexture[key] or addon.db["combatMeterOverlayBlend"]
+		if dropOverlayBlend then dropOverlayBlend:SetValue(addon.db["combatMeterOverlayBlend"]) end
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+	end)
+	local initialOverlayTex = addon.db["combatMeterOverlayTexture"] or (TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga")
+	dropOverlayTex:SetValue(initialOverlayTex)
+	groupCore:AddChild(dropOverlayTex)
+
+	dropOverlayBlend = addon.functions.createDropdownAce(L["Overlay Blend Mode"], { ADD = "ADD", BLEND = "BLEND", MOD = "MOD" }, { "ADD", "BLEND", "MOD" }, function(_, _, key)
+		addon.db["combatMeterOverlayBlend"] = key
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+	end)
+	local initialBlend = addon.db["combatMeterOverlayBlend"] or defaultBlendByTexture[initialOverlayTex] or "ADD"
+	addon.db["combatMeterOverlayBlend"] = initialBlend
+	dropOverlayBlend:SetValue(initialBlend)
+	groupCore:AddChild(dropOverlayBlend)
+
+	sliderOverlayAlpha = addon.functions.createSliderAce(
+		L["Overlay Opacity"] .. ": " .. math.floor(((addon.db["combatMeterOverlayAlpha"] or 0.28) * 100) + 0.5) .. "%",
+		addon.db["combatMeterOverlayAlpha"] or 0.28,
+		0,
+		1,
+		0.01,
+		function(self, _, val)
+			addon.db["combatMeterOverlayAlpha"] = val
+			self:SetLabel(L["Overlay Opacity"] .. ": " .. math.floor((val * 100) + 0.5) .. "%")
+			if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+		end
+	)
+	groupCore:AddChild(sliderOverlayAlpha)
+
+	dropOverlayTex:SetDisabled(not addon.db["combatMeterUseOverlay"])
+	dropOverlayBlend:SetDisabled(not addon.db["combatMeterUseOverlay"])
+	sliderOverlayAlpha:SetDisabled(not addon.db["combatMeterUseOverlay"])
+
+	local cbRounded = addon.functions.createCheckboxAce(L["Rounded Corners"], addon.db["combatMeterRoundedCorners"], function(_, _, value)
+		addon.db["combatMeterRoundedCorners"] = value
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
+	end)
+	groupCore:AddChild(cbRounded)
+
 	local btnReset = addon.functions.createButtonAce(L["Reset"], nil, function()
 		if SlashCmdList and SlashCmdList["EQOLCM"] then SlashCmdList["EQOLCM"]("reset") end
+		if addon.CombatMeter.functions.applyBarTextures then addon.CombatMeter.functions.applyBarTextures() end
 		if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
 	end)
 	groupCore:AddChild(btnReset)
@@ -161,6 +253,12 @@ addon.functions.InitDBValue("combatMeterAlwaysShow", false)
 addon.functions.InitDBValue("combatMeterUpdateRate", 0.2)
 addon.functions.InitDBValue("combatMeterFontSize", 12)
 addon.functions.InitDBValue("combatMeterNameLength", 12)
+addon.functions.InitDBValue("combatMeterBarTexture", TEXTURE_PATH .. "eqol_base_flat_8x8.tga")
+addon.functions.InitDBValue("combatMeterUseOverlay", false)
+addon.functions.InitDBValue("combatMeterOverlayTexture", TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga")
+addon.functions.InitDBValue("combatMeterOverlayBlend", "ADD")
+addon.functions.InitDBValue("combatMeterOverlayAlpha", 0.28)
+addon.functions.InitDBValue("combatMeterRoundedCorners", false)
 addon.functions.InitDBValue("combatMeterGroups", {
 	{
 		type = "dps",
