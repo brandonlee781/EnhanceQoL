@@ -16,7 +16,6 @@ local specIcons = {}
 local pendingInspect = {}
 local groupFrames = {}
 local groupUnitsCached = {}
-local classByGUID = {}
 local shortNameCache = {}
 local ticker
 local tickerRate = config["combatMeterUpdateRate"] or 0.3
@@ -284,7 +283,7 @@ local function createGroupFrame(groupConfig)
 				if groupUnits[guid] then
 					local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
 					local value = total / overallDuration -- rate over total tracked time
-					tinsert(list, { guid = guid, name = p.name, value = value, total = total })
+					tinsert(list, { guid = guid, name = p.name, value = value, total = total, class = p.class })
 					if value > maxValue then maxValue = value end
 				end
 			end
@@ -307,7 +306,7 @@ local function createGroupFrame(groupConfig)
 						value = data.healing / duration
 						total = data.healing
 					end
-					tinsert(list, { guid = guid, name = data.name, value = value, total = total })
+					tinsert(list, { guid = guid, name = data.name, value = value, total = total, class = data.class })
 					if value > maxValue then maxValue = value end
 				end
 			end
@@ -345,10 +344,12 @@ local function createGroupFrame(groupConfig)
 			if not found then
 				local name = UnitName("player")
 				local value, total
+				local class
 				if self.metric == "damageOverall" or self.metric == "healingOverall" then
 					local p = addon.CombatMeter.overallPlayers[playerGUID]
 					if p then
 						total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+						class = p.class
 					else
 						total = 0
 					end
@@ -370,13 +371,14 @@ local function createGroupFrame(groupConfig)
 							total = data.healing
 							value = data.healing / duration
 						end
+						class = data.class
 					else
 						total = 0
 						value = 0
 					end
 				end
 				if value > maxValue then maxValue = value end
-				tinsert(list, { guid = playerGUID, name = name, value = value, total = total })
+				tinsert(list, { guid = playerGUID, name = name, value = value, total = total, class = class })
 			end
 			if #list > maxBars then
 				local playerIndex
@@ -406,12 +408,7 @@ local function createGroupFrame(groupConfig)
 			end
 			bar:SetValue(p.value)
 
-			local class = classByGUID[p.guid]
-			if class == nil then
-				local _, c = GetPlayerInfoByGUID(p.guid)
-				class = c or ""
-				classByGUID[p.guid] = class
-			end
+			local class = p.class or ""
 			if bar._class ~= class then
 				local color = RAID_CLASS_COLORS[class] or NORMAL_FONT_COLOR
 				bar:SetStatusBarColor(color.r, color.g, color.b)
@@ -602,9 +599,6 @@ controller:SetScript("OnEvent", function(self, event, ...)
 		end
 		for guid in pairs(pendingInspect) do
 			if not groupUnitsCached[guid] then pendingInspect[guid] = nil end
-		end
-		for guid in pairs(classByGUID) do
-			if not groupUnitsCached[guid] then classByGUID[guid] = nil end
 		end
 		for guid in pairs(shortNameCache) do
 			if not groupUnitsCached[guid] then shortNameCache[guid] = nil end

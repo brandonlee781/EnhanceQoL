@@ -60,6 +60,8 @@ local function acquirePlayer(tbl, guid, name)
 		player.guid = guid
 		player.damage = 0
 		player.healing = 0
+		local _, class = GetPlayerInfoByGUID(guid)
+		player.class = class
 		players[guid] = player
 	end
 	if name and player.name ~= name then player.name = name end
@@ -129,6 +131,7 @@ local function handleEvent(self, event)
 			fight.players[guid] = {
 				guid = guid,
 				name = data.name,
+				class = data.class,
 				damage = data.damage,
 				healing = data.healing,
 			}
