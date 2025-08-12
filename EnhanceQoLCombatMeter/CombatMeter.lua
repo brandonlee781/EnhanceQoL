@@ -195,9 +195,7 @@ local function handleEvent(self, event)
 		local hist = addon.db["combatMeterHistory"]
 		hist[#hist + 1] = fight
 		local MAX = 30
-		while #hist > MAX do
-			table.remove(hist, 1)
-		end
+		if #hist > MAX then table.remove(hist, 1) end
 	elseif event == "GROUP_ROSTER_UPDATE" or event == "UNIT_PET" or event == "PLAYER_ENTERING_WORLD" then
 		rebuildPetOwnerFromRoster()
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
@@ -209,9 +207,9 @@ end
 frame:SetScript("OnEvent", handleEvent)
 
 function cm.functions.getOverallStats()
-        local duration = cm.overallDuration
-        if duration <= 0 then duration = 1 end
-        return cm.overallPlayers, duration
+	local duration = cm.overallDuration
+	if duration <= 0 then duration = 1 end
+	return cm.overallPlayers, duration
 end
 
 function cm.functions.toggle(enabled)
