@@ -145,28 +145,32 @@ local function handleEvent(self, event)
 		rebuildPetOwnerFromRoster()
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not cm.inCombat then return end
-		local info = { CombatLogGetCurrentEventInfo() }
-		local subevent = info[2]
-		local sourceGUID, sourceName, sourceFlags = info[4], info[5], info[6]
-		local destGUID = info[8]
+
+		-- Call 1: early filter for subevent
+		local _, sub = CombatLogGetCurrentEventInfo()
 
 		-- Maintain pet/guardian owner mapping via CLEU
-		if subevent == "SPELL_SUMMON" or subevent == "SPELL_CREATE" then
+		if sub == "SPELL_SUMMON" or sub == "SPELL_CREATE" then
+			local _, _, _, sourceGUID, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
 			if destGUID and sourceGUID then petOwner[destGUID] = sourceGUID end
 			return
-		elseif subevent == "UNIT_DIED" or subevent == "UNIT_DESTROYED" then
+		elseif sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" then
+			local _, _, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
 			if destGUID then petOwner[destGUID] = nil end
+			return
+		elseif not (dmgIdx[sub] or healIdx[sub] or sub == "SPELL_ABSORBED") then
+			-- Note: We intentionally ignore *_MISSED ABSORB to avoid double-counting with SPELL_ABSORBED (matches Details behavior)
 			return
 		end
 
-		-- Note: We intentionally ignore *_MISSED ABSORB to avoid double-counting with SPELL_ABSORBED (matches Details behavior)
-		if not (dmgIdx[subevent] or healIdx[subevent] or subevent == "SPELL_ABSORBED") then return end
+		-- Call 2: fetch full event info into locals
+		local _, subevent, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, destFlags, _, a12, a13, a14, a15, a16, a17, a18, a19, a20 = CombatLogGetCurrentEventInfo()
 
 		local idx = dmgIdx[subevent]
 		if idx then
 			if not sourceGUID or band(sourceFlags or 0, groupMask) == 0 then return end
-			local amount = info[11 + idx]
-			if not amount or amount <= 0 then return end
+			local amount = (idx == 1 and a12) or (idx == 2 and a13) or (idx == 4 and a15) or 0
+			if amount <= 0 then return end
 			local ownerGUID, ownerName = resolveOwner(sourceGUID, sourceName, sourceFlags)
 			local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 			local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -175,11 +179,12 @@ local function handleEvent(self, event)
 			return
 		end
 
-		local hidx = healIdx[subevent]
-		if hidx then
+		local h = healIdx[subevent]
+		if h then
 			if not sourceGUID or band(sourceFlags or 0, groupMask) == 0 then return end
-			local amount = (info[11 + hidx[1]] or 0) - (info[11 + hidx[2]] or 0)
-			if not amount or amount <= 0 then return end
+			local amount = ((h[1] == 4 and a15) or (h[1] == 5 and a16) or (h[1] == 6 and a17) or (h[1] == 7 and a18) or (h[1] == 8 and a19) or (h[1] == 9 and a20) or 0)
+				- ((h[2] == 4 and a15) or (h[2] == 5 and a16) or (h[2] == 6 and a17) or (h[2] == 7 and a18) or (h[2] == 8 and a19) or (h[2] == 9 and a20) or 0)
+			if amount <= 0 then return end
 			local ownerGUID, ownerName = resolveOwner(sourceGUID, sourceName, sourceFlags)
 			local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 			local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -194,15 +199,8 @@ local function handleEvent(self, event)
 			-- absorberGUID, absorberName, absorberFlags, absorberRaidFlags,
 			-- absorbingSpellID, absorbingSpellName, absorbingSpellSchool,
 			-- absorbedAmount, absorbedCritical
-			local varargCount = #info - 11
-			local start = varargCount - 8
-			local base = 11 + start
-			local absorberGUID = info[base]
-			local absorberName = info[base + 1]
-			local absorberFlags = info[base + 2]
-			-- info[base + 4] holds the absorbing spell name if needed for debugging
-			local absorbedAmount = info[base + 7]
-			local absorbedCritical = info[base + 8]
+			local total = select("#", CombatLogGetCurrentEventInfo())
+			local absorberGUID, absorberName, absorberFlags, _, _, _, _, absorbedAmount = select(total - 8, CombatLogGetCurrentEventInfo())
 			if not absorberGUID or type(absorberFlags) ~= "number" or band(absorberFlags, groupMask) == 0 then return end
 			if not absorbedAmount or absorbedAmount <= 0 then return end
 			local ownerGUID, ownerName = resolveOwner(absorberGUID, absorberName, absorberFlags)
