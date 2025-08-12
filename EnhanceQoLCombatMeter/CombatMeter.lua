@@ -182,6 +182,7 @@ local dmgIdx = {
 
 local function handleEvent(self, event, unit)
 	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
+		if cm.inCombat then return end
 		cm.inCombat = true
 		cm.fightStartTime = GetTime()
 		cm.historySelection = nil
