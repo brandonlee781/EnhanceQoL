@@ -22,17 +22,17 @@ local ticker
 local tinsert, tsort = table.insert, table.sort
 
 local function scheduleInspectRetry(guid, unit)
-        C_Timer.After(1, function()
-                if pendingInspect[guid] and CanInspect(unit) then NotifyInspect(unit) end
-        end)
+	C_Timer.After(1, function()
+		if pendingInspect[guid] and CanInspect(unit) then NotifyInspect(unit) end
+	end)
 end
 
 local function tableSize(t)
-        local n = 0
-        for _ in pairs(t) do
-                n = n + 1
-        end
-        return n
+	local n = 0
+	for _ in pairs(t) do
+		n = n + 1
+	end
+	return n
 end
 
 -- font helpers ---------------------------------------------------------------
@@ -114,6 +114,8 @@ local function createGroupFrame(groupConfig)
 	frame:SetClampedToScreen(true)
 	frame:Hide()
 	frame.bars = {}
+	frame.list = frame.list or {}
+	frame.top = frame.top or {}
 	frame.metric = groupConfig.type
 	frame.groupConfig = groupConfig
 
@@ -257,23 +259,28 @@ local function createGroupFrame(groupConfig)
 			return
 		end
 		self:Show()
-		local list = {}
+		self.list = self.list or {}
+		self.top = self.top or {}
+		local list = self.list
+		local top = self.top
+		wipe(list)
+		wipe(top)
 		local maxValue = 0
-               if self.metric == "damageOverall" or self.metric == "healingOverall" then
-                       local duration = addon.CombatMeter.overallDuration
-                       if duration <= 0 then duration = 1 end
-                       for guid, p in pairs(addon.CombatMeter.overallPlayers) do
-                               if groupUnits[guid] then
-                                       local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
-                                       local value = total / duration -- rate over total tracked time
-                                       tinsert(list, { guid = guid, name = p.name, value = value, total = total })
-                                       if value > maxValue then maxValue = value end
-                               end
-                       end
-               else
-                       local duration
-                       if addon.CombatMeter.inCombat then
-                               duration = GetTime() - addon.CombatMeter.fightStartTime
+		if self.metric == "damageOverall" or self.metric == "healingOverall" then
+			local duration = addon.CombatMeter.overallDuration
+			if duration <= 0 then duration = 1 end
+			for guid, p in pairs(addon.CombatMeter.overallPlayers) do
+				if groupUnits[guid] then
+					local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+					local value = total / duration -- rate over total tracked time
+					tinsert(list, { guid = guid, name = p.name, value = value, total = total })
+					if value > maxValue then maxValue = value end
+				end
+			end
+		else
+			local duration
+			if addon.CombatMeter.inCombat then
+				duration = GetTime() - addon.CombatMeter.fightStartTime
 			else
 				duration = addon.CombatMeter.fightDuration
 			end
@@ -295,32 +302,27 @@ local function createGroupFrame(groupConfig)
 			end
 		end
 
-               if maxValue == 0 then maxValue = 1 end
-               local maxBars = groupConfig.maxBars or DEFAULT_MAX_BARS
-               local groupCount = tableSize(groupUnits)
-               if groupCount > 20 and #list > maxBars then
-                       local top = {}
-                       for _, entry in ipairs(list) do
-                               local inserted = false
-                               for i = 1, #top do
-                                       if entry.value > top[i].value then
-                                               tinsert(top, i, entry)
-                                               inserted = true
-                                               break
-                                       end
-                               end
-                               if not inserted and #top < maxBars then
-                                       top[#top + 1] = entry
-                               end
-                               if #top > maxBars then
-                                       top[#top] = nil
-                               end
-                       end
-                       list = top
-               else
-                       tsort(list, function(a, b) return a.value > b.value end)
-               end
-               local playerGUID = UnitGUID("player")
+		if maxValue == 0 then maxValue = 1 end
+		local maxBars = groupConfig.maxBars or DEFAULT_MAX_BARS
+		local groupCount = tableSize(groupUnits)
+		if groupCount > 20 and #list > maxBars then
+			for _, entry in ipairs(list) do
+				local inserted = false
+				for i = 1, #top do
+					if entry.value > top[i].value then
+						tinsert(top, i, entry)
+						inserted = true
+						break
+					end
+				end
+				if not inserted and #top < maxBars then top[#top + 1] = entry end
+				if #top > maxBars then top[#top] = nil end
+			end
+			list = top
+		else
+			tsort(list, function(a, b) return a.value > b.value end)
+		end
+		local playerGUID = UnitGUID("player")
 		if groupConfig.alwaysShowSelf then
 			local found = false
 			for _, entry in ipairs(list) do
@@ -330,22 +332,22 @@ local function createGroupFrame(groupConfig)
 				end
 			end
 			if not found then
-                               local name = UnitName("player")
-                               local value, total
-                               if self.metric == "damageOverall" or self.metric == "healingOverall" then
-                                       local duration = addon.CombatMeter.overallDuration
-                                       if duration <= 0 then duration = 1 end
-                                       local p = addon.CombatMeter.overallPlayers[playerGUID]
-                                       if p then
-                                               total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
-                                       else
-                                               total = 0
-                                       end
-                                       value = total / duration
-                               else
-                                       local duration
-                                       if addon.CombatMeter.inCombat then
-                                               duration = GetTime() - addon.CombatMeter.fightStartTime
+				local name = UnitName("player")
+				local value, total
+				if self.metric == "damageOverall" or self.metric == "healingOverall" then
+					local duration = addon.CombatMeter.overallDuration
+					if duration <= 0 then duration = 1 end
+					local p = addon.CombatMeter.overallPlayers[playerGUID]
+					if p then
+						total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+					else
+						total = 0
+					end
+					value = total / duration
+				else
+					local duration
+					if addon.CombatMeter.inCombat then
+						duration = GetTime() - addon.CombatMeter.fightStartTime
 					else
 						duration = addon.CombatMeter.fightDuration
 					end
@@ -416,15 +418,15 @@ local function createGroupFrame(groupConfig)
 						icon = select(4, C_SpecializationInfo.GetSpecializationInfo(specIndex))
 						specIcons[p.guid] = icon
 					end
-                                elseif CanInspect(unit) and pendingInspect[p.guid] == nil then
-                                        NotifyInspect(unit)
-                                        pendingInspect[p.guid] = true
-                                        scheduleInspectRetry(p.guid, unit)
-                                end
-                        end
-                        if bar._icon ~= icon then
-                                bar.icon:SetTexture(icon)
-                                bar._icon = icon
+				elseif CanInspect(unit) and pendingInspect[p.guid] == nil then
+					NotifyInspect(unit)
+					pendingInspect[p.guid] = true
+					scheduleInspectRetry(p.guid, unit)
+				end
+			end
+			if bar._icon ~= icon then
+				bar.icon:SetTexture(icon)
+				bar._icon = icon
 			end
 
 			local shortName = shortNameCache[p.guid]
@@ -528,13 +530,13 @@ local controller = CreateFrame("Frame")
 addon.CombatMeter.uiFrame = controller
 
 controller:SetScript("OnEvent", function(self, event, ...)
-       if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
-               if ticker then ticker:Cancel() end
-               buildGroupUnits()
-               local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or config["combatMeterUpdateRate"]
-               ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
-               addon.CombatMeter.ticker = ticker
-               C_Timer.After(0, UpdateAllFrames)
+	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
+		if ticker then ticker:Cancel() end
+		buildGroupUnits()
+		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or config["combatMeterUpdateRate"]
+		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
+		addon.CombatMeter.ticker = ticker
+		C_Timer.After(0, UpdateAllFrames)
 	elseif event == "INSPECT_READY" then
 		local guid = ...
 		if not next(groupUnitsCached) then buildGroupUnits() end
@@ -556,15 +558,15 @@ controller:SetScript("OnEvent", function(self, event, ...)
 				if specIndex then specIcons[guid] = select(4, GetSpecializationInfo(specIndex)) end
 				UpdateAllFrames()
 			else
-                                if CanInspect(unit) and pendingInspect[guid] == nil then
-                                        NotifyInspect(unit)
-                                        pendingInspect[guid] = true
-                                        scheduleInspectRetry(guid, unit)
-                                end
-                        end
-                end
-        elseif event == "GROUP_ROSTER_UPDATE" then
-                buildGroupUnits()
+				if CanInspect(unit) and pendingInspect[guid] == nil then
+					NotifyInspect(unit)
+					pendingInspect[guid] = true
+					scheduleInspectRetry(guid, unit)
+				end
+			end
+		end
+	elseif event == "GROUP_ROSTER_UPDATE" then
+		buildGroupUnits()
 		for guid in pairs(specIcons) do
 			if not groupUnitsCached[guid] then specIcons[guid] = nil end
 		end
@@ -589,12 +591,12 @@ controller:SetScript("OnEvent", function(self, event, ...)
 end)
 
 function addon.CombatMeter.functions.setUpdateRate(rate)
-       if ticker then
-               ticker:Cancel()
-               local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or rate
-               ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
-               addon.CombatMeter.ticker = ticker
-       end
+	if ticker then
+		ticker:Cancel()
+		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or rate
+		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
+		addon.CombatMeter.ticker = ticker
+	end
 end
 
 local function rebuildGroups()
