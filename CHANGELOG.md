@@ -8,12 +8,12 @@
   - Create your own movable DataPanels and add data streams for more information.
   - Right-click a data stream to access additional options.
 - **Combat Meter** – track combat statistics with highly customizable bar groups.
+  - Module is ultra lightweight with 99% <1ms even in 40ppl raids and minimal RAM usage
   - Disabled by default; enable via **Options → Combat Meter**.
   - Supports metrics for **DPS**, **overall damage**, **healing per fight**, and **overall healing**.
   - Each group lets you choose bar width/height, max bars, and whether to always show yourself.
   - Optional **Pre-Pull Capture** window includes casts made just before combat starts.
   - Bars offer texture/overlay choices, rounded corners, and adjustable update rate & font size.
-  - Use `/eqolcm reset` to clear recorded history.
 
 ### 📊 Built-in data streams
 
@@ -26,6 +26,7 @@
 - **Talent Build** – shows the active talent loadout.
 
 ### 🐛 Fixed
+
 - Dungeon Rating missed Streets and Gambit
 
 ---
