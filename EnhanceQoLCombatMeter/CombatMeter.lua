@@ -81,11 +81,7 @@ local function releasePlayers(players)
 	local pool = cm.playerPool
 	for guid in pairs(players) do
 		local player = players[guid]
-		player.damage = 0
-		player.healing = 0
-		player.name = nil
-		player.class = nil
-		player.guid = nil
+		wipe(player)
 		pool[#pool + 1] = player
 		players[guid] = nil
 	end
