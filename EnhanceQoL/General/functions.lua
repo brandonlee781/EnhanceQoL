@@ -378,13 +378,13 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				if addon.itemBagFilters["rarity"] then
 					if nil == addon.itemBagFiltersQuality[itemQuality] or addon.itemBagFiltersQuality[itemQuality] == false then setVisibility = true end
 				end
-				local cilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
-				if addon.itemBagFilters["minLevel"] and (cilvl < addon.itemBagFilters["minLevel"] or (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc])) then
-					setVisibility = true
-				end
-				if addon.itemBagFilters["maxLevel"] and (cilvl > addon.itemBagFilters["maxLevel"] or (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc])) then
-					setVisibility = true
-				end
+                                local cilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
+                                if addon.itemBagFilters["minLevel"] and (not cilvl or cilvl < addon.itemBagFilters["minLevel"] or (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc])) then
+                                        setVisibility = true
+                                end
+                                if addon.itemBagFilters["maxLevel"] and (not cilvl or cilvl > addon.itemBagFilters["maxLevel"] or (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc])) then
+                                        setVisibility = true
+                                end
 				if addon.itemBagFilters["currentExpension"] and LE_EXPANSION_LEVEL_CURRENT ~= expId then setVisibility = true end
 				if addon.itemBagFilters["equipment"] and (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc]) then setVisibility = true end
 				if addon.itemBagFilters["bind"] then

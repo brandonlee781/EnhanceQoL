@@ -11,6 +11,7 @@
 
 - Resolved issues in **DataPanel**.
 - Improved **Combat Meter** DPS/HPS determination accuracy.
+- Fixed an error when filtering inventory by item level.
 
 ---
 
