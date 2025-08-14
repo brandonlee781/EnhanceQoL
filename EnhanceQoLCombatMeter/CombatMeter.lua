@@ -337,16 +337,20 @@ local dmgIdx = {
 }
 
 local function getSpellInfoFromSub(sub, a12, a15)
-	if sub == "SWING_DAMAGE" then
-		return 6603, "Melee"
-	elseif sub and (sub:find("_DAMAGE") or sub:find("_HEAL")) then
-		local spellID = a15
-		if spellID then
-			local spellInfo = C_Spell.GetSpellInfo(spellID)
-			if spellInfo then return spellID, spellInfo.name end
-		end
+	if sub == "SWING_DAMAGE" then return 6603, "Melee" end
+	-- Für SPELL_* und RANGE_* liegt die spellId in a12
+	if sub == "RANGE_DAMAGE" or sub:find("^SPELL_") then
+		local spellID = a12
+		local name = spellID and GetSpellInfo(spellID)
+		return spellID or -1, name or "Other"
 	end
 	return -1, "Other"
+end
+
+local function isCritFor(sub, a18, a21)
+	if sub == "SWING_DAMAGE" then return not not a18 end
+	if sub == "SPELL_DAMAGE" or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_HEAL" or sub == "SPELL_PERIODIC_HEAL" then return not not a21 end
+	return false
 end
 
 local function handleEvent(self, event, unit)
@@ -438,7 +442,7 @@ local function handleEvent(self, event, unit)
 			local amount = (idx == 1 and a12) or a15 or 0
 			if amount <= 0 then return end
 			local spellId, spellName = getSpellInfoFromSub(sub, a12, a15)
-			local crit = a21 or a18
+			local crit = isCritFor(sub, a18, a21)
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -497,7 +501,7 @@ local function handleEvent(self, event, unit)
 			local amount = (a15 or 0) - (a16 or 0)
 			if amount <= 0 then return end
 			local spellId, spellName = getSpellInfoFromSub(sub, a12, a15)
-			local crit = a21 or a18
+			local crit = isCritFor(sub, a18, a21)
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
