@@ -3,17 +3,19 @@
 ## [4.5.0] – 2025-08-16
 
 ### ✨ Added
-- **No bloodlust in group** option added to LFG Filter
-  - Only show groups without a bloodlust class
-- Optionally move **Teleport Compendium**, **Mythic+ Rating** and **Mythic+ Dungeons**
+
+- **No Bloodlust in group** (LFG Filter)  
+  Hides groups that already include a Bloodlust provider (Mage, Shaman, Evoker, or Hunter via pet), showing only groups **without** Bloodlust.
+- **Repositioning**: Optionally move **Teleport Compendium**, **Mythic+ Rating**, and **Mythic+ Dungeons** frames.
 
 ### 🐛 Fixed
 
-- _Secret Technique_ by Rogues where missed in **Combat Meter**
-- _Offhealing_ voice not always played in **Potion Tracker**
-- _Reset_ in **Combat Meter** in combat disabled logging of events
-- **Dungeon Filter** wasn't working in some situations as expected
-- **Skip Patreon confirmation** wasn't working as intended since 11.2 changes
+- **Combat Meter**: _Secret Technique_ (Rogue) was not counted.
+- **Combat Meter**: Beast Mastery second pet (_Generic Hunter Pet_, NPC **165189**) was not mapped.
+- **Potion Tracker**: **Offhealing** voice line did not always play.
+- **Combat Meter**: **Reset during combat** could disable event logging.
+- **Dungeon Filter**: Filtering failed in certain situations.
+- **Patreon**: **Skip confirmation** behavior broken since 11.2.
 
 ---
 
