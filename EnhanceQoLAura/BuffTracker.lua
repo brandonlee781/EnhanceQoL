@@ -338,10 +338,8 @@ local function updateInstanceGroup()
 	currentInstanceGroup = difficultyToGroup[diffID]
 end
 
-
 local groupTypeNames = { PARTY = PARTY, RAID = RAID, SOLO = SOLO or "Solo" }
 local groupTypeOrder = { "PARTY", "RAID", "SOLO" }
-local currentGroupType
 
 local function updateGroupType()
 	if IsInRaid() then
@@ -1327,16 +1325,6 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		updateInstanceGroup()
 		updateGroupType()
 		rebuildAltMapping()
-
-		updateGroupType()
-		collectActiveAuras()
-		scanBuffs()
-		return
-	end
-	if event == "GROUP_ROSTER_UPDATE" then
-		updateGroupType()
-		rebuildAltMapping()
-		collectActiveAuras()
 		scanBuffs()
 		return
 	end
@@ -1460,7 +1448,6 @@ eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
 eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
