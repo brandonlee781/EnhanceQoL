@@ -157,8 +157,8 @@ end
 
 if Menu and Menu.ModifyMenu then Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_FILTER", EQOL_AddLFGEntries) end
 
-local function MyCustomFilter(info, pinnedID)
-	if pinnedID and info.searchResultID == pinnedID then return true end
+local function MyCustomFilter(info, selectedID)
+	if selectedID and info.searchResultID == selectedID then return true end
 	if appliedLookup[info.searchResultID] then return true end
 	if info.numMembers == 5 then return false end
 
