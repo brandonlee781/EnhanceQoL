@@ -246,6 +246,22 @@ local _eqolFiltering = false
 local function ApplyEQOLFilters(isInitial)
 	if _eqolFiltering then return end
 	_eqolFiltering = true
+	if LFGListApplicationDialog and LFGListApplicationDialog:IsShown() then
+		_eqolFiltering = false
+		return
+	end
+	if GetTime() < suspendFilterUntil then
+		_eqolFiltering = false
+		return
+	end
+	if LFGListInviteDialog and LFGListInviteDialog:IsShown() then
+		_eqolFiltering = false
+		return
+	end
+	if LFDRoleCheckPopup and LFDRoleCheckPopup:IsShown() then
+		_eqolFiltering = false
+		return
+	end
 
 	scanGen = scanGen + 1
 	wipe(toRemove)
@@ -268,6 +284,14 @@ local function ApplyEQOLFilters(isInitial)
 	end
 	local dp = panel.ScrollBox and panel.ScrollBox:GetDataProvider()
 	if not dp then
+		_eqolFiltering = false
+		return
+	end
+	if IsMouseButtonDown() and panel and panel.ScrollBox and MouseIsOver(panel.ScrollBox) then
+		_eqolFiltering = false
+		return
+	end
+	if panel.SignUpButton and (panel.SignUpButton:IsMouseOver() or panel.SignUpButton:GetButtonState() == "PUSHED") then
 		_eqolFiltering = false
 		return
 	end
