@@ -385,7 +385,8 @@ local function ScheduleFilters(initial)
 	if initial then _lastInitial = true end
 	if _filterScheduled then return end
 	_filterScheduled = true
-	C_Timer.After(0, function()
+	local delay = (IsInGroup() and 0.2 or 0.05)
+	C_Timer.After(delay, function()
 		_filterScheduled = false
 		ApplyEQOLFilters(_lastInitial)
 		_lastInitial = false
