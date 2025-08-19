@@ -159,7 +159,12 @@ local function checkCurrencies(stream)
 		end
 	end
 
-	local newText = table.concat(parts, " ")
+	local newText
+	if #parts > 0 then
+		newText = table.concat(parts, " ")
+	else
+		newText = L["Right-Click for options"]
+	end
 	if stream.snapshot.text ~= newText or stream.snapshot.fontSize ~= size then
 		stream.snapshot.text = newText
 		stream.snapshot.fontSize = size
