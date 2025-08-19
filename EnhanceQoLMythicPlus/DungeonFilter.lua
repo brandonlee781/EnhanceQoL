@@ -163,6 +163,87 @@ local function EntryPassesFilter(info)
 	return true
 end
 
+-- === Visual highlight for entries that fail our filter (PGF-style, taint-safe) ===
+local function EQOL_SetTextGrey(widget, grey)
+	if not widget or not widget.SetTextColor then return end
+	-- Cache original color once
+	if not widget._eqolOrigColor then
+		local r, g, b, a = 1, 1, 1, 1
+		if widget.GetTextColor then
+			r, g, b, a = widget:GetTextColor()
+		end
+		widget._eqolOrigColor = { r, g, b, a }
+	end
+	if grey then
+		widget:SetTextColor(0.6, 0.6, 0.6, 1)
+	else
+		local c = widget._eqolOrigColor
+		if c then widget:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
+	end
+end
+
+local function EQOL_RestoreEntryVisuals(entry)
+	if entry._eqolOrigAlpha then entry:SetAlpha(entry._eqolOrigAlpha) end
+	-- Try common fontstrings on the entry; restore if we changed them before
+	local labels = { "Name", "ActivityName", "Members", "Comment", "VoiceChat", "LeaderName", "ListingName" }
+	for _, k in ipairs(labels) do
+		local w = entry[k]
+		if w and w._eqolOrigColor then EQOL_SetTextGrey(w, false) end
+	end
+end
+
+local function EQOL_ApplyEntryVisuals(entry, dim, skipGrey)
+	-- Alpha grey-out is robust across templates; also grey some labels if present
+	if not entry._eqolOrigAlpha then entry._eqolOrigAlpha = entry:GetAlpha() or 1 end
+	entry:SetAlpha(dim and 0.45 or entry._eqolOrigAlpha)
+	if skipGrey then return end
+	local labels = { "Name", "ActivityName", "Members", "Comment", "VoiceChat", "LeaderName", "ListingName" }
+	for _, k in ipairs(labels) do
+		local w = entry[k]
+		EQOL_SetTextGrey(w, dim)
+	end
+end
+
+local function EQOL_HighlightSearchEntry(entry)
+	-- Only decorate in our use-case
+	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
+	local panel = LFGListFrame and LFGListFrame.SearchPanel
+	if not panel or panel.categoryID ~= 2 then return end
+
+	-- If no filters active, restore visuals and exit
+	if not AnyFilterActive() then
+		EQOL_RestoreEntryVisuals(entry)
+		return
+	end
+
+	local resultID = entry and (entry.resultID or entry.id or entry.searchResultID)
+	if not resultID then
+		EQOL_RestoreEntryVisuals(entry)
+		return
+	end
+
+	-- Keep selected/applied entries normal
+	local selectedID = (type(LFGListSearchPanel_GetSelectedResult) == "function" and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
+	if selectedID and selectedID == resultID then
+		EQOL_RestoreEntryVisuals(entry)
+		return
+	end
+
+	local _, appStatus, pendingStatus = C_LFGList.GetApplicationInfo(resultID)
+	if (appStatus and appStatus ~= "none") or pendingStatus then
+		EQOL_RestoreEntryVisuals(entry)
+		return
+	end
+
+	local info = C_LFGList.GetSearchResultInfo(resultID)
+	local pass = info and EntryPassesFilter(info)
+
+	local ignored = false
+	if addon.db.enableIgnore and addon.Ignore and addon.Ignore.CheckIgnore and info and info.leaderName then ignored = addon.Ignore:CheckIgnore(info.leaderName) and true or false end
+
+	EQOL_ApplyEntryVisuals(entry, pass == false, ignored)
+end
+
 local function FilterResults(panel)
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	if not panel or panel.categoryID ~= 2 then return end
@@ -207,6 +288,7 @@ local hooked = false
 function addon.MythicPlus.functions.addDungeonFilter()
 	if not hooked then
 		hooksecurefunc("LFGListSearchPanel_UpdateResultList", FilterResults)
+		hooksecurefunc("LFGListSearchEntry_Update", EQOL_HighlightSearchEntry)
 		hooked = true
 		if LFGList_ReportAdvertisement then
 			function LFGList_ReportAdvertisement(searchResultID, leaderName)
