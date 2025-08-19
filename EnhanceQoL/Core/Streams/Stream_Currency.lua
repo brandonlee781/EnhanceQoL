@@ -45,9 +45,7 @@ local function handleMouseEnter(button)
 			end
 		end
 		if slot.lastTip then
-			GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
-			GameTooltip:SetText(L["Right-Click for options"])
-			GameTooltip:Show()
+			GameTooltip:Hide()
 			slot.lastTip = nil
 		end
 	end
@@ -59,6 +57,7 @@ local function handleMouseLeave(button)
 	if not db or not db.tooltipPerCurrency then return end
 	button:SetScript("OnUpdate", nil)
 	if button.slot then button.slot.lastTip = nil end
+	GameTooltip:Hide()
 end
 
 local function rebuildTracked()
@@ -171,8 +170,8 @@ local function createAceWindow()
 	local frame = AceGUI:Create("Window")
 	aceWindowWidget = frame
 	frame:SetTitle(GAMEMENU_OPTIONS)
-	frame:SetWidth(320)
-	frame:SetHeight(400)
+	frame:SetWidth(280)
+	frame:SetHeight(320)
 	frame:SetLayout("List")
 
 	db._windowStatus = db._windowStatus or {}
