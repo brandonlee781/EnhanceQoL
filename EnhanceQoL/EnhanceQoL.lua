@@ -4703,7 +4703,7 @@ local function initCharacter()
 
 	local function updateCloakUpgradeButton()
 		if PaperDollFrame and PaperDollFrame:IsShown() then
-			if addon.db["showCloakUpgradeButton"] and IsEquippedItem(235499) then
+			if addon.db["showCloakUpgradeButton"] and C_Item.IsEquippedItem(235499) then
 				addon.general.cloakUpgradeFrame:Show()
 			else
 				addon.general.cloakUpgradeFrame:Hide()

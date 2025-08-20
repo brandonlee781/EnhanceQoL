@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### ✨ Added
+
+- DataPanel currency stream: per-currency tooltips, optional description hiding, and red coloring when capped
+
+### 🐛 Fixed
+
+- DataPanel currency stream: per-currency tooltips now obey the description toggle and no longer show stray "Right-Click for options" tooltips
+
 ## [4.6.0] – 2025-08-18
 
 ### ✨ Added

@@ -30,6 +30,7 @@ local applyAnchor
 local ShareCategory
 local importCategory
 local exportCategory
+local GetItemInfo = C_Item.GetItemInfo
 
 for _, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 	if cat.useAdvancedTracking == nil then cat.useAdvancedTracking = true end

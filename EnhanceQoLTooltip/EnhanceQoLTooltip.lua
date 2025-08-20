@@ -32,6 +32,12 @@ end
 local function checkCurrency(tooltip, id)
 	if tooltip:IsForbidden() or tooltip:IsProtected() then return end
 	if not id then return end
+
+	if addon.db["TooltipShowCurrencyID"] then
+		tooltip:AddLine(" ")
+		tooltip:AddDoubleLine(L["CurrencyID"], id)
+	end
+
 	if not addon.db["TooltipShowCurrencyAccountWide"] then return end
 	local charList = C_CurrencyInfo.FetchCurrencyDataFromAccountCharacters(id)
 
@@ -626,6 +632,7 @@ local function addCurrencyFrame(container)
 
 	local data = {
 		{ text = L["TooltipShowCurrencyAccountWide"], var = "TooltipShowCurrencyAccountWide" },
+		{ text = L["TooltipShowCurrencyID"], var = "TooltipShowCurrencyID" },
 	}
 
 	table.sort(data, function(a, b) return a.text < b.text end)

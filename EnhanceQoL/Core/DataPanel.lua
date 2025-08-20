@@ -2,6 +2,7 @@ local addonName, addon = ...
 addon.DataPanel = addon.DataPanel or {}
 local DataPanel = addon.DataPanel
 local DataHub = addon.DataHub
+local L = addon.L
 
 local panels = {}
 
@@ -177,27 +178,113 @@ function DataPanel.Create(id, name)
 
 		local function cb(payload)
 			payload = payload or {}
-			local text = payload.text or ""
-			if text ~= data.lastText then
-				data.text:SetText(text)
-				data.lastText = text
-				local width = data.text:GetStringWidth()
-				if width ~= data.lastWidth then
-					data.lastWidth = width
+			local font = (addon.variables and addon.variables.defaultFont) or select(1, data.text:GetFont())
+			local size = payload.fontSize or data.fontSize or 14
+
+			if payload.parts then
+				data.text:SetText("")
+				data.text:Hide()
+				data.parts = data.parts or {}
+				local prev
+				local totalWidth = 0
+				for i, part in ipairs(payload.parts) do
+					local child = data.parts[i]
+					if not child then
+						child = CreateFrame("Button", nil, button)
+						child.text = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+						child.text:SetAllPoints()
+						child:RegisterForClicks("AnyUp")
+						data.parts[i] = child
+					end
+					child:Show()
+					child:SetHeight(button:GetHeight())
+					child.text:SetFont(font, size, "OUTLINE")
+					child.text:SetText(part.text or "")
+					local w = child.text:GetStringWidth()
+					child:SetWidth(w)
+					child:ClearAllPoints()
+					if prev then
+						child:SetPoint("LEFT", prev, "RIGHT", 5, 0)
+					else
+						child:SetPoint("LEFT", button, "LEFT", 0, 0)
+					end
+					prev = child
+					child.currencyID = part.id
+					child:SetScript("OnEnter", function(b)
+						GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
+						if data.perCurrency and b.currencyID then
+							GameTooltip:SetCurrencyByID(b.currencyID)
+							if data.showDescription == false then
+								local info = C_CurrencyInfo.GetCurrencyInfo(b.currencyID)
+								if info and info.description and info.description ~= "" then
+									local name = GameTooltip:GetName()
+									for i = 2, GameTooltip:NumLines() do
+										local line = _G[name .. "TextLeft" .. i]
+										if line and line:GetText() == info.description then
+											line:SetText("")
+											break
+										end
+									end
+								end
+							end
+							GameTooltip:AddLine(" ")
+							GameTooltip:AddLine(L["Right-Click for options"])
+						elseif data.tooltip then
+							GameTooltip:SetText(data.tooltip)
+						end
+						GameTooltip:Show()
+					end)
+					child:SetScript("OnLeave", function() GameTooltip:Hide() end)
+					child:SetScript("OnClick", function(_, btn, ...)
+						local fn = data.OnClick
+						if type(fn) == "table" then fn = fn[btn] end
+						if fn then fn(_, btn, ...) end
+					end)
+					totalWidth = totalWidth + w + (i > 1 and 5 or 0)
+				end
+				if data.parts then
+					for i = #payload.parts + 1, #data.parts do
+						data.parts[i]:Hide()
+					end
+				end
+				if totalWidth ~= data.lastWidth then
+					data.lastWidth = totalWidth
 					self:Refresh()
 				end
+			else
+				if data.parts then
+					for _, child in ipairs(data.parts) do
+						child:Hide()
+					end
+				end
+				data.text:Show()
+				local text = payload.text or ""
+				if text ~= data.lastText then
+					data.text:SetText(text)
+					data.lastText = text
+					local width = data.text:GetStringWidth()
+					if width ~= data.lastWidth then
+						data.lastWidth = width
+						self:Refresh()
+					end
+				end
 			end
+
 			if payload.fontSize and data.fontSize ~= payload.fontSize then
-				local font = (addon.variables and addon.variables.defaultFont) or select(1, data.text:GetFont())
 				data.text:SetFont(font, payload.fontSize, "OUTLINE")
 				data.fontSize = payload.fontSize
-				local width = data.text:GetStringWidth()
-				if width ~= data.lastWidth then
-					data.lastWidth = width
-					self:Refresh()
+				if not payload.parts then
+					local width = data.text:GetStringWidth()
+					if width ~= data.lastWidth then
+						data.lastWidth = width
+						self:Refresh()
+					end
 				end
 			end
 			data.tooltip = payload.tooltip
+			data.perCurrency = payload.perCurrency
+			data.showDescription = payload.showDescription
+			data.hover = payload.hover
 			data.OnMouseEnter = payload.OnMouseEnter
 			data.OnMouseLeave = payload.OnMouseLeave
 			if payload.OnClick ~= nil then data.OnClick = payload.OnClick end

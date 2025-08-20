@@ -76,3 +76,5 @@ L["TooltipShowQuestID"] = "Show Quest ID"
 
 -- Currency
 L["TooltipShowCurrencyAccountWide"] = "Show account-wide currency on tooltip"
+L["TooltipShowCurrencyID"] = "Show currency ID on Tooltip"
+L["CurrencyID"] = "CurrencyID"

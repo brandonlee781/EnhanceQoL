@@ -39,6 +39,10 @@ addon.functions.InitDBValue("TooltipDebuffHideType", 1)
 addon.functions.InitDBValue("TooltipDebuffHideInCombat", false)
 addon.functions.InitDBValue("TooltipDebuffHideInDungeon", false)
 
+-- Currency
+addon.functions.InitDBValue("TooltipShowCurrencyAccountWide", false)
+addon.functions.InitDBValue("TooltipShowCurrencyID", false)
+
 addon.Tooltip = {}
 addon.LTooltip = {} -- Locales for MythicPlus
 addon.Tooltip.functions = {}
