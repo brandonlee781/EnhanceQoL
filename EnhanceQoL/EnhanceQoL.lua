@@ -2,6 +2,7 @@
 -- luacheck: globals Menu GameTooltip_SetTitle GameTooltip_AddNormalLine EnhanceQoL
 -- luacheck: globals GenericTraitUI_LoadUI GenericTraitFrame
 -- luacheck: globals CancelDuel DeclineGroup C_PetBattles
+-- luacheck: globals ExpansionLandingPage ExpansionLandingPageMinimapButton ShowGarrisonLandingPage GarrisonLandingPage GarrisonLandingPage_Toggle GarrisonLandingPageMinimapButton CovenantSanctumFrame CovenantSanctumFrame_LoadUI EasyMenu
 local addonName, addon = ...
 
 local LDB = LibStub("LibDataBroker-1.1")
@@ -2904,7 +2905,8 @@ local function addSocialFrame(container)
 			var = "ignoreTooltipNote",
 			text = L["IgnoreTooltipNote"],
 			type = "CheckBox",
-			callback = function(self, _, value) addon.db["ignoreTooltipNote"] = value
+			callback = function(self, _, value)
+				addon.db["ignoreTooltipNote"] = value
 				container:ReleaseChildren()
 				addSocialFrame(container)
 			end,
@@ -2963,7 +2965,6 @@ local function addSocialFrame(container)
 
 		groupCore:AddChild(addon.functions.createSpacerAce())
 	end
-
 
 	local labelHeadline = addon.functions.createLabelAce("|cffffd700" .. L["IgnoreDesc"], nil, nil, 14)
 	labelHeadline:SetFullWidth(true)
@@ -3689,6 +3690,133 @@ local function initMisc()
 		end
 		if addon.db["hiddenLandingPages"][id] then self:Hide() end
 	end)
+
+	-- Right-click context menu for expansion/garrison minimap buttons
+	local MU = MenuUtil
+	local tinsert = table.insert
+
+	local function GetCurrentGarrType()
+		if C_Garrison and C_Garrison.GetLandingPageGarrisonType then
+			local t = C_Garrison.GetLandingPageGarrisonType()
+			if type(t) == "number" and t > 0 then return t end
+		end
+		return nil
+	end
+
+	local function OpenLandingPage()
+		if ExpansionLandingPageMinimapButton or ExpansionLandingPage then
+			if ExpansionLandingPage and ExpansionLandingPage:IsShown() then HideUIPanel(ExpansionLandingPage) end
+			if ExpansionLandingPageMinimapButton and ExpansionLandingPageMinimapButton.CanChangeAttribute and ExpansionLandingPageMinimapButton:CanChangeAttribute() then
+				ExpansionLandingPageMinimapButton:Click()
+				return true
+			end
+		end
+
+		if ShowGarrisonLandingPage then
+			local gtype = GetCurrentGarrType()
+			if gtype then
+				ShowGarrisonLandingPage(gtype)
+				return true
+			end
+		end
+		if GarrisonLandingPage_Toggle then
+			GarrisonLandingPage_Toggle()
+			return true
+		end
+		return false
+	end
+
+	local function OpenMissions()
+		if OpenLandingPage() then
+			C_Timer.After(0, function()
+				if ExpansionLandingPage and ExpansionLandingPage:IsShown() then
+					local list = ExpansionLandingPage and ExpansionLandingPage.List
+					local box = list and list.ScrollBox
+					if box and box.ForEachFrame then
+						box:ForEachFrame(function(btn)
+							local label = btn and btn.Title and btn.Title:GetText() or ""
+							if label and label:lower():find("mission") then
+								if btn.Button and btn.Button.Click then
+									btn.Button:Click()
+								elseif btn:GetScript("OnClick") then
+									btn:GetScript("OnClick")(btn)
+								end
+							end
+						end)
+					end
+				end
+			end)
+			return
+		end
+
+		C_Timer.After(0, function()
+			if GarrisonLandingPage and GarrisonLandingPage:IsShown() then
+				local function clickIfExists(frameName)
+					local f = _G[frameName]
+					if f and f.Click then
+						f:Click()
+						return true
+					end
+					return false
+				end
+				if not clickIfExists("GarrisonLandingPageTab2") then clickIfExists("GarrisonLandingPageReportTab") end
+			end
+		end)
+	end
+
+	local function BuildLegacyMenu()
+		local items = {
+			{ text = "Open Landing Page", notCheckable = true, func = OpenLandingPage },
+			{ text = "Open Mission Report", notCheckable = true, func = OpenMissions },
+		}
+		if ShowGarrisonLandingPage and Enum and Enum.GarrisonType then
+			tinsert(items, { text = "Open Garrison (WoD)", notCheckable = true, func = function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_6_0) end })
+			tinsert(items, { text = "Open Order Hall (Legion)", notCheckable = true, func = function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_7_0) end })
+		end
+		if CovenantSanctumFrame_LoadUI then
+			tinsert(items, {
+				text = "Open Covenant Sanctum",
+				notCheckable = true,
+				func = function()
+					CovenantSanctumFrame_LoadUI()
+					ShowUIPanel(CovenantSanctumFrame)
+				end,
+			})
+		end
+		return items
+	end
+
+	local function ShowLandingMenu(owner)
+		if MU and MU.CreateContextMenu then
+			MU.CreateContextMenu(owner, function(_, root)
+				root:CreateButton("Open Landing Page", OpenLandingPage)
+				root:CreateButton("Open Mission Report", OpenMissions)
+				if ShowGarrisonLandingPage and Enum and Enum.GarrisonType then
+					root:CreateButton("Open Garrison (WoD)", function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_6_0) end)
+					root:CreateButton("Open Order Hall (Legion)", function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_7_0) end)
+				end
+				if CovenantSanctumFrame_LoadUI then root:CreateButton("Open Covenant Sanctum", function()
+					CovenantSanctumFrame_LoadUI()
+					ShowUIPanel(CovenantSanctumFrame)
+				end) end
+			end)
+		elseif EasyMenu then
+			EasyMenu(BuildLegacyMenu(), CreateFrame("Frame", nil, UIParent, "UIDropDownMenuTemplate"), "cursor", 0, 0, "MENU", true)
+		end
+	end
+
+	local function AttachRightClickMenu(button)
+		if not button or button._eqolMenuHooked then return end
+		button:HookScript("OnMouseUp", function(self, btn)
+			if btn == "RightButton" then ShowLandingMenu(self) end
+		end)
+		button._eqolMenuHooked = true
+	end
+
+	C_Timer.After(0, function()
+		if ExpansionLandingPageMinimapButton then AttachRightClickMenu(ExpansionLandingPageMinimapButton) end
+		if GarrisonLandingPageMinimapButton then AttachRightClickMenu(GarrisonLandingPageMinimapButton) end
+	end)
 end
 
 local function initLoot()
@@ -3939,9 +4067,9 @@ local function initSocial()
 	addon.functions.InitDBValue("enableIgnore", false)
 	addon.functions.InitDBValue("ignoreAttachFriendsFrame", true)
 	addon.functions.InitDBValue("ignoreAnchorFriendsFrame", false)
-       addon.functions.InitDBValue("ignoreTooltipNote", false)
-       addon.functions.InitDBValue("ignoreTooltipMaxChars", 100)
-       addon.functions.InitDBValue("ignoreTooltipWordsPerLine", 5)
+	addon.functions.InitDBValue("ignoreTooltipNote", false)
+	addon.functions.InitDBValue("ignoreTooltipMaxChars", 100)
+	addon.functions.InitDBValue("ignoreTooltipWordsPerLine", 5)
 	addon.functions.InitDBValue("ignoreFramePoint", "CENTER")
 	addon.functions.InitDBValue("ignoreFrameX", 0)
 	addon.functions.InitDBValue("ignoreFrameY", 0)
