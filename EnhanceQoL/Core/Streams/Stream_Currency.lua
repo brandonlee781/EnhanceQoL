@@ -304,19 +304,12 @@ local provider = {
 			for _, h in ipairs(hover) do
 				if mx >= h.start and mx <= h.stop then
 					tip:SetCurrencyByID(h.id)
-					tip:AddLine(("ID %d"):format(h.id))
 					tip:AddLine(" ")
 					break
 				end
 			end
-			tip:AddLine(L["Right-Click for options"])
-		elseif stream.snapshot and stream.snapshot.tooltip then
-			for line in string.gmatch(stream.snapshot.tooltip, "[^\n]+") do
-				tip:AddLine(line)
-			end
-		else
-			tip:AddLine(L["Right-Click for options"])
 		end
+		tip:AddLine(L["Right-Click for options"])
 		tip:Show()
 	end,
 }
