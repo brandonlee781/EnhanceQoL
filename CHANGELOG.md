@@ -1,13 +1,13 @@
 # Changelog
 
-
 ## [4.7.1] – 2025-08-24
 
 ### 🐛 Fixed
 
-- **BuffTrack** was not correctly detecting _Delve_ as a difficulty
-- **Catalyst Charge** sometimes fall back to a heavier detection method
-- **Currency Stream** sometimes the currency was not updated correctly
+- **BuffTrack:** Delves were not recognized as a valid difficulty, causing buff tracking to be skipped. Detection now works correctly.
+- **Catalyst Charge:** Resolved cases where the feature unnecessarily fell back to the heavy detection path; it now prefers the lightweight path as intended.
+- **Currency Stream:** Fixed a timing issue that could prevent currencies from refreshing. Values now update reliably after gains/spends and on login.
+- **Combat Meter:** Corrected an anchoring/clamping issue that could make the window shift or “grow upward” when bars changed or on instance transitions. Frames now keep their position and clamp to screen properly.
 
 ---
 
