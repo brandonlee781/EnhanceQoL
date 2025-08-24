@@ -298,6 +298,10 @@ local function createGroupFrame(groupConfig)
 
 	function frame:HideOutline() dragOutline:Hide() end
 
+	local function restorePosition()
+		frame:ClearAllPoints()
+		frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", groupConfig.x or 0, groupConfig.y or 0)
+	end
 	dragHandle:SetScript("OnDragStart", function(self)
 		local parent = self:GetParent()
 		addon.CombatMeter.functions.showOutlinesAll()
@@ -416,10 +420,6 @@ local function createGroupFrame(groupConfig)
 	dragHandle.text:SetText(metricNames[groupConfig.type] or L["Combat Meter"])
 	frame.dragHandle = dragHandle
 
-	local function restorePosition()
-		frame:ClearAllPoints()
-		frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", groupConfig.x or 0, groupConfig.y or 0)
-	end
 	restorePosition()
 
 	local function getBar(index)
