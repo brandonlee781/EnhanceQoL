@@ -1,9 +1,14 @@
 # Changelog
 
-## [4.7.2] – 2025-08-25
+## [4.8.0] – 2025-08-25
+
+### ✨ Added
+
+- **Drink Macro:** Option to use _Recuperate_ alongside your normal drinks for faster regeneration.
 
 ### 🐛 Fixed
-- **Combat Meter:** Spirit Link Totem/Tempered in Battle redistribution was incorrectly credited as damage done. It is now treated as **negative healing** and excluded from DPS.
+
+- **Combat Meter:** Spirit Link Totem / Tempered in Battle redistribution was incorrectly credited as damage done. It is now treated as **negative healing**, excluded from DPS.
 
 ---
 

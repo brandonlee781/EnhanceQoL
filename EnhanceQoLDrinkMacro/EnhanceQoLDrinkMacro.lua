@@ -33,7 +33,7 @@ local function buildMacroString(item)
 end
 
 local function unitHasMana()
-	local maxMana = UnitPowerMax("Player", Enum.PowerType.Mana)
+	local maxMana = UnitPowerMax("player", Enum.PowerType.Mana)
 	return maxMana > 0
 end
 
@@ -58,7 +58,7 @@ local function addDrinks()
 end
 
 function addon.functions.updateAvailableDrinks(ignoreCombat)
-	if UnitAffectingCombat("Player") and ignoreCombat == false then return end
+	if UnitAffectingCombat("player") and ignoreCombat == false then return end
 	if unitHasMana() == false and not (addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks) then return end
 	createMacroIfMissing()
 	addDrinks()
