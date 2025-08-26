@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.8.1] – 2025-08-25
+
+### 🐛 Fixed
+
+-- **Drink Macro:** Syntax error fixed
+
+---
+
 ## [4.8.0] – 2025-08-25
 
 ### ✨ Added

@@ -566,121 +566,60 @@ addon.Drinks.drinkList = { -- Special Food
 table.sort(addon.Drinks.drinkList, function(a, b) return a.mana > b.mana end)
 
 function addon.functions.updateAllowedDrinks()
+	-- cache globals as locals
+	local UnitLevel = UnitLevel
+	local UnitPowerMax = UnitPowerMax
+	local UnitRace = UnitRace
+	local IsSpellInSpellBook = C_SpellBook.IsSpellInSpellBook
+	local tinsert = table.insert
 	local newItem = addon.functions.newItem
 	local db = addon.db
 
 	local playerLevel = UnitLevel("player")
 	local mana = UnitPowerMax("player", 0)
-	local allowRecuperate = db.allowRecuperate
-
-	-- prepare new result tables
-	local filtered = addon.Drinks.filteredDrinks
-	if filtered then
-		wipe(filtered)
-	else
-		filtered = {}
-		addon.Drinks.filteredDrinks = filtered
-	end
-	local mageFoodMap = addon.Drinks.mageFood
-	if mageFoodMap then
-		wipe(mageFoodMap)
-	else
-		mageFoodMap = {}
-		addon.Drinks.mageFood = mageFoodMap
-	end
-
-	if mana <= 0 and not allowRecuperate then return end
+	if mana <= 0 then return end
 
 	local _, race = UnitRace("player")
 	local isEarthen = (race == "EarthenDwarf")
 	local minManaValue = mana * (db.minManaFoodValue / 100)
 
-	local filteredMage, filteredRest = {}, {}
+	-- prepare new result tables
+	local filtered = {}
+	local mageFoodMap = {}
 
 	local preferMage = db.preferMageFood
 	local ignoreBuff = db.ignoreBuffFood
 	local ignoreGems = db.ignoreGemsEarthen
+	local allowRecuperate = db.allowRecuperate
 
-	local hasRecup = IsSpellInSpellBook(1231411)
-	local hasConj = IsSpellInSpellBook(190336)
-	local hasQuiet = IsSpellInSpellBook(461063)
+	-- iterate only once over the master list
+	for i = 1, #addon.Drinks.drinkList do
+		local drink = addon.Drinks.drinkList[i]
+		-- track mage food separately without modifying the original mana
+		if drink.isMageFood then mageFoodMap[drink.id] = true end
 
-	local list = addon.Drinks.drinkList
-
-	-- handle spells and other specials
-	for i = 1, #list do
-		local drink = list[i]
-		if drink.isSpell then
-			local req = drink.requiredLevel
-			local dMana = (drink.isMageFood or drink.isBuffFood) and mana or drink.mana
+		local req = drink.requiredLevel
+		local dMana = drink.isMageFood and mana or drink.mana
+		if
+			req <= playerLevel
+			and (dMana >= minManaValue or (allowRecuperate and drink.id == 1231411 and addon.variables.unitClass ~= "MAGE") or (drink.id == 190336 and addon.variables.unitClass == "MAGE"))
+		then
 			if
-				req <= playerLevel
-				and ((mana > 0 and dMana >= minManaValue) or (allowRecuperate and drink.id == 1231411 and addon.variables.unitClass ~= "MAGE") or (drink.id == 190336 and addon.variables.unitClass == "MAGE"))
-				and not (drink.isBuffFood and ignoreBuff)
+				not (drink.isBuffFood and ignoreBuff)
 				and not (isEarthen and not drink.isEarthenFood)
 				and not (drink.earthenOnly and not isEarthen)
 				and not (drink.earthenOnly and drink.isGem and ignoreGems)
+				and not (drink.isSpell and not IsSpellInSpellBook(drink.id))
 			then
-				local spellAllowed = (drink.id == 1231411 and hasRecup) or (drink.id == 190336 and hasConj) or (drink.id == 461063 and hasQuiet)
-				if spellAllowed then filteredRest[#filteredRest + 1] = newItem(drink.id, drink.desc, true) end
-			end
-		end
-	end
-
-	-- main pass: non-mage-food, non-spells
-	for i = 1, #list do
-		local drink = list[i]
-		if not drink.isMageFood and not drink.isSpell then
-			if not drink.isBuffFood and drink.mana < minManaValue then break end
-
-			local req = drink.requiredLevel
-			local dMana = drink.isBuffFood and mana or drink.mana
-			if
-				req <= playerLevel
-				and mana > 0
-				and dMana >= minManaValue
-				and not (drink.isBuffFood and ignoreBuff)
-				and not (isEarthen and not drink.isEarthenFood)
-				and not (drink.earthenOnly and not isEarthen)
-				and not (drink.earthenOnly and drink.isGem and ignoreGems)
-			then
-				filteredRest[#filteredRest + 1] = newItem(drink.id, drink.desc, false)
-			end
-		end
-	end
-
-	-- second pass: mage foods
-	for i = 1, #list do
-		local drink = list[i]
-		if drink.isMageFood then
-			mageFoodMap[drink.id] = true
-
-			local req = drink.requiredLevel
-			local dMana = mana
-			if
-				req <= playerLevel
-				and mana > 0
-				and dMana >= minManaValue
-				and not (drink.isBuffFood and ignoreBuff)
-				and not (isEarthen and not drink.isEarthenFood)
-				and not (drink.earthenOnly and not isEarthen)
-				and not (drink.earthenOnly and drink.isGem and ignoreGems)
-			then
-				if preferMage then
-					filteredMage[#filteredMage + 1] = newItem(drink.id, drink.desc, drink.isSpell)
+				if drink.isMageFood and preferMage then
+					tinsert(filtered, 1, newItem(drink.id, drink.desc, drink.isSpell))
 				else
-					filteredRest[#filteredRest + 1] = newItem(drink.id, drink.desc, drink.isSpell)
+					tinsert(filtered, newItem(drink.id, drink.desc, drink.isSpell))
 				end
 			end
 		end
 	end
 
-	for i = 1, #filteredMage do
-		filtered[#filtered + 1] = filteredMage[i]
-	end
-	for i = 1, #filteredRest do
-		filtered[#filtered + 1] = filteredRest[i]
-	end
-
+	addon.Drinks.filteredDrinks = filtered
 	addon.Drinks.mageFood = mageFoodMap
 end
