@@ -11,6 +11,7 @@
 
 - **New Combat Meter Panel:** Loads and anchors correctly.
 - Minor polish across the meter.
+- _Catalyst_ an item missed the red marking for missed enchants sometimes
 
 ---
 
