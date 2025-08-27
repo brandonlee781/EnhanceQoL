@@ -6,6 +6,7 @@
 
 - **Combat Meter:** Interrupts are now tracked with a dedicated metric and panel.
 - **Combat Meter:** Tooltips list which spells were interrupted.
+- **Character Frame:** Red highlight for socket-eligible items without a socket (incl. Helm, Wrist, Waist in PvP)
 
 ### 🐛 Fixed
 
