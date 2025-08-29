@@ -608,10 +608,18 @@ local function updateHealthBar()
 		local curHealth = UnitHealth("player")
 		local absorb = UnitGetTotalAbsorbs("player") or 0
 
+		-- Only push values to the bar if changed
+		if healthBar._lastMax ~= maxHealth then
+			healthBar:SetMinMaxValues(0, maxHealth)
+			healthBar._lastMax = maxHealth
+		end
+		if healthBar._lastVal ~= curHealth then
+			healthBar:SetValue(curHealth)
+			healthBar._lastVal = curHealth
+		end
+
 		local percent = (curHealth / math.max(maxHealth, 1)) * 100
-		local percentStr = string.format("%.0f", percent)
-		healthBar:SetMinMaxValues(0, maxHealth)
-		healthBar:SetValue(curHealth)
+		local percentStr = tostring(math.floor(percent + 0.5))
 		if healthBar.text then
 			local settings = getBarSettings("HEALTH")
 			local style = settings and settings.textStyle or "PERCENT"
@@ -627,7 +635,10 @@ local function updateHealthBar()
 				else -- CURMAX
 					text = curHealth .. " / " .. maxHealth
 				end
-				healthBar.text:SetText(text)
+				if healthBar._lastText ~= text then
+					healthBar.text:SetText(text)
+					healthBar._lastText = text
+				end
 				healthBar.text:Show()
 			end
 		end
@@ -914,7 +925,7 @@ function getBarSettings(pType)
 end
 
 local function updatePowerBar(type)
-	if powerbar[type] and powerbar[type]:IsVisible() then
+    if powerbar[type] and powerbar[type]:IsVisible() then
 		-- Special handling for DK Runes: six sub-bars that fill as cooldown progresses
 		if type == "RUNES" then
 			local bar = powerbar[type]
@@ -1015,9 +1026,9 @@ local function updatePowerBar(type)
 			if bar.text then bar.text:SetText("") end
 			return
 		end
-		local pType = powerTypeEnums[type:gsub("_", "")]
-		local maxPower = UnitPowerMax("player", pType)
-		local curPower = UnitPower("player", pType)
+        local pType = powerTypeEnums[type:gsub("_", "")]
+        local maxPower = UnitPowerMax("player", pType)
+        local curPower = UnitPower("player", pType)
 
 		local settings = getBarSettings(type)
 		local style = settings and settings.textStyle
@@ -1030,27 +1041,36 @@ local function updatePowerBar(type)
 			end
 		end
 
-		local bar = powerbar[type]
-		bar:SetMinMaxValues(0, maxPower)
-		bar:SetValue(curPower)
-		if bar.text then
-			if style == "NONE" then
-				bar.text:SetText("")
-				bar.text:Hide()
-			else
-				local text
-				if style == "PERCENT" then
-					text = string.format("%.0f", (curPower / maxPower) * 100)
-				elseif style == "CURRENT" then
-					text = tostring(curPower)
-				else -- CURMAX
-					text = curPower .. " / " .. maxPower
-				end
-				bar.text:SetText(text)
-				bar.text:Show()
-			end
-		end
-	end
+        local bar = powerbar[type]
+        if bar._lastMax ~= maxPower then
+            bar:SetMinMaxValues(0, maxPower)
+            bar._lastMax = maxPower
+        end
+        if bar._lastVal ~= curPower then
+            bar:SetValue(curPower)
+            bar._lastVal = curPower
+        end
+        if bar.text then
+            if style == "NONE" then
+                bar.text:SetText("")
+                bar.text:Hide()
+            else
+                local text
+                if style == "PERCENT" then
+                    text = tostring(math.floor(((curPower / math.max(maxPower, 1)) * 100) + 0.5))
+                elseif style == "CURRENT" then
+                    text = tostring(curPower)
+                else -- CURMAX
+                    text = curPower .. " / " .. maxPower
+                end
+                if bar._lastText ~= text then
+                    bar.text:SetText(text)
+                    bar._lastText = text
+                end
+                bar.text:Show()
+            end
+        end
+    end
 end
 
 -- Create/update separator ticks for a given bar type if enabled
@@ -1090,33 +1110,38 @@ local function updateBarSeparators(pType)
 
 	bar.separatorMarks = bar.separatorMarks or {}
 	local needed = segments - 1
-	local w = math.max(1, bar:GetWidth() or 0)
-	local h = math.max(1, bar:GetHeight() or 0)
+    local w = math.max(1, bar:GetWidth() or 0)
+    local h = math.max(1, bar:GetHeight() or 0)
+    local sc = (cfg and cfg.separatorColor) or { 1, 1, 1, 0.5 }
+    local colorKey = table.concat({ tostring(sc[1] or 1), tostring(sc[2] or 1), tostring(sc[3] or 1), tostring(sc[4] or 0.5) }, ":")
+
+    if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepColorKey == colorKey then
+        return
+    end
 
 	-- Ensure we have enough textures
 	for i = #bar.separatorMarks + 1, needed do
-		local tx = bar:CreateTexture(nil, "OVERLAY")
-		local sc = (cfg and cfg.separatorColor) or { 1, 1, 1, 0.5 }
-		tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
-		bar.separatorMarks[i] = tx
-	end
+        local tx = bar:CreateTexture(nil, "OVERLAY")
+        tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
+        bar.separatorMarks[i] = tx
+    end
 	-- Position visible separators
 	for i = 1, needed do
 		local tx = bar.separatorMarks[i]
 		tx:ClearAllPoints()
 		local frac = i / segments
 		local x = math.floor(w * frac + 0.5)
-		local half = math.floor(SEPARATOR_THICKNESS * 0.5)
-		tx:SetPoint("LEFT", bar, "LEFT", x - math.max(0, half), 0)
-		tx:SetSize(SEPARATOR_THICKNESS, h)
-		local sc = (cfg and cfg.separatorColor) or { 1, 1, 1, 0.5 }
-		tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
-		tx:Show()
-	end
+        local half = math.floor(SEPARATOR_THICKNESS * 0.5)
+        tx:SetPoint("LEFT", bar, "LEFT", x - math.max(0, half), 0)
+        tx:SetSize(SEPARATOR_THICKNESS, h)
+        tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
+        tx:Show()
+    end
 	-- Hide extras
 	for i = needed + 1, #bar.separatorMarks do
-		bar.separatorMarks[i]:Hide()
-	end
+        bar.separatorMarks[i]:Hide()
+    end
+    bar._sepW, bar._sepH, bar._sepSegments, bar._sepColorKey = w, h, segments, colorKey
 end
 
 -- Layout helper for DK RUNES: create or resize 6 child statusbars
