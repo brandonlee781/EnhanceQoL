@@ -15,6 +15,10 @@ addon.Aura.ResourceBars = ResourceBars
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local AceGUI = addon.AceGUI
 local UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime = UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime
+local CreateFrame = CreateFrame
+local PowerBarColor = PowerBarColor
+local floor, max, min, ceil = math.floor, math.max, math.min, math.ceil
+local tsort = table.sort
 
 local frameAnchor
 local mainFrame
@@ -29,11 +33,45 @@ local lastTabIndex
 local lastBarSelectionPerSpec = {}
 local BAR_STACK_SPACING = -1
 local SEPARATOR_THICKNESS = 1
+local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 -- Fixed, non-DB defaults
 local DEFAULT_HEALTH_WIDTH = 200
 local DEFAULT_HEALTH_HEIGHT = 20
 local DEFAULT_POWER_WIDTH = 200
 local DEFAULT_POWER_HEIGHT = 20
+
+local function Snap(bar, off)
+	local s = bar:GetEffectiveScale() or 1
+	return floor(off * s + 0.5) / s
+end
+
+local FREQUENT = { ENERGY = true, FOCUS = true, RAGE = true, RUNIC_POWER = true, LUNAR_POWER = true }
+local formIndexToKey = {
+	[0] = "HUMANOID",
+	[1] = "BEAR",
+	[2] = "CAT",
+	[3] = "TRAVEL",
+	[4] = "MOONKIN",
+	[5] = "TREANT",
+	[6] = "STAG",
+}
+local function mapFormNameToKey(name)
+	if not name then return nil end
+	name = tostring(name):lower()
+	if name:find("bear") then return "BEAR" end
+	if name:find("cat") then return "CAT" end
+	if name:find("travel") or name:find("aquatic") or name:find("flight") or name:find("flight form") then return "TRAVEL" end
+	if name:find("moonkin") or name:find("owl") then return "MOONKIN" end
+	if name:find("treant") then return "TREANT" end
+	if name:find("stag") then return "STAG" end
+	return nil
+end
+
+local DK_SPEC_COLOR = {
+	[1] = { 0.8, 0.1, 0.1 },
+	[2] = { 0.2, 0.6, 1.0 },
+	[3] = { 0.0, 0.9, 0.3 },
+}
 
 function addon.Aura.functions.addResourceFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
@@ -75,7 +113,7 @@ function addon.Aura.functions.addResourceFrame(container)
 		},
 	}
 
-	table.sort(data, function(a, b) return a.text < b.text end)
+	tsort(data, function(a, b) return a.text < b.text end)
 
 	for _, cbData in ipairs(data) do
 		local uFunc = function(self, _, value) addon.db[cbData.var] = value end
@@ -552,7 +590,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					sepRow:AddChild(cbSep)
 					sepColor = AceGUI:Create("ColorPicker")
 					sepColor:SetLabel(L["Separator Color"] or "Separator Color")
-					local sc = cfg.separatorColor or { 1, 1, 1, 0.5 }
+					local sc = cfg.separatorColor or SEP_DEFAULT
 					sepColor:SetColor(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
 					sepColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
 						cfg.separatorColor = { r, g, b, a }
@@ -635,7 +673,7 @@ local function getPowerBarColor(type)
 	return 1, 1, 1
 end
 
-local function updateHealthBar()
+local function updateHealthBar(evt)
 	if healthBar and healthBar:IsVisible() then
 		local maxHealth = healthBar._lastMax
 		if not maxHealth then
@@ -644,7 +682,13 @@ local function updateHealthBar()
 			healthBar:SetMinMaxValues(0, maxHealth)
 		end
 		local curHealth = UnitHealth("player")
-		local absorb = UnitGetTotalAbsorbs("player") or 0
+		local absorb
+		local lastAbs = (healthBar.absorbBar and healthBar.absorbBar._lastVal) or 0
+		if evt == "UNIT_ABSORB_AMOUNT_CHANGED" or evt == "UNIT_MAXHEALTH" or healthBar._lastVal ~= curHealth then
+			absorb = UnitGetTotalAbsorbs("player") or 0
+		else
+			absorb = lastAbs
+		end
 
 		-- Only push values to the bar if changed
 		if healthBar._lastVal ~= curHealth then
@@ -652,8 +696,8 @@ local function updateHealthBar()
 			healthBar._lastVal = curHealth
 		end
 
-		local percent = (curHealth / math.max(maxHealth, 1)) * 100
-		local percentStr = tostring(math.floor(percent + 0.5))
+		local percent = (curHealth / max(maxHealth, 1)) * 100
+		local percentStr = tostring(floor(percent + 0.5))
 		if healthBar.text then
 			local settings = getBarSettings("HEALTH")
 			local style = settings and settings.textStyle or "PERCENT"
@@ -981,14 +1025,8 @@ function updatePowerBar(type, runeSlot)
 		-- Special handling for DK Runes: six sub-bars that fill as cooldown progresses
 		if type == "RUNES" then
 			local bar = powerbar[type]
-			local spec = GetSpecialization() or addon.variables.unitSpec
-			local r, g, b = 0.8, 0.1, 0.1 -- Blood default
-			if spec == 2 then
-				r, g, b = 0.2, 0.6, 1.0
-			end -- Frost
-			if spec == 3 then
-				r, g, b = 0.0, 0.9, 0.3
-			end -- Unholy
+			local col = bar._dkColor or DK_SPEC_COLOR[addon.variables.unitSpec] or DK_SPEC_COLOR[1]
+			local r, g, b = col[1], col[2], col[3]
 			local grey = 0.35
 			bar._rune = bar._rune or {}
 			bar._runeOrder = bar._runeOrder or {}
@@ -1010,7 +1048,7 @@ function updatePowerBar(type, runeSlot)
 			for i = count + 1, #charging do
 				charging[i] = nil
 			end
-			table.sort(charging, function(a, b)
+			tsort(charging, function(a, b)
 				local ra = (bar._rune[a].start + bar._rune[a].duration)
 				local rb = (bar._rune[b].start + bar._rune[b].duration)
 				return ra < rb
@@ -1046,7 +1084,7 @@ function updatePowerBar(type, runeSlot)
 				local info = runeIndex and bar._rune[runeIndex]
 				local sb = bar.runes and bar.runes[i]
 				if sb and info then
-					local prog = info.ready and 1 or math.min(1, math.max(0, (now - info.start) / math.max(info.duration, 1)))
+					local prog = info.ready and 1 or min(1, max(0, (now - info.start) / max(info.duration, 1)))
 					sb:SetValue(prog)
 					local wantReady = info.ready or prog >= 1
 					if sb._isReady ~= wantReady then
@@ -1059,7 +1097,7 @@ function updatePowerBar(type, runeSlot)
 					end
 					if sb.fs then
 						if cfg.showCooldownText then
-							local remain = math.ceil((info.start + info.duration) - now)
+							local remain = ceil((info.start + info.duration) - now)
 							if remain > 0 and not info.ready then
 								sb.fs:SetText(tostring(remain))
 							else
@@ -1091,7 +1129,7 @@ function updatePowerBar(type, runeSlot)
 								if data.ready then
 									prog = 1
 								else
-									prog = math.min(1, math.max(0, (n - data.start) / math.max(data.duration, 1)))
+									prog = min(1, max(0, (n - data.start) / max(data.duration, 1)))
 									if prog >= 1 then
 										if not self._runeResync then
 											self._runeResync = true
@@ -1111,7 +1149,7 @@ function updatePowerBar(type, runeSlot)
 								sb:SetValue(prog)
 								if sb.fs then
 									if cfgOnUpdate.showCooldownText and not data.ready then
-										local remain = math.ceil((data.start + data.duration) - n)
+										local remain = ceil((data.start + data.duration) - n)
 										if remain ~= sb._lastRemain then
 											if remain > 0 then
 												sb.fs:SetText(tostring(remain))
@@ -1154,16 +1192,7 @@ function updatePowerBar(type, runeSlot)
 		end
 		local curPower = UnitPower("player", pType)
 
-		local settings = getBarSettings(type)
-		local style = settings and settings.textStyle
-
-		if not style then
-			if type == "MANA" then
-				style = "PERCENT"
-			else
-				style = "CURMAX"
-			end
-		end
+		local style = bar._style or ((type == "MANA") and "PERCENT" or "CURMAX")
 
 		if bar._lastVal ~= curPower then
 			bar:SetValue(curPower)
@@ -1176,7 +1205,7 @@ function updatePowerBar(type, runeSlot)
 			else
 				local text
 				if style == "PERCENT" then
-					text = tostring(math.floor(((curPower / math.max(maxPower, 1)) * 100) + 0.5))
+					text = tostring(floor(((curPower / max(maxPower, 1)) * 100) + 0.5))
 				elseif style == "CURRENT" then
 					text = tostring(curPower)
 				else -- CURMAX
@@ -1195,7 +1224,7 @@ end
 -- Create/update separator ticks for a given bar type if enabled
 local function updateBarSeparators(pType)
 	local eligible = ResourceBars.separatorEligible
-	if not eligible or not eligible[pType] then return end
+	if pType ~= "RUNES" and (not eligible or not eligible[pType]) then return end
 	local bar = powerbar[pType]
 	if not bar then return end
 	local cfg = getBarSettings(pType)
@@ -1209,7 +1238,9 @@ local function updateBarSeparators(pType)
 	end
 
 	local segments
-	if pType == "ENERGY" then
+	if pType == "RUNES" then
+		segments = 6
+	elseif pType == "ENERGY" then
 		segments = 10
 	else
 		local enumId = POWER_ENUM[pType]
@@ -1227,12 +1258,14 @@ local function updateBarSeparators(pType)
 
 	bar.separatorMarks = bar.separatorMarks or {}
 	local needed = segments - 1
-	local w = math.max(1, bar:GetWidth() or 0)
-	local h = math.max(1, bar:GetHeight() or 0)
-	local sc = (cfg and cfg.separatorColor) or { 1, 1, 1, 0.5 }
+	local w = max(1, bar:GetWidth() or 0)
+	local h = max(1, bar:GetHeight() or 0)
+	local segW = w / segments
+	local thickness = min(SEPARATOR_THICKNESS, max(1, floor(segW - 1)))
+	local sc = (cfg and cfg.separatorColor) or SEP_DEFAULT
 	local r, g, b, a = sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5
 
-	if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepR == r and bar._sepG == g and bar._sepB == b and bar._sepA == a then return end
+	if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepR == r and bar._sepG == g and bar._sepB == b and bar._sepA == a and bar._sepThickness == thickness then return end
 
 	-- Ensure we have enough textures
 	for i = #bar.separatorMarks + 1, needed do
@@ -1245,10 +1278,10 @@ local function updateBarSeparators(pType)
 		local tx = bar.separatorMarks[i]
 		tx:ClearAllPoints()
 		local frac = i / segments
-		local x = math.floor(w * frac + 0.5)
-		local half = math.floor(SEPARATOR_THICKNESS * 0.5)
-		tx:SetPoint("LEFT", bar, "LEFT", x - math.max(0, half), 0)
-		tx:SetSize(SEPARATOR_THICKNESS, h)
+		local x = Snap(bar, w * frac)
+		local half = floor(thickness * 0.5)
+		tx:SetPoint("LEFT", bar, "LEFT", x - max(0, half), 0)
+		tx:SetSize(thickness, h)
 		tx:SetColorTexture(r, g, b, a)
 		tx:Show()
 	end
@@ -1257,7 +1290,7 @@ local function updateBarSeparators(pType)
 		bar.separatorMarks[i]:Hide()
 	end
 	-- Cache current geometry and color to fast-exit next time
-	bar._sepW, bar._sepH, bar._sepSegments = w, h, segments
+	bar._sepW, bar._sepH, bar._sepSegments, bar._sepThickness = w, h, segments, thickness
 	bar._sepR, bar._sepG, bar._sepB, bar._sepA = r, g, b, a
 end
 
@@ -1266,10 +1299,14 @@ function layoutRunes(bar)
 	if not bar then return end
 	bar.runes = bar.runes or {}
 	local count = 6
-	local gap = 2
-	local w = math.max(1, bar:GetWidth() or 0)
-	local h = math.max(1, bar:GetHeight() or 0)
-	local segW = math.max(1, math.floor((w - gap * (count - 1)) / count + 0.5))
+	local gap = 0
+	local w = max(1, bar:GetWidth() or 0)
+	local h = max(1, bar:GetHeight() or 0)
+	local segW = max(1, floor((w - gap * (count - 1)) / count + 0.5))
+	local cfg = getBarSettings("RUNES") or {}
+	local show = cfg.showCooldownText == true
+	local size = cfg.cooldownTextFontSize or 16
+	local fontPath = addon.variables.defaultFont
 	for i = 1, count do
 		local sb = bar.runes[i]
 		if not sb then
@@ -1280,34 +1317,40 @@ function layoutRunes(bar)
 			bar.runes[i] = sb
 		end
 		sb:ClearAllPoints()
-		if i == count then
-			sb:ClearAllPoints()
-			sb:SetPoint("LEFT", bar.runes[i - 1], "RIGHT", gap, 0)
-			sb:SetPoint("RIGHT", bar, "RIGHT", 0, 0) -- füllt bis ganz rechts
-			sb:SetHeight(h)
-		else
-			sb:SetSize(segW, h)
-		end
+		sb:SetHeight(h)
 		if i == 1 then
 			sb:SetPoint("LEFT", bar, "LEFT", 0, 0)
 		else
 			sb:SetPoint("LEFT", bar.runes[i - 1], "RIGHT", gap, 0)
+		end
+		if i == count then
+			sb:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+		else
+			sb:SetWidth(segW)
 		end
 		-- cooldown text per segment
 		if not sb.fs then
 			sb.fs = sb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			sb.fs:SetPoint("CENTER", sb, "CENTER", 0, 0)
 		end
-		local cfg = getBarSettings("RUNES") or {}
-		local show = cfg.showCooldownText == true
-		local size = cfg.cooldownTextFontSize or 16
-		sb.fs:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+		if sb._fsSize ~= size or sb._fsFont ~= fontPath then
+			sb.fs:SetFont(fontPath, size, "OUTLINE")
+			sb._fsSize = size
+			sb._fsFont = fontPath
+		end
 		if show then
 			sb.fs:Show()
 		else
 			sb.fs:Hide()
 		end
 	end
+end
+
+function ResourceBars.ForceRuneRecolor()
+	local rb = powerbar["RUNES"]
+	if not rb then return end
+	local spec = addon.variables.unitSpec
+	rb._dkColor = DK_SPEC_COLOR[spec] or DK_SPEC_COLOR[1]
 end
 
 local function createPowerBar(type, anchor)
@@ -1324,6 +1367,9 @@ local function createPowerBar(type, anchor)
 	local settings = getBarSettings(type)
 	local w = settings and settings.width or DEFAULT_POWER_WIDTH
 	local h = settings and settings.height or DEFAULT_POWER_HEIGHT
+	bar._cfg = settings
+	local defaultStyle = (type == "MANA") and "PERCENT" or "CURMAX"
+	bar._style = settings and settings.textStyle or defaultStyle
 	bar:SetSize(w, h)
 	bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
 	bar:SetClampedToScreen(true)
@@ -1439,14 +1485,23 @@ local function createPowerBar(type, anchor)
 
 	powerbar[type] = bar
 	bar:Show()
+	if type == "RUNES" then ResourceBars.ForceRuneRecolor() end
 	updatePowerBar(type)
-	updateBarSeparators(type)
+	if type == "RUNES" then
+		updateBarSeparators("RUNES")
+	elseif ResourceBars.separatorEligible[type] then
+		updateBarSeparators(type)
+	end
 
 	-- Ensure dependents re-anchor when this bar changes size
 	bar:SetScript("OnSizeChanged", function()
 		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorDependentsOf then addon.Aura.ResourceBars.ReanchorDependentsOf("EQOL" .. type .. "Bar") end
-		if type == "RUNES" then layoutRunes(bar) end
-		updateBarSeparators(type)
+		if type == "RUNES" then
+			layoutRunes(bar)
+			updateBarSeparators("RUNES")
+		elseif ResourceBars.separatorEligible[type] then
+			updateBarSeparators(type)
+		end
 	end)
 end
 
@@ -1465,27 +1520,6 @@ local function setPowerbars()
 	local _, powerToken = UnitPowerType("player")
 	powerfrequent = {}
 	local isDruid = addon.variables.unitClass == "DRUID"
-	local FREQUENT = { ENERGY = true, FOCUS = true, RAGE = true, RUNIC_POWER = true, LUNAR_POWER = true }
-	local formIndexToKey = {
-		[0] = "HUMANOID",
-		[1] = "BEAR",
-		[2] = "CAT",
-		[3] = "TRAVEL",
-		[4] = "MOONKIN",
-		[5] = "TREANT",
-		[6] = "STAG",
-	}
-	local function mapFormNameToKey(name)
-		if not name then return nil end
-		name = tostring(name):lower()
-		if name:find("bear") then return "BEAR" end
-		if name:find("cat") then return "CAT" end
-		if name:find("travel") or name:find("aquatic") or name:find("flight") or name:find("flight form") then return "TRAVEL" end
-		if name:find("moonkin") or name:find("owl") then return "MOONKIN" end
-		if name:find("treant") then return "TREANT" end
-		if name:find("stag") then return "STAG" end
-		return nil
-	end
 	local function currentDruidForm()
 		if not isDruid then return nil end
 		local idx = GetShapeshiftForm() or 0
@@ -1679,7 +1713,7 @@ local function eventHandler(self, event, unit, arg1)
 			healthBar._lastMax = max
 			healthBar:SetMinMaxValues(0, max)
 		end
-		updateHealthBar()
+		updateHealthBar(event)
 	elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and powerbar[arg1]:IsShown() and not powerfrequent[arg1] then
 		updatePowerBar(arg1)
 	elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerbar[arg1]:IsShown() and powerfrequent[arg1] then
@@ -1693,7 +1727,7 @@ local function eventHandler(self, event, unit, arg1)
 			bar:SetMinMaxValues(0, max)
 		end
 		updatePowerBar(arg1)
-		updateBarSeparators(arg1)
+		if ResourceBars.separatorEligible[arg1] then updateBarSeparators(arg1) end
 	elseif event == "RUNE_POWER_UPDATE" then
 		-- payload: runeIndex, isEnergize -> first vararg is held in 'unit' here
 		if powerbar["RUNES"] and powerbar["RUNES"]:IsShown() then updatePowerBar("RUNES", unit) end
@@ -1988,12 +2022,19 @@ function ResourceBars.Refresh()
 			local isUI = (a.relativeFrame or "UIParent") == "UIParent"
 			bar:SetMovable(isUI)
 			bar:EnableMouse(isUI)
+
+			local cfg = specCfg and specCfg[pType]
+			bar._cfg = cfg
+			local defaultStyle = (pType == "MANA") and "PERCENT" or "CURMAX"
+			bar._style = cfg and cfg.textStyle or defaultStyle
+
 			if pType == "RUNES" then
 				layoutRunes(bar)
 				updatePowerBar("RUNES")
 			else
-				updateBarSeparators(pType)
+				updatePowerBar(pType)
 			end
+			if ResourceBars.separatorEligible[pType] then updateBarSeparators(pType) end
 		end
 	end
 	-- Apply text font sizes without forcing full rebuild
@@ -2014,7 +2055,7 @@ function ResourceBars.Refresh()
 			bar.text:SetFont(addon.variables.defaultFont, fs, "OUTLINE")
 		end
 	end
-	updateHealthBar()
+	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 	-- Ensure RUNES animation stops when not visible/enabled
 	local runesEnabled = specCfg and specCfg.RUNES and (specCfg.RUNES.enabled == true)
