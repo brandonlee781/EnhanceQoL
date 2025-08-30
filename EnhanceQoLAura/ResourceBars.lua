@@ -1442,6 +1442,15 @@ local function setPowerbars()
 	local _, powerToken = UnitPowerType("player")
 	powerfrequent = {}
 	local isDruid = addon.variables.unitClass == "DRUID"
+	local formIndexToKey = {
+		[0] = "HUMANOID",
+		[1] = "BEAR",
+		[2] = "CAT",
+		[3] = "TRAVEL",
+		[4] = "MOONKIN",
+		[5] = "TREANT",
+		[6] = "STAG",
+	}
 	local function mapFormNameToKey(name)
 		if not name then return nil end
 		name = tostring(name):lower()
@@ -1456,11 +1465,10 @@ local function setPowerbars()
 	local function currentDruidForm()
 		if not isDruid then return nil end
 		local idx = GetShapeshiftForm() or 0
-		if idx == 0 then return "HUMANOID" end
-		-- Try to resolve by form name at this index
+		local key = formIndexToKey[idx]
+		if key then return key end
 		local name
 		if GetShapeshiftFormInfo then
-			-- Retail returns (icon, name, isActive, isCastable) or similar; pick second as name if present
 			local r1, r2 = GetShapeshiftFormInfo(idx)
 			if type(r1) == "string" then
 				name = r1
@@ -1468,16 +1476,8 @@ local function setPowerbars()
 				name = r2
 			end
 		end
-		local key = mapFormNameToKey(name)
+		key = mapFormNameToKey(name)
 		if key then return key end
-		-- Fallback to index mapping rules
-		if idx == 1 then return "BEAR" end
-		if idx == 2 then return "CAT" end
-		if idx == 3 then return "TRAVEL" end
-		-- 4..6: ordered among Moonkin, Treant, Stag – default mapping
-		if idx == 4 then return "MOONKIN" end
-		if idx == 5 then return "TREANT" end
-		if idx == 6 then return "STAG" end
 		return "HUMANOID"
 	end
 	local druidForm = currentDruidForm()
