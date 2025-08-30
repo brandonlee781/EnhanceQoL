@@ -666,9 +666,7 @@ function addon.Aura.functions.addResourceFrame(container)
 		end
 
 		tabGroup:SetTabs(specTabs)
-		tabGroup:SetCallback("OnGroupSelected", function(tabContainer, _, val)
-			buildSpec(tabContainer, val)
-		end)
+		tabGroup:SetCallback("OnGroupSelected", function(tabContainer, _, val) buildSpec(tabContainer, val) end)
 		wrapper:AddChild(tabGroup)
 		tabGroup:SelectTab(addon.variables.unitSpec or specTabs[1].value)
 	end
@@ -691,14 +689,8 @@ local function updateHealthBar(evt)
 			healthBar:SetMinMaxValues(0, maxHealth)
 		end
 		local curHealth = UnitHealth("player")
-		local combined
-		local lastCombined = (healthBar.absorbBar and healthBar.absorbBar._lastVal) or curHealth
-		if evt == "UNIT_ABSORB_AMOUNT_CHANGED" or evt == "UNIT_MAXHEALTH" or healthBar._lastVal ~= curHealth then
-			local abs = UnitGetTotalAbsorbs("player") or 0
-			combined = curHealth + abs
-		else
-			combined = lastCombined
-		end
+		-- Always compute absorbs fresh; caching combined/lastCombined is unnecessary now
+		local abs = UnitGetTotalAbsorbs("player") or 0
 
 		-- Only push values to the bar if changed
 		if healthBar._lastVal ~= curHealth then
@@ -743,14 +735,13 @@ local function updateHealthBar(evt)
 			healthBar._lastBracket = bracket
 		end
 
-		if combined > maxHealth then combined = maxHealth end
 		if healthBar.absorbBar._lastMax ~= maxHealth then
 			healthBar.absorbBar:SetMinMaxValues(0, maxHealth)
 			healthBar.absorbBar._lastMax = maxHealth
 		end
-		if healthBar.absorbBar._lastVal ~= combined then
-			healthBar.absorbBar:SetValue(combined)
-			healthBar.absorbBar._lastVal = combined
+		if healthBar.absorbBar._lastVal ~= abs then
+			healthBar.absorbBar:SetValue(abs)
+			healthBar.absorbBar._lastVal = abs
 		end
 	end
 end
@@ -904,7 +895,7 @@ local function createHealthBar()
 	local absorbBar = CreateFrame("StatusBar", "EQOLAbsorbBar", healthBar)
 	absorbBar:SetAllPoints(healthBar)
 	absorbBar:SetFrameStrata(healthBar:GetFrameStrata())
-	absorbBar:SetFrameLevel(max(0, (healthBar:GetFrameLevel() or 1) - 1))
+	absorbBar:SetFrameLevel((healthBar:GetFrameLevel() + 1))
 	absorbBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
 	absorbBar:SetStatusBarColor(0.8, 0.8, 0.8, 0.8)
 	healthBar.absorbBar = absorbBar
