@@ -924,9 +924,10 @@ local powertypeClasses = {
 	},
 }
 
-local powerTypeEnums = {}
-for i, v in pairs(Enum.PowerType) do
-	powerTypeEnums[i:upper()] = v
+local POWER_ENUM = {}
+for k, v in pairs(Enum.PowerType) do
+	local key = k:gsub("(%l)(%u)", "%1_%2"):upper()
+	POWER_ENUM[key] = v
 end
 
 local classPowerTypes = {
@@ -1132,7 +1133,7 @@ function updatePowerBar(type, runeSlot)
 			return
 		end
 		local bar = powerbar[type]
-		local pType = powerTypeEnums[type:gsub("_", "")]
+		local pType = POWER_ENUM[type]
 		local maxPower = bar._lastMax
 		if not maxPower then
 			maxPower = UnitPowerMax("player", pType)
@@ -1201,7 +1202,7 @@ local function updateBarSeparators(pType)
 	elseif pType == "RUNES" then
 		segments = 6
 	else
-		local enumId = powerTypeEnums[pType:gsub("_", "")]
+		local enumId = POWER_ENUM[pType]
 		segments = enumId and UnitPowerMax("player", enumId) or 0
 	end
 	if not segments or segments < 2 then
@@ -1626,7 +1627,7 @@ local function eventHandler(self, event, unit, arg1)
 	elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerbar[arg1]:IsShown() and powerfrequent[arg1] then
 		updatePowerBar(arg1)
 	elseif event == "UNIT_MAXPOWER" and powerbar[arg1] and powerbar[arg1]:IsShown() then
-		local enum = powerTypeEnums[arg1:gsub("_", "")]
+		local enum = POWER_ENUM[arg1]
 		local bar = powerbar[arg1]
 		if enum and bar then
 			local max = UnitPowerMax("player", enum)
