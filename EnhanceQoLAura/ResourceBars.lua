@@ -1190,14 +1190,14 @@ local function updateBarSeparators(pType)
 	local w = math.max(1, bar:GetWidth() or 0)
 	local h = math.max(1, bar:GetHeight() or 0)
 	local sc = (cfg and cfg.separatorColor) or { 1, 1, 1, 0.5 }
-	local colorKey = table.concat({ tostring(sc[1] or 1), tostring(sc[2] or 1), tostring(sc[3] or 1), tostring(sc[4] or 0.5) }, ":")
+	local r, g, b, a = sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5
 
-	if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepColorKey == colorKey then return end
+	if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepR == r and bar._sepG == g and bar._sepB == b and bar._sepA == a then return end
 
 	-- Ensure we have enough textures
 	for i = #bar.separatorMarks + 1, needed do
 		local tx = bar:CreateTexture(nil, "OVERLAY")
-		tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
+		tx:SetColorTexture(r, g, b, a)
 		bar.separatorMarks[i] = tx
 	end
 	-- Position visible separators
@@ -1209,14 +1209,14 @@ local function updateBarSeparators(pType)
 		local half = math.floor(SEPARATOR_THICKNESS * 0.5)
 		tx:SetPoint("LEFT", bar, "LEFT", x - math.max(0, half), 0)
 		tx:SetSize(SEPARATOR_THICKNESS, h)
-		tx:SetColorTexture(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
+		tx:SetColorTexture(r, g, b, a)
 		tx:Show()
 	end
 	-- Hide extras
 	for i = needed + 1, #bar.separatorMarks do
 		bar.separatorMarks[i]:Hide()
 	end
-	bar._sepW, bar._sepH, bar._sepSegments, bar._sepColorKey = w, h, segments, colorKey
+	bar._sepW, bar._sepH, bar._sepSegments, bar._sepR, bar._sepG, bar._sepB, bar._sepA = w, h, segments, r, g, b, a
 end
 
 -- Layout helper for DK RUNES: create or resize 6 child statusbars
