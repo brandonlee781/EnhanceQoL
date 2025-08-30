@@ -1413,20 +1413,21 @@ local function createPowerBar(type, anchor)
 		end
 	end)
 
-	powerbar[type] = bar
-	bar:Show()
-	updatePowerBar(type)
-	updateBarSeparators(type)
+       powerbar[type] = bar
+       bar:Show()
+       updatePowerBar(type)
+       updateBarSeparators(type)
 
-	-- Ensure dependents re-anchor when this bar changes size
-	bar:SetScript("OnSizeChanged", function()
-		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorDependentsOf then addon.Aura.ResourceBars.ReanchorDependentsOf("EQOL" .. type .. "Bar") end
-		if type == "RUNES" then
-			layoutRunes(bar)
-		else
-			updateBarSeparators(type)
-		end
-	end)
+       -- Ensure dependents re-anchor when this bar changes size
+       bar:SetScript("OnSizeChanged", function()
+               if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorDependentsOf then
+                       addon.Aura.ResourceBars.ReanchorDependentsOf("EQOL" .. type .. "Bar")
+               end
+               if type == "RUNES" then
+                       layoutRunes(bar)
+               end
+               updateBarSeparators(type)
+       end)
 end
 
 local eventsToRegister = {
@@ -1782,19 +1783,17 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 		w = w or (s and s.width) or defaultW
 		h = h or (s and s.height) or defaultH
 	end
-	if pType then
-		if powerbar[pType] then
-			powerbar[pType]:SetSize(w, h)
-			changed[getFrameName(pType)] = true
-			updateBarSeparators(pType)
-		end
-	else
-		for t, bar in pairs(powerbar) do
-			bar:SetSize(w, h)
-			changed[getFrameName(t)] = true
-			updateBarSeparators(t)
-		end
-	end
+       if pType then
+               if powerbar[pType] then
+                       powerbar[pType]:SetSize(w, h)
+                       changed[getFrameName(pType)] = true
+               end
+       else
+               for t, bar in pairs(powerbar) do
+                       bar:SetSize(w, h)
+                       changed[getFrameName(t)] = true
+               end
+       end
 
 	local class = addon.variables.unitClass
 	local spec = addon.variables.unitSpec
