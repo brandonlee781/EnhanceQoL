@@ -516,13 +516,7 @@ local function addKeystoneFrame(container)
 					end
 				end,
 			},
-			{
-				text = "Lock current pull label",
-				var = "mythicPlusCurrentPullLocked",
-				func = function(self, _, value)
-					addon.db["mythicPlusCurrentPullLocked"] = value
-				end,
-			},
+
 			{
 				text = L["groupfinderShowPartyKeystone"],
 				var = "groupfinderShowPartyKeystone",
@@ -557,9 +551,8 @@ local function addKeystoneFrame(container)
 		local sliderPullFont = addon.functions.createSliderAce("Current pull text size: " .. curSize, curSize, 8, 32, 1, function(self, _, value2)
 			addon.db["mythicPlusCurrentPullFontSize"] = value2
 			self:SetLabel("Current pull text size: " .. value2)
-			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.ToggleCurrentPull then
-				-- trigger a light refresh by toggling on if already on
-				if addon.db["mythicPlusCurrentPull"] then addon.MythicPlus.functions.ToggleCurrentPull(true) end
+			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.UpdateCurrentPullAppearance then
+				addon.MythicPlus.functions.UpdateCurrentPullAppearance()
 			end
 		end)
 		sliderPullFont:SetFullWidth(false)

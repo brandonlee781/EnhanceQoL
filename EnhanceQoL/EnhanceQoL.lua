@@ -377,6 +377,7 @@ local function UpdateActionBarMouseover(barName, enable, variable)
 
 	local btnPrefix
 	if barName == "MainMenuBar" then
+		-- we have to change the parent of the Vehice Leave Button
 		btnPrefix = "ActionButton"
 	elseif barName == "PetActionBar" then
 		btnPrefix = "PetActionButton"

@@ -194,11 +194,13 @@ local allowedSub = {
 }
 
 local function SetCombatLogActive(active)
-	if active then
-		f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	else
-		f:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	end
+    if active then
+        f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        f:RegisterEvent("PLAYER_REGEN_ENABLED")
+    else
+        f:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        f:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
 end
 
 local function IsInKeystoneRun()
@@ -283,7 +285,7 @@ f:SetScript("OnEvent", function(_, ev, arg1)
 		return
 	end
 
-	if ev == "COMBAT_LOG_EVENT_UNFILTERED" then
+    if ev == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not MDT or not MPlus.active then return end
 		-- Late MDT init guard: try once more to build weights when first combat events arrive
 		if (MPlus.maxForces or 0) == 0 or (next(MPlus.weights) == nil) then BuildWeightsFromMDT() end
@@ -300,8 +302,15 @@ f:SetScript("OnEvent", function(_, ev, arg1)
 			if not MPlus.inPullGUID[dstGUID] then AddGUIDToPull(dstGUID) end
 			if sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" or sub == "UNIT_DISSIPATES" then RemoveGUIDFromPull(dstGUID) end
 		end
-		return
-	end
+        return
+    end
+
+    if ev == "PLAYER_REGEN_ENABLED" then
+        if not MDT or not MPlus.active then return end
+        -- Reset current pull when leaving combat (player side)
+        ResetPull()
+        return
+    end
 end)
 
 -- Toggle registration from the MythicPlus UI
@@ -330,4 +339,9 @@ function addon.MythicPlus.functions.ToggleCurrentPull(enabled)
 end
 
 -- Apply initial state based on saved setting
+-- live‑update helper exposed for UI sliders
+addon.MythicPlus.functions.UpdateCurrentPullAppearance = function()
+    UpdateUILabel()
+end
+
 if addon and addon.db and addon.db["mythicPlusCurrentPull"] then addon.MythicPlus.functions.ToggleCurrentPull(true) end
