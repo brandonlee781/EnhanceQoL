@@ -136,6 +136,13 @@ addon.functions.addToTree(nil, {
 	text = L["Drink Macro"],
 })
 
+-- Add child entry for Health Macro under Drink Macro
+addon.functions.addToTree("drink", {
+	value = "health",
+	text = L["Health Macro"],
+})
+addon.variables.statusTable.groups["drink"] = true
+
 local function addDrinkFrame(container)
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	container:AddChild(wrapper)
@@ -272,5 +279,9 @@ end
 function addon.Drinks.functions.treeCallback(container, group)
 	container:ReleaseChildren() -- Entfernt vorherige Inhalte
 	-- Prüfen, welche Gruppe ausgewählt wurde
-	if group == "drink" then addDrinkFrame(container) end
+	if group == "drink" then
+		addDrinkFrame(container)
+	elseif group == "drink\001health" then
+		if addon.Health and addon.Health.functions and addon.Health.functions.addHealthFrame then addon.Health.functions.addHealthFrame(container) end
+	end
 end

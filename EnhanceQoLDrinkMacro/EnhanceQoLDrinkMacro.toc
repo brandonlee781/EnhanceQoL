@@ -25,3 +25,5 @@ locales\[TextLocale].lua
 Drinks.lua
 FoodReminder.lua
 EnhanceQoLDrinkMacro.lua
+Health.lua
+EnhanceQoLHealthMacro.lua

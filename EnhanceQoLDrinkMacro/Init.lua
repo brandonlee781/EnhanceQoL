@@ -11,6 +11,11 @@ addon.Drinks.functions = {}
 addon.Drinks.filteredDrinks = {} -- Used for the filtered List later
 addon.LDrinkMacro = {} -- Locales for drink macro
 
+-- Health macro module scaffolding
+addon.Health = {}
+addon.Health.functions = {}
+addon.Health.filteredHealth = {}
+
 function addon.functions.newItem(id, name, isSpell)
     local self = {}
 
