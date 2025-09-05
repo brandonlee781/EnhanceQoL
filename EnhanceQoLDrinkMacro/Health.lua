@@ -51,7 +51,7 @@ end
 -- key, id, requiredLevel, heal (relative ranking), type: "stone"|"potion"|"other"
 addon.Health.healthList = {
 	-- Healthstones (Warlock)
-	{ key = "Healthstone", id = 5512, requiredLevel = 5, healFunc = function(maxHP) return GetPotionHeal(maxHP or 0) end, type = "stone" },
+	{ key = "Healthstone", id = 5512, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP or 0) end, type = "stone" },
 	{
 		key = "DemonicHealthstone",
 		id = 224464,
@@ -68,9 +68,14 @@ addon.Health.healthList = {
 	{ key = "InvigoratingHealingPotion3", id = 244839, requiredLevel = 71, heal = 1050000, type = "potion" },
 
 	-- Khaz Algar: Algari Healing Potion (Qualities 1-3)
-	{ key = "AlgariHealingPotion1", id = 211878, requiredLevel = 71, heal = 900000, type = "potion" },
-	{ key = "AlgariHealingPotion2", id = 211879, requiredLevel = 71, heal = 1000000, type = "potion" },
-	{ key = "AlgariHealingPotion3", id = 211880, requiredLevel = 71, heal = 1100000, type = "potion" },
+	{ key = "AlgariHealingPotion1", id = 211878, requiredLevel = 71, heal = 3500000, type = "potion" },
+	{ key = "AlgariHealingPotion2", id = 211879, requiredLevel = 71, heal = 3600000, type = "potion" },
+	{ key = "AlgariHealingPotion3", id = 211880, requiredLevel = 71, heal = 3800000, type = "potion" },
+
+	-- Dragonflight: Refreshing Healing Potion (Qualities 1-3) - kept for completeness
+	{ key = "RefreshingHealingPotion1", id = 207023, requiredLevel = 70, heal = 159194, type = "potion" },
+	{ key = "RefreshingHealingPotion2", id = 207022, requiredLevel = 70, heal = 136368, type = "potion" },
+	{ key = "RefreshingHealingPotion3", id = 207021, requiredLevel = 70, heal = 116788, type = "potion" },
 
 	-- Dragonflight: Refreshing Healing Potion (Qualities 1-3) - kept for completeness
 	{ key = "RefreshingHealingPotion1", id = 191378, requiredLevel = 61, heal = 118950, type = "potion" },
@@ -78,20 +83,23 @@ addon.Health.healthList = {
 	{ key = "RefreshingHealingPotion3", id = 191380, requiredLevel = 61, heal = 162500, type = "potion" },
 
 	-- Shadowlands
-	{ key = "SpiritualHealingPotion", id = 171267, requiredLevel = 50, heal = 500000, type = "potion" },
+	{ key = "SpiritualHealingPotion", id = 171267, requiredLevel = 51, heal = 36000, type = "potion" },
 
 	-- Battle for Azeroth
-	{ key = "CoastalHealingPotion", id = 152615, requiredLevel = 45, heal = 250000, type = "potion" },
-	{ key = "AbyssalHealingPotion", id = 169451, requiredLevel = 50, heal = 350000, type = "potion" },
+	{ key = "CoastalHealingPotion", id = 152615, requiredLevel = 40, heal = 8000, type = "potion" },
+	{ key = "AbyssalHealingPotion", id = 169451, requiredLevel = 40, heal = 16000, type = "potion" },
 
 	-- Legion
-	{ key = "AncientHealingPotion", id = 127834, requiredLevel = 40, heal = 160000, type = "potion" },
+	{ key = "AncientHealingPotion", id = 127834, requiredLevel = 40, heal = 6000, type = "potion" },
+	{ key = "AgedHealingPotion", id = 136569, requiredLevel = 40, heal = 6000, type = "potion" },
 
 	-- Warlords of Draenor
-	{ key = "HealingTonic", id = 109223, requiredLevel = 35, heal = 90000, type = "potion" },
+	{ key = "HealingTonic", id = 109223, requiredLevel = 35, heal = 3400, type = "potion" },
+	{ key = "MasterHealingPotion", id = 76097, requiredLevel = 32, heal = 2200, type = "potion" },
+	{ key = "MysticalHealingPotion", id = 57191, requiredLevel = 30, heal = 1000, type = "potion" },
 
 	-- Wrath of the Lich King
-	{ key = "RunicHealingPotion", id = 33447, requiredLevel = 20, heal = 8000, type = "potion" },
+	{ key = "RunicHealingPotion", id = 33447, requiredLevel = 27, heal = 1200, type = "potion" },
 
 	{ key = "SurvivalistsHealingPotion", id = 224021, requiredLevel = 5, type = "potion", healFunc = function(maxHP) return GetPotionHeal(maxHP or 0) end },
 
