@@ -517,6 +517,13 @@ local function addKeystoneFrame(container)
 				end,
 			},
 			{
+				text = "Lock current pull label",
+				var = "mythicPlusCurrentPullLocked",
+				func = function(self, _, value)
+					addon.db["mythicPlusCurrentPullLocked"] = value
+				end,
+			},
+			{
 				text = L["groupfinderShowPartyKeystone"],
 				var = "groupfinderShowPartyKeystone",
 				func = function(self, _, value)
@@ -544,6 +551,20 @@ local function addKeystoneFrame(container)
 		dropPullTimerType:SetWidth(200)
 		groupEnabled:AddChild(dropPullTimerType)
 		groupEnabled:AddChild(addon.functions.createSpacerAce())
+
+		-- Current Pull: font size slider (visible regardless; applied when feature is enabled)
+		local curSize = addon.db["mythicPlusCurrentPullFontSize"] or 14
+		local sliderPullFont = addon.functions.createSliderAce("Current pull text size: " .. curSize, curSize, 8, 32, 1, function(self, _, value2)
+			addon.db["mythicPlusCurrentPullFontSize"] = value2
+			self:SetLabel("Current pull text size: " .. value2)
+			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.ToggleCurrentPull then
+				-- trigger a light refresh by toggling on if already on
+				if addon.db["mythicPlusCurrentPull"] then addon.MythicPlus.functions.ToggleCurrentPull(true) end
+			end
+		end)
+		sliderPullFont:SetFullWidth(false)
+		sliderPullFont:SetWidth(300)
+		groupEnabled:AddChild(sliderPullFont)
 
 		local longSlider = addon.functions.createSliderAce(L["sliderLongTime"] .. ": " .. addon.db["pullTimerLongTime"] .. "s", addon.db["pullTimerLongTime"], 0, 60, 1, function(self, _, value2)
 			addon.db["pullTimerLongTime"] = value2
