@@ -377,7 +377,12 @@ local function UpdateActionBarMouseover(barName, enable, variable)
 
 	local btnPrefix
 	if barName == "MainMenuBar" then
-		-- we have to change the parent of the Vehice Leave Button
+		-- we have to change the Vehice Leave Button behaviour
+		local leave = _G.MainMenuBarVehicleLeaveButton
+		if leave then
+			leave:SetIgnoreParentAlpha(true)
+			leave:SetAlpha(1)
+		end
 		btnPrefix = "ActionButton"
 	elseif barName == "PetActionBar" then
 		btnPrefix = "PetActionButton"
