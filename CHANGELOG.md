@@ -6,6 +6,7 @@
 
 - **Active Talentbuild:** Wrong default value initilized
 - **Aura Tracker:** Missing sound messages on import of disabled custom sound effects
+- **Tooltip:** “Right‑click for options” had an empty line left
 
 ---
 
