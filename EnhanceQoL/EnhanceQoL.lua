@@ -370,10 +370,49 @@ local function UpdateUnitFrameMouseover(barName, cbData)
 end
 
 local hookedButtons = {}
+
+-- Keep action bars visible while interacting with SpellFlyout
+local EQOL_LastMouseoverBar
+local EQOL_LastMouseoverVar
+
+local function EQOL_ShouldKeepVisibleByFlyout()
+    return _G.SpellFlyout and _G.SpellFlyout:IsShown() and MouseIsOver(_G.SpellFlyout)
+end
+
+local function EQOL_HideBarIfNotHovered(bar, variable)
+    if not addon.db or not addon.db[variable] then return end
+    C_Timer.After(0, function()
+        -- Only hide if neither the bar nor the spell flyout is under the mouse
+        if not MouseIsOver(bar) and not EQOL_ShouldKeepVisibleByFlyout() then bar:SetAlpha(0) end
+    end)
+end
+
+local function EQOL_HookSpellFlyout()
+    local flyout = _G.SpellFlyout
+    if not flyout or flyout.EQOL_MouseoverHooked then return end
+
+    flyout:HookScript("OnEnter", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then EQOL_LastMouseoverBar:SetAlpha(1) end
+    end)
+
+    flyout:HookScript("OnLeave", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then
+            EQOL_HideBarIfNotHovered(EQOL_LastMouseoverBar, EQOL_LastMouseoverVar)
+        end
+    end)
+
+    flyout:HookScript("OnHide", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then
+            EQOL_HideBarIfNotHovered(EQOL_LastMouseoverBar, EQOL_LastMouseoverVar)
+        end
+    end)
+
+    flyout.EQOL_MouseoverHooked = true
+end
 -- Action Bars
 local function UpdateActionBarMouseover(barName, enable, variable)
-	local bar = _G[barName]
-	if not bar then return end
+    local bar = _G[barName]
+    if not bar then return end
 
 	local btnPrefix
 	if barName == "MainMenuBar" then
@@ -392,40 +431,56 @@ local function UpdateActionBarMouseover(barName, enable, variable)
 		btnPrefix = barName .. "Button"
 	end
 
-	if enable then
-		bar:SetAlpha(0)
-		-- bar:EnableMouse(true)
-		bar:SetScript("OnEnter", function(self) bar:SetAlpha(1) end)
-		bar:SetScript("OnLeave", function(self) bar:SetAlpha(0) end)
-		for i = 1, 12 do
-			local button = _G[btnPrefix .. i]
-			if button and not hookedButtons[button] then
-				if button.OnEnter then
-					button:HookScript("OnEnter", function(self)
-						if addon.db[variable] then bar:SetAlpha(1) end
-					end)
-					hookedButtons[button] = true
-				else
-					-- button:EnableMouse(true)
-					button:SetScript("OnEnter", function(self) bar:SetAlpha(1) end)
-				end
-				if button.OnLeave then
-					button:HookScript("OnLeave", function(self)
-						if addon.db[variable] then bar:SetAlpha(0) end
-					end)
-				else
-					button:EnableMouse(true)
-					button:SetScript("OnLeave", function(self)
-						bar:SetAlpha(0)
-						GameTooltip:Hide()
-					end)
-				end
-				if not hookedButtons[button] then GameTooltipActionButton(button) end
-			end
-		end
-	else
-		bar:SetAlpha(1)
-		-- bar:EnableMouse(true)
+    if enable then
+        bar:SetAlpha(0)
+        -- bar:EnableMouse(true)
+        bar:SetScript("OnEnter", function(self)
+            bar:SetAlpha(1)
+            EQOL_LastMouseoverBar = bar
+            EQOL_LastMouseoverVar = variable
+        end)
+        bar:SetScript("OnLeave", function(self)
+            EQOL_HideBarIfNotHovered(bar, variable)
+        end)
+        for i = 1, 12 do
+            local button = _G[btnPrefix .. i]
+            if button and not hookedButtons[button] then
+                if button.OnEnter then
+                    button:HookScript("OnEnter", function(self)
+                        if addon.db[variable] then
+                            bar:SetAlpha(1)
+                            EQOL_LastMouseoverBar = bar
+                            EQOL_LastMouseoverVar = variable
+                        end
+                    end)
+                    hookedButtons[button] = true
+                else
+                    -- button:EnableMouse(true)
+                    button:SetScript("OnEnter", function(self)
+                        bar:SetAlpha(1)
+                        EQOL_LastMouseoverBar = bar
+                        EQOL_LastMouseoverVar = variable
+                    end)
+                end
+                if button.OnLeave then
+                    button:HookScript("OnLeave", function(self)
+                        if addon.db[variable] then EQOL_HideBarIfNotHovered(bar, variable) end
+                    end)
+                else
+                    button:EnableMouse(true)
+                    button:SetScript("OnLeave", function(self)
+                        EQOL_HideBarIfNotHovered(bar, variable)
+                        GameTooltip:Hide()
+                    end)
+                end
+                if not hookedButtons[button] then GameTooltipActionButton(button) end
+            end
+        end
+        -- Ensure flyout hooks are in place (once)
+        C_Timer.After(0, EQOL_HookSpellFlyout)
+    else
+        bar:SetAlpha(1)
+        -- bar:EnableMouse(true)
 		bar:SetScript("OnEnter", nil)
 		bar:SetScript("OnLeave", nil)
 		for i = 1, 12 do
@@ -1114,6 +1169,18 @@ local function addChatFrame(container)
 				addChatFrame(container)
 			end,
 		},
+		{
+			var = "chatHideLearnUnlearn",
+			text = L["chatHideLearnUnlearn"],
+			type = "CheckBox",
+			desc = L["chatHideLearnUnlearnDesc"],
+			func = function(self, _, value)
+				addon.db["chatHideLearnUnlearn"] = value
+				if addon.functions.ApplyChatLearnFilter then addon.functions.ApplyChatLearnFilter(value) end
+				container:ReleaseChildren()
+				addChatFrame(container)
+			end,
+		},
 	}
 
 	table.sort(data, function(a, b) return a.text < b.text end)
@@ -1367,17 +1434,19 @@ local function addMinimapFrame(container)
 				addon.functions.checkReloadFrame()
 			end,
 		},
-		{
-			parent = "",
-			var = "showInstanceDifficulty",
-			desc = L["showInstanceDifficultyDesc"],
-			text = L["showInstanceDifficulty"],
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["showInstanceDifficulty"] = value
-				if addon.InstanceDifficulty and addon.InstanceDifficulty.SetEnabled then addon.InstanceDifficulty:SetEnabled(value) end
-			end,
-		},
+        {
+            parent = "",
+            var = "showInstanceDifficulty",
+            desc = L["showInstanceDifficultyDesc"],
+            text = L["showInstanceDifficulty"],
+            type = "CheckBox",
+            callback = function(self, _, value)
+                addon.db["showInstanceDifficulty"] = value
+                if addon.InstanceDifficulty and addon.InstanceDifficulty.SetEnabled then addon.InstanceDifficulty:SetEnabled(value) end
+                container:ReleaseChildren()
+                addMinimapFrame(container)
+            end,
+        },
 		{
 			parent = "",
 			var = "enableLandingPageMenu",
@@ -1471,6 +1540,146 @@ local function addMinimapFrame(container)
 		})
 	end
 	-- custom icon path removed
+
+	-- Instance Difficulty extra settings (position + colors)
+	if addon.db["showInstanceDifficulty"] then
+
+        -- Font size
+        table.insert(data, {
+            parent = L["showInstanceDifficulty"],
+            var = "instanceDifficultyFontSize",
+            type = "Slider",
+            text = L["instanceDifficultyFontSize"],
+            value = addon.db["instanceDifficultyFontSize"],
+            min = 8,
+            max = 28,
+            step = 1,
+            displayOrder = 10,
+            callback = function(_, _, val)
+                addon.db["instanceDifficultyFontSize"] = val
+                if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+            end,
+        })
+
+		-- Offsets
+        table.insert(data, {
+            parent = L["showInstanceDifficulty"],
+            var = "instanceDifficultyOffsetX",
+            type = "Slider",
+            text = L["instanceDifficultyOffsetX"],
+            value = addon.db["instanceDifficultyOffsetX"],
+            min = -400,
+            max = 400,
+            step = 1,
+            displayOrder = 20,
+            callback = function(_, _, val)
+                addon.db["instanceDifficultyOffsetX"] = val
+                if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+            end,
+        })
+        table.insert(data, {
+            parent = L["showInstanceDifficulty"],
+            var = "instanceDifficultyOffsetY",
+            type = "Slider",
+            text = L["instanceDifficultyOffsetY"],
+            value = addon.db["instanceDifficultyOffsetY"],
+            min = -400,
+            max = 400,
+            step = 1,
+            displayOrder = 30,
+            callback = function(_, _, val)
+                addon.db["instanceDifficultyOffsetY"] = val
+                if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+            end,
+        })
+
+        table.insert(data, {
+            parent = L["showInstanceDifficulty"],
+            var = "instanceDifficultyUseColors",
+            type = "CheckBox",
+            text = L["instanceDifficultyUseColors"],
+            value = addon.db["instanceDifficultyUseColors"],
+            displayOrder = 40,
+            callback = function(self, _, v)
+                addon.db["instanceDifficultyUseColors"] = v
+                if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                container:ReleaseChildren()
+                addMinimapFrame(container)
+            end,
+        })
+
+        if addon.db["instanceDifficultyUseColors"] then
+            local colors = addon.db["instanceDifficultyColors"] or {}
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY1"] or "Normal",
+                value = colors.NM,
+                displayOrder = 60,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].NM = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY2"] or "Heroic",
+                value = colors.HC,
+                displayOrder = 70,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].HC = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY6"] or "Mythic",
+                value = colors.M,
+                displayOrder = 80,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].M = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY_MYTHIC_PLUS"] or "Mythic+",
+                value = colors.MPLUS,
+                displayOrder = 90,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].MPLUS = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY3"] or "Raid Finder",
+                value = colors.LFR,
+                displayOrder = 50,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].LFR = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+            table.insert(data, {
+                parent = L["showInstanceDifficulty"],
+                type = "ColorPicker",
+                text = _G["PLAYER_DIFFICULTY_TIMEWALKER"] or "Timewalking",
+                value = colors.TW,
+                displayOrder = 100,
+                callback = function(r, g, b)
+                    addon.db["instanceDifficultyColors"].TW = { r = r, g = g, b = b }
+                    if addon.InstanceDifficulty then addon.InstanceDifficulty:Update() end
+                end,
+            })
+        end
+	end
+
+	-- Build UI
 	local wrapper = addon.functions.createWrapperData(data, container, L)
 end
 
@@ -4193,6 +4402,34 @@ local function initBagsFrame()
 end
 
 local function initChatFrame()
+	-- Build learn/unlearn message patterns and filter once
+	if not addon.variables.learnUnlearnPatterns then
+		local patterns = {}
+		if ERR_LEARN_PASSIVE_S then table.insert(patterns, fmtToPattern(ERR_LEARN_PASSIVE_S)) end
+		if ERR_LEARN_SPELL_S then table.insert(patterns, fmtToPattern(ERR_LEARN_SPELL_S)) end
+		if ERR_LEARN_ABILITY_S then table.insert(patterns, fmtToPattern(ERR_LEARN_ABILITY_S)) end
+		if ERR_SPELL_UNLEARNED_S then table.insert(patterns, fmtToPattern(ERR_SPELL_UNLEARNED_S)) end
+		addon.variables.learnUnlearnPatterns = patterns
+	end
+
+	addon.functions.ChatLearnFilter = addon.functions.ChatLearnFilter
+		or function(_, _, msg)
+			if not msg then return false end
+			for _, pat in ipairs(addon.variables.learnUnlearnPatterns or {}) do
+				if msg:match(pat) then return true end
+			end
+			return false
+		end
+
+	addon.functions.ApplyChatLearnFilter = addon.functions.ApplyChatLearnFilter
+		or function(enabled)
+			if enabled then
+				ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", addon.functions.ChatLearnFilter)
+			else
+				ChatFrame_RemoveMessageEventFilter("CHAT_MSG_SYSTEM", addon.functions.ChatLearnFilter)
+			end
+		end
+
 	if ChatFrame1 then
 		addon.functions.InitDBValue("chatFrameFadeEnabled", ChatFrame1:GetFading())
 		addon.functions.InitDBValue("chatFrameFadeTimeVisible", ChatFrame1:GetTimeVisible())
@@ -4215,6 +4452,10 @@ local function initChatFrame()
 	addon.functions.InitDBValue("chatIMFrameData", {})
 	addon.functions.InitDBValue("chatIMHideInCombat", false)
 	addon.functions.InitDBValue("chatIMUseAnimation", true)
+	addon.functions.InitDBValue("chatHideLearnUnlearn", false)
+
+	-- Apply learn/unlearn message filter based on saved setting
+	addon.functions.ApplyChatLearnFilter(addon.db["chatHideLearnUnlearn"])
 	if addon.ChatIM and addon.ChatIM.SetEnabled then addon.ChatIM:SetEnabled(addon.db["enableChatIM"]) end
 end
 
@@ -4259,7 +4500,25 @@ local function initUI()
 	addon.functions.InitDBValue("persistAuctionHouseFilter", false)
 	addon.functions.InitDBValue("alwaysUserCurExpAuctionHouse", false)
 	addon.functions.InitDBValue("hideDynamicFlightBar", false)
-	addon.functions.InitDBValue("showInstanceDifficulty", false)
+    addon.functions.InitDBValue("showInstanceDifficulty", false)
+    -- anchor no longer used; position controlled by offsets from CENTER
+    addon.functions.InitDBValue("instanceDifficultyOffsetX", 0)
+    addon.functions.InitDBValue("instanceDifficultyOffsetY", 0)
+    addon.functions.InitDBValue("instanceDifficultyFontSize", 14)
+    addon.functions.InitDBValue("instanceDifficultyUseColors", false)
+    if type(addon.db["instanceDifficultyColors"]) ~= "table" then addon.db["instanceDifficultyColors"] = {} end
+    -- Ensure default color entries exist
+    local defaultColors = {
+        NM = { r = 0.20, g = 0.95, b = 0.20 }, -- Normal: Green
+        HC = { r = 0.25, g = 0.55, b = 1.00 }, -- Heroic: Blue
+        M = { r = 0.80, g = 0.40, b = 1.00 }, -- Mythic: Violet
+        MPLUS = { r = 0.80, g = 0.40, b = 1.00 }, -- Mythic+: Violet
+        LFR = { r = 1.00, g = 1.00, b = 1.00 }, -- LFR: White (editable)
+        TW = { r = 1.00, g = 1.00, b = 1.00 }, -- Timewalking: White (editable)
+    }
+    for k, v in pairs(defaultColors) do
+        if type(addon.db["instanceDifficultyColors"][k]) ~= "table" then addon.db["instanceDifficultyColors"][k] = v end
+    end
 	-- addon.functions.InitDBValue("instanceDifficultyUseIcon", false)
 
 	table.insert(addon.variables.unitFrameNames, {

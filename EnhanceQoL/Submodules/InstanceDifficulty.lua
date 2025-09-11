@@ -28,7 +28,6 @@ indicator:HookScript("OnShow", function() InstanceDifficulty:Update() end)
 
 InstanceDifficulty.text = InstanceDifficulty.text or indicator:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 InstanceDifficulty.text:SetFont(addon.variables.defaultFont, 14, "OUTLINE")
-InstanceDifficulty.text:SetPoint("CENTER", indicator, "CENTER", 0, 0)
 InstanceDifficulty.text:Hide()
 
 InstanceDifficulty.icon = InstanceDifficulty.icon or indicator:CreateTexture(nil, "OVERLAY")
@@ -81,15 +80,30 @@ local function getShortLabel(difficultyID, difficultyName)
 end
 
 function InstanceDifficulty:Update()
-	if not self.enabled or not addon.db then return end
-	if not IsInInstance() then
-		self.text:Hide()
-		self.icon:Hide()
-		return
-	end
+    if not self.enabled or not addon.db then return end
+    if not IsInInstance() then
+        self.text:Hide()
+        self.icon:Hide()
+        return
+    end
 
-	local _, _, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
-	local short = getShortLabel(difficultyID, difficultyName)
+    local _, _, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
+    local short = getShortLabel(difficultyID, difficultyName)
+    -- Stable code for color mapping
+    local code
+    if difficultyID == 1 or difficultyID == 3 or difficultyID == 4 or difficultyID == 14 or difficultyID == 33 or difficultyID == 150 or nmNames[difficultyName] then
+        code = "NM"
+    elseif difficultyID == 2 or difficultyID == 5 or difficultyID == 6 or difficultyID == 15 or difficultyID == 205 or difficultyID == 230 or hcNames[difficultyName] then
+        code = "HC"
+    elseif difficultyID == 16 or difficultyID == 23 then
+        code = "M"
+    elseif difficultyID == 8 then
+        code = "MPLUS"
+    elseif difficultyID == 7 or difficultyID == 17 or difficultyID == 151 then
+        code = "LFR"
+    elseif difficultyID == 24 then
+        code = "TW"
+    end
 
 	-- Custom icons are temporarily disabled
 
@@ -99,9 +113,27 @@ function InstanceDifficulty:Update()
 	else
 		text = short
 	end
-	self.text:SetText(text)
-	self.text:Show()
-	self.icon:Hide()
+    -- Apply anchor (fixed center) and offsets
+    local anchor = "CENTER"
+    local offX = (addon.db and addon.db["instanceDifficultyOffsetX"]) or 0
+    local offY = (addon.db and addon.db["instanceDifficultyOffsetY"]) or 0
+    self.text:ClearAllPoints()
+    self.text:SetPoint(anchor, indicator, anchor, offX, offY)
+
+    self.text:SetText(text)
+    -- Apply font size
+    local fontSize = (addon.db and addon.db["instanceDifficultyFontSize"]) or 14
+    self.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
+    -- Apply optional difficulty colors
+    if addon.db and addon.db["instanceDifficultyUseColors"] then
+        local colors = addon.db["instanceDifficultyColors"] or {}
+        local c = (code and colors[code]) or { r = 1, g = 1, b = 1 }
+        self.text:SetTextColor(c.r or 1, c.g or 1, c.b or 1)
+    else
+        self.text:SetTextColor(1, 1, 1)
+    end
+    self.text:Show()
+    self.icon:Hide()
 end
 
 function InstanceDifficulty:SetEnabled(value)

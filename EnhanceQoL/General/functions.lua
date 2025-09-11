@@ -218,6 +218,19 @@ function addon.functions.createWrapperData(data, container, L)
 		group:SetTitle(parent)
 		scrollInner:AddChild(group)
 
+		-- Stable ordering: prefer displayOrder if provided, else by label text
+		table.sort(groupData, function(a, b)
+			local ao, bo = a.displayOrder, b.displayOrder
+			if ao ~= nil or bo ~= nil then
+				if ao == nil then ao = math.huge end
+				if bo == nil then bo = math.huge end
+				if ao ~= bo then return ao < bo end
+			end
+			local textA = a.text or L[a.var] or ""
+			local textB = b.text or L[b.var] or ""
+			return textA < textB
+		end)
+
 		for _, checkboxData in ipairs(groupData) do
 			local widget = AceGUI:Create(checkboxData.type)
 
@@ -241,19 +254,48 @@ function addon.functions.createWrapperData(data, container, L)
 				widget:SetWidth(checkboxData.width or 100)
 				if checkboxData.callback then widget:SetCallback("OnClick", checkboxData.callback) end
 				group:AddChild(widget)
-			elseif checkboxData.type == "Dropdown" then
-				widget:SetLabel(checkboxData.text or "")
-				if checkboxData.order then
-					widget:SetList(checkboxData.list, checkboxData.order)
-				else
-					widget:SetList(checkboxData.list)
-				end
-				widget:SetFullWidth(true)
-				if checkboxData.callback then widget:SetCallback("OnValueChanged", checkboxData.callback) end
-				group:AddChild(widget)
-				if checkboxData.value then widget:SetValue(checkboxData.value) end
-				if checkboxData.relWidth then widget:SetRelativeWidth(checkboxData.relWidth) end
+		elseif checkboxData.type == "Dropdown" then
+			widget:SetLabel(checkboxData.text or "")
+			if checkboxData.order then
+				widget:SetList(checkboxData.list, checkboxData.order)
+			else
+				widget:SetList(checkboxData.list)
 			end
+			widget:SetFullWidth(true)
+			if checkboxData.callback then widget:SetCallback("OnValueChanged", checkboxData.callback) end
+			group:AddChild(widget)
+			if checkboxData.value then widget:SetValue(checkboxData.value) end
+			if checkboxData.relWidth then widget:SetRelativeWidth(checkboxData.relWidth) end
+		elseif checkboxData.type == "ColorPicker" then
+			widget = AceGUI:Create("ColorPicker")
+			widget:SetLabel(checkboxData.text or "")
+			local c = checkboxData.value or { r = 1, g = 1, b = 1 }
+			widget:SetColor(c.r or 1, c.g or 1, c.b or 1)
+			widget:SetCallback("OnValueChanged", function(_, _, r, g, b)
+				if checkboxData.callback then checkboxData.callback(r, g, b) end
+			end)
+			group:AddChild(widget)
+		elseif checkboxData.type == "Slider" then
+			widget = AceGUI:Create("Slider")
+			local value = checkboxData.value or 0
+			local labelBase = checkboxData.text or ""
+			local function setLabel(val)
+				if checkboxData.showValue == false then
+					widget:SetLabel(labelBase)
+				else
+					widget:SetLabel(string.format("%s: %s", labelBase, tostring(val)))
+				end
+			end
+			setLabel(value)
+			widget:SetValue(value)
+			widget:SetSliderValues(checkboxData.min or 0, checkboxData.max or 100, checkboxData.step or 1)
+			widget:SetFullWidth(true)
+			widget:SetCallback("OnValueChanged", function(self, _, val)
+				setLabel(val)
+				if checkboxData.callback then checkboxData.callback(self, _, val) end
+			end)
+			group:AddChild(widget)
+		end
 			if checkboxData.gv then addon.elements[checkboxData.gv] = widget end
 		end
 	end
