@@ -25,6 +25,8 @@
   - Captain's Signet of Command
   - Commander's Signet of Battle
   - Violet Seal of the Grand Magus
+  - Blessed Medallion of Karabor
+  - Kirin Tor Rings
 - **Bigger Merchant Frame:** Option to increase the Merchant Frame size
 
 ---

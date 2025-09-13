@@ -610,6 +610,8 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[80256] = { text = "HS", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
 			[59317] = { text = "HS", isToy = true, toyID = 58487, isHearthstone = true, icon = 133743, map = 125 },
+
+			[54406] = { text = "HS", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415 },
 		},
 	},
 	[40] = {
@@ -636,6 +638,8 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[36941] = { text = "ENGI", isToy = true, toyID = 30544, isEngineering = true, isGnomish = true },
 			[36890] = { text = "ENGI", isToy = true, toyID = 30542, isEngineering = true, isGoblin = true },
+
+			[41234] = { text = "HS", isItem = true, itemID = 32757, isHearthstone = true, icon = 133279, equipSlot = 2 },
 		},
 	},
 	[20] = {
@@ -679,9 +683,13 @@ addon.MythicPlus.variables.portalCompendium = {
 	[12] = {
 		headline = GUILD,
 		spells = {
-			[89157] = { text = "HS", isItem = true, itemID = 65360, isHearthstone = true, icon = 461812, equipSlot = 15 },
-			[1221360] = { text = "HS", isItem = true, itemID = 63206, isHearthstone = true, icon = 461811, equipSlot = 15 },
-			[1221359] = { text = "HS", isItem = true, itemID = 63352, isHearthstone = true, icon = 461810, equipSlot = 15 },
+			[89157] = { text = "HS", isItem = true, itemID = 65360, isHearthstone = true, icon = 461812, equipSlot = 15, faction = FACTION_ALLIANCE },
+			[1221360] = { text = "HS", isItem = true, itemID = 63206, isHearthstone = true, icon = 461811, equipSlot = 15, faction = FACTION_ALLIANCE },
+			[1221359] = { text = "HS", isItem = true, itemID = 63352, isHearthstone = true, icon = 461810, equipSlot = 15, faction = FACTION_ALLIANCE },
+
+			[89158] = { text = "HS", isItem = true, itemID = 65274, isHearthstone = true, icon = 461815, equipSlot = 15, faction = FACTION_HORDE },
+			[1221356] = { text = "HS", isItem = true, itemID = 63353, isHearthstone = true, icon = 461813, equipSlot = 15, faction = FACTION_HORDE },
+			[1221357] = { text = "HS", isItem = true, itemID = 63207, isHearthstone = true, icon = 461814, equipSlot = 15, faction = FACTION_HORDE },
 		},
 	},
 }
