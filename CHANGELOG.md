@@ -18,6 +18,7 @@
   - Reaves Module: Wormhole Generator Mode (Special option)
   - Kirin Tor Beacon (Zone based - Throne of Thunder/Isle of Thunder)
   - Sunreaver Beacon (Zone based - Throne of Thunder/Isle of Thunder)
+- **Bigger Merchant Frame:** Option to increase the Merchant Frame size
 
 ---
 
