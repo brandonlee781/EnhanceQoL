@@ -552,11 +552,18 @@ local function CreatePortalCompendium(frame, compendium)
 		local sortedSpells = {}
 		if not addon.db["teleportsCompendiumHide" .. section.headline] then
 			for spellID, data in pairs(section.spells) do
+				-- Engineering specialization gate (Gnomish/Goblin) where applicable
+				local specOk = true
+				if data.isGnomish then specOk = specOk and hasGnomish end
+				if data.isGoblin then specOk = specOk and hasGoblin end
+
 				local known = (C_SpellBook.IsSpellInSpellBook(spellID) and not data.isToy)
-					or (hasEngineering and data.toyID and not data.isHearthstone and isToyUsable(data.toyID))
+					or (hasEngineering and specOk and data.toyID and not data.isHearthstone and isToyUsable(data.toyID))
 					or (data.isItem and GetItemCount(data.itemID) > 0)
 					or (data.isHearthstone and isToyUsable(data.toyID))
-				local showSpell = (not data.faction or data.faction == faction)
+
+				local showSpell = specOk
+					and (not data.faction or data.faction == faction)
 					and (not data.map or (data.map == C_Map.GetBestMapForUnit("player")))
 					and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
 					and (not addon.db["hideActualSeason"] or not portalSpells[spellID])

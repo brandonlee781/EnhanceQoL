@@ -529,6 +529,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			-- Dalaran (Broken Isles, Legion)
 			[224869] = { text = "DalB", isClassTP = "MAGE" },
 			[224871] = { text = "DalB", isMagePortal = true },
+
+			[227334] = { text = "HS", isItem = true, itemID = 141605, isHearthstone = true, icon = 132161 },
 		},
 	},
 	[70] = {
@@ -587,6 +589,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE },
 			[88346] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE },
 			[88347] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
+
+			[80256] = { text = "HS", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
 		},
 	},
 	[40] = {

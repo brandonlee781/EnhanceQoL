@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.17.0] – 2025-09-13
+
+### ✨ Added
+
+- **Teleport Compendium:** New Spells
+  - Potion of Deepholm
+  - Flightmaster's Whistle
+  - Dimensional Ripper - Area 52
+  - Dimensional Ripper - Everlook
+  - Ultrasafe Transporter: Toshley's Station
+  - Ultrasafe Transporter: Gadgetzan
+
+---
+
 ## [4.16.0] – 2025-09-13
 
 ### ✨ Added
