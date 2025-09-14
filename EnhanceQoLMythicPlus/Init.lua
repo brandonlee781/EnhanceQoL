@@ -108,6 +108,8 @@ addon.functions.InitDBValue("teleportsWorldMapUseModern", true)
 -- Cache for resolved map/zone names used by modern frame
 addon.functions.InitDBValue("teleportNameCache", {})
 addon.functions.InitDBValue("teleportFavorites", {})
+-- Enable/disable World Map Teleport Panel independently
+addon.functions.InitDBValue("teleportsWorldMapEnabled", true)
 -- Favorites override is now always active in code
 addon.functions.InitDBValue("teleportFrameLocked", true)
 addon.functions.InitDBValue("teleportFrameData", {})

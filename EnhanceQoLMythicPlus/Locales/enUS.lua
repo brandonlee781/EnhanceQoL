@@ -71,9 +71,12 @@ L["mythicPlusIgnoreTimewalking"] = "Do not apply a raid marker in %s dungeons"
 -- Teleports
 L["Teleports"] = "Teleports"
 L["teleportEnabled"] = "Enable Teleport Frame"
+L["teleportEnabledDesc"] = "Shows current Mythic+ season teleports in the PVE frame"
 L["DungeonCompendium"] = "Teleport Compendium"
 L["teleportsEnableCompendium"] = "Enable Teleport Compendium"
 L["teleportsWorldMapUseModern"] = "Use modern Teleport compendium in World Map"
+L["teleportsWorldMapEnabled"] = "Enable World Map Teleport panel"
+L["teleportsWorldMapEnabledDesc"] = "Adds a new tab to the World Map listing all available teleport options"
 L["teleportsWorldMapUseModernNames"] = "Use long names (modern/zone) in modern World Map compendium"
 
 L["teleportsHeadline"] = "This adds a frame with Dungeon Teleports to your PVEFrame"

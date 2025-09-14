@@ -751,20 +751,27 @@ local function addTeleportFrame(container)
 	wrapper:AddChild(groupCore)
 	groupCore:SetTitle(L["teleportsHeadline"])
 
-	local cbTeleportsEnabled = addon.functions.createCheckboxAce(L["teleportEnabled"], addon.db["teleportFrame"], function(self, _, value)
-		addon.db["teleportFrame"] = value
-		container:ReleaseChildren()
-		addTeleportFrame(container)
-		addon.MythicPlus.functions.toggleFrame()
-	end)
-	groupCore:AddChild(cbTeleportsEnabled)
+    local cbTeleportsEnabled = addon.functions.createCheckboxAce(L["teleportEnabled"], addon.db["teleportFrame"], function(self, _, value)
+        addon.db["teleportFrame"] = value
+        container:ReleaseChildren()
+        addTeleportFrame(container)
+        addon.MythicPlus.functions.toggleFrame()
+    end, L["teleportEnabledDesc"])
+    groupCore:AddChild(cbTeleportsEnabled)
 
-	-- if addon.db["teleportFrame"] then
-	local data = {
-		{
-			text = L["portalHideMissing"],
-			var = "portalHideMissing",
-		},
+    -- World Map Compendium toggle, independent of Teleport Frame
+    local cbWorldMapEnabled = addon.functions.createCheckboxAce(L["teleportsWorldMapEnabled"], addon.db["teleportsWorldMapEnabled"], function(self, _, value)
+        addon.db["teleportsWorldMapEnabled"] = value
+        if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
+    end, L["teleportsWorldMapEnabledDesc"])
+    groupCore:AddChild(cbWorldMapEnabled)
+
+    -- if addon.db["teleportFrame"] then
+    local data = {
+        {
+            text = L["portalHideMissing"],
+            var = "portalHideMissing",
+        },
 		{
 			text = L["portalShowTooltip"],
 			var = "portalShowTooltip",
