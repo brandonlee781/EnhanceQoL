@@ -559,7 +559,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[159902] = { text = "UBRS", cId = { [167] = true } },
 			[163830] = { text = "ENGI", isToy = true, toyID = 112059, isEngineering = true },
 			[171253] = { text = "GARR", isToy = true, toyID = 110560, isHearthstone = true },
-			[189838] = { text = "GARR", isItem = true, itemID = 128353, isHearthstone = true },
+			[189838] = { text = "GARR", isItem = true, itemID = 128353, icon = 134234, isHearthstone = true },
 			[132621] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
 			[132620] = { text = "VALE", isMagePortal = true, faction = FACTION_ALLIANCE },
 			[132627] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_HORDE },
@@ -616,8 +616,8 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[54406] = { text = "DALA", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11 },
 
-			[89597] = { text = "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_HORDE, equipSlot = 19 },
-			[89598] = { text = "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_ALLIANCE, equipSlot = 19 },
+			[89597] = { text = "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_ALLIANCE, equipSlot = 19 },
+			[89598] = { text = "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_HORDE, equipSlot = 19 },
 		},
 	},
 	[40] = {
