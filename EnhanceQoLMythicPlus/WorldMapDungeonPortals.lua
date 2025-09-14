@@ -446,13 +446,17 @@ local function CreateLegendRowButton(parent, entry, width, height)
         GameTooltip:Hide()
     end)
 
-	-- Unknown/disabled visual state
+	-- Unknown visual state: keep hover for tooltip, but block casting
 	if not entry.isKnown then
 		if b.Icon then
 			b.Icon:SetDesaturated(true)
 			b.Icon:SetAlpha(0.5)
 		end
-		b:EnableMouse(false)
+		-- Allow mouse for tooltip/right-click favorite, but prevent left-click actions
+		b:EnableMouse(true)
+		b:SetAttribute("type1", nil)
+		b:SetAttribute("spell1", nil)
+		b:SetAttribute("macrotext1", nil)
 	else
 		if b.Icon then
 			b.Icon:SetDesaturated(false)
