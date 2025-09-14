@@ -43,6 +43,7 @@
   _(seamless; looks and behaves like a Blizzard panel)_
 
 - **Item level upgrades:** Option to show a small arrow on items, that are better than your currently equipped items
+  - On flyouts it compares the actual item with the inventory ones not just your slot (trinket1/2 if one is better, it ignores upgrades on those)
 
 ---
 

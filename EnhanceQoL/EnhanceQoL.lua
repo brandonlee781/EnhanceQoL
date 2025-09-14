@@ -3956,7 +3956,7 @@ local function updateFlyoutButtonInfo(button)
 					button.ItemLevelText:SetTextColor(quality.r, quality.g, quality.b, 1)
 					button.ItemLevelText:Show()
 
-					-- Upgrade arrow for Flyout items
+					-- Upgrade icon for Flyout items: compare against the specific slot's equipped item
 					if addon.db["showUpgradeArrowOnBagItems"] and itemLink then
 						local function getEquipSlotsFor(equipLoc)
 							if equipLoc == "INVTYPE_FINGER" then
@@ -3995,12 +3995,28 @@ local function updateFlyoutButtonInfo(button)
 
 						local invSlot = select(4, C_Item.GetItemInfoInstant(itemLink))
 						local slots = getEquipSlotsFor(invSlot)
+
+						-- Determine the specific target slot for this flyout (e.g., 13 or 14 for trinkets)
+						local flyoutFrame = _G.EquipmentFlyoutFrame
+						local targetSlot = flyoutFrame and flyoutFrame.button and flyoutFrame.button.GetID and flyoutFrame.button:GetID() or nil
+
 						local baseline
 						if slots and #slots > 0 then
-							for _, s in ipairs(slots) do
-								local eqLink = GetInventoryItemLink("player", s)
-								local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
-								if baseline == nil then baseline = eqIlvl else baseline = math.min(baseline, eqIlvl) end
+							local function containsSlot(tbl, val)
+								for i = 1, #tbl do if tbl[i] == val then return true end end
+								return false
+							end
+							if targetSlot and containsSlot(slots, targetSlot) then
+								-- Compare only against the item in the specific flyout's slot
+								local eqLink = GetInventoryItemLink("player", targetSlot)
+								baseline = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
+							else
+								-- Fallback: compare against the worst of the valid slots
+								for _, s in ipairs(slots) do
+									local eqLink = GetInventoryItemLink("player", s)
+									local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
+									if baseline == nil then baseline = eqIlvl else baseline = math.min(baseline, eqIlvl) end
+								end
 							end
 						end
 						local isUpgrade = baseline ~= nil and itemLevel and itemLevel > baseline
