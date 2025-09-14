@@ -610,8 +610,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			[88346] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE },
 			[88347] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
 
-			[80256] = { text = "HS", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
-			[59317] = { text = "HS", isToy = true, toyID = 58487, isHearthstone = true, icon = 133743, map = 125 },
+			[80256] = { text = "DH", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
+			[59317] = { text = "VC", isToy = true, toyID = 43824, isHearthstone = true, icon = 133743, map = 125 },
 
 			[54406] = { text = "HS", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11 },
 
@@ -628,7 +628,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[53140] = { text = "DalN", isClassTP = "MAGE" },
 			[53142] = { text = "DalN", isMagePortal = true },
 
-			[66238] = { text = "DH", isItem = true, itemID = 46874, isHearthstone = true, icon = 135026, equipSlot = 19 },
+			[66238] = { text = "ATG", isItem = true, itemID = 46874, isHearthstone = true, icon = 135026, equipSlot = 19 },
 		},
 	},
 	[30] = {
