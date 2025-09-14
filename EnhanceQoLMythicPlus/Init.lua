@@ -559,6 +559,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[159902] = { text = "UBRS", cId = { [167] = true } },
 			[163830] = { text = "ENGI", isToy = true, toyID = 112059, isEngineering = true },
 			[171253] = { text = "GARR", isToy = true, toyID = 110560, isHearthstone = true },
+			[189838] = { text = "GARR", isItem = true, itemID = 128353, isHearthstone = true },
 			[132621] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
 			[132620] = { text = "VALE", isMagePortal = true, faction = FACTION_ALLIANCE },
 			[132627] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_HORDE },
@@ -648,6 +649,7 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[41234] = { text = "HS", isItem = true, itemID = 32757, isHearthstone = true, icon = 133279, equipSlot = 2 },
 			[28148] = { text = "KARA", isItem = true, itemID = { 22589, 22632, 22630, 22631 }, isHearthstone = true, icon = 133279, equipSlot = 16 },
+			[39937] = { text = "KARA", isItem = true, itemID = 28585, isHearthstone = true, icon = 135226, equipSlot = 8 },
 		},
 	},
 	[20] = {
@@ -696,6 +698,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[556] = { text = "CLASS", isClassTP = "SHAMAN" },
 			[126892] = { text = "CLASS", isClassTP = "MONK" },
 			[265225] = { text = "RACE", isRaceTP = "DarkIronDwarf" },
+			[312372] = { text = "RACE", isRaceTP = "Vulpera" },
 		},
 	},
 	[11] = {

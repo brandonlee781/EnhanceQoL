@@ -33,6 +33,8 @@
   - Boots of the Bay
   - Atiesh, Greatstaff of the Guardian
   - The Brassiest Knuckle
+  - Ruby Slippers
+  - Vulpera racial
 
 - **Merchant Frame:** Option to expand the merchant frame (20 items per page)
 
