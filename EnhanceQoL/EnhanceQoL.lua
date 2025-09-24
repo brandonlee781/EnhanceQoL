@@ -3,7 +3,7 @@
 -- luacheck: globals GenericTraitUI_LoadUI GenericTraitFrame
 -- luacheck: globals CancelDuel DeclineGroup C_PetBattles
 -- luacheck: globals ExpansionLandingPage ExpansionLandingPageMinimapButton ShowGarrisonLandingPage GarrisonLandingPage GarrisonLandingPage_Toggle GarrisonLandingPageMinimapButton CovenantSanctumFrame CovenantSanctumFrame_LoadUI EasyMenu
--- luacheck: globals ActionButton_UpdateRangeIndicator
+-- luacheck: globals ActionButton_UpdateRangeIndicator MAINMENU_BUTTON
 local addonName, addon = ...
 
 local LDB = LibStub("LibDataBroker-1.1")
@@ -2251,10 +2251,46 @@ local function addUIFrame(container)
 			type = "CheckBox",
 			callback = function(self, _, value)
 				addon.db["hideRaidTools"] = value
-				addon.functions.toggleRaidTools(addon.db["hideRaidTools"], _G.CompactRaidFrameManager)
+			addon.functions.toggleRaidTools(addon.db["hideRaidTools"], _G.CompactRaidFrameManager)
+			end,
+		},
+		-- Game Menu scaling toggle
+		{
+			parent = MAINMENU_BUTTON,
+			var = "gameMenuScaleEnabled",
+			text = L["enableGameMenuScale"],
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["gameMenuScaleEnabled"] = value
+				if value then
+					addon.functions.ensureGameMenuHooks()
+					addon.functions.applyGameMenuScale()
+				else
+					if GameMenuFrame then GameMenuFrame:SetScale(1.0) end
+				end
+				container:ReleaseChildren()
+				addUIFrame(container)
 			end,
 		},
 	}
+
+	-- Conditionally add the slider when enabled
+	if addon.db["gameMenuScaleEnabled"] then
+		table.insert(data, {
+			parent = MAINMENU_BUTTON,
+			var = "gameMenuScale",
+			type = "Slider",
+			text = L["gameMenuScale"],
+			value = addon.db["gameMenuScale"],
+			min = 0.5,
+			max = 2.0,
+			step = 0.05,
+			callback = function(_, _, val)
+				addon.db["gameMenuScale"] = val
+				addon.functions.applyGameMenuScale()
+			end,
+		})
+	end
 
 	addon.functions.createWrapperData(data, container, L)
 end
@@ -4756,6 +4792,35 @@ local function initUI()
         if type(addon.db["instanceDifficultyColors"][k]) ~= "table" then addon.db["instanceDifficultyColors"][k] = v end
     end
 	-- addon.functions.InitDBValue("instanceDifficultyUseIcon", false)
+
+	-- Game Menu (ESC) scaling
+	addon.functions.InitDBValue("gameMenuScaleEnabled", false)
+	addon.functions.InitDBValue("gameMenuScale", 1.0)
+
+	local gmHooked = false
+	function addon.functions.applyGameMenuScale()
+		if not GameMenuFrame then return end
+		local scale = 1.0
+		if addon.db and addon.db["gameMenuScaleEnabled"] and addon.db["gameMenuScale"] then scale = addon.db["gameMenuScale"] end
+		GameMenuFrame:SetScale(scale)
+	end
+
+	function addon.functions.ensureGameMenuHooks()
+		if gmHooked then return end
+		if not GameMenuFrame then return end
+		GameMenuFrame:HookScript("OnShow", function()
+			addon.functions.applyGameMenuScale()
+		end)
+		-- Re-apply on size changes to keep proportions consistent
+		GameMenuFrame:HookScript("OnSizeChanged", function()
+			addon.functions.applyGameMenuScale()
+		end)
+		gmHooked = true
+	end
+
+	-- Prepare hooks early (frame is part of base UI)
+	addon.functions.ensureGameMenuHooks()
+	addon.functions.applyGameMenuScale()
 
 	table.insert(addon.variables.unitFrameNames, {
 		name = "MicroMenu",

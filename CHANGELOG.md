@@ -20,6 +20,8 @@
 
 - **Health Macro:** Option to use **combat potions** in combat
 
+-- **GameMenu size:** Option to scale the Game Menu
+
 ### 🔄 Changed
 
 - **Declutter:** Removed some old and obsolete options, changed the position and category of some options and made it more "übersichtlich?"

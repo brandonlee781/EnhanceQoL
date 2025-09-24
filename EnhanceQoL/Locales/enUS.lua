@@ -236,6 +236,10 @@ L["useMinimapButtonBinIcon"] = "Use a Minimap button for the sink"
 L["useMinimapButtonBinMouseover"] = "Show a movable frame for the button sink with mouseover"
 L["lockMinimapButtonBin"] = "Lock the button sink frame"
 
+-- Game Menu
+L["enableGameMenuScale"] = "Enable Game Menu scaling"
+L["gameMenuScale"] = "Game Menu scale"
+
 L["UnitFrameHideExplain"] = "Hide the element and only show it on mouseover"
 L["chatFrameFadeEnabled"] = "Enable chat fading"
 L["chatFrameFadeTimeVisibleText"] = "Text remains visible for"
