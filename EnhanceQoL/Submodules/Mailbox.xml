@@ -25,6 +25,7 @@
         </Anchors>
         <Scripts>
             <OnLoad>EQOLMailboxFrame_OnLoad(self);</OnLoad>
+            <OnShow>if EQOLMailboxFrame_OnShow then EQOLMailboxFrame_OnShow(self); end</OnShow>
             <OnMouseDown>
                 if self:IsMovable() then self:StartMoving(); end
                 EQOLMailboxFrameSearchBox:ClearFocus();
