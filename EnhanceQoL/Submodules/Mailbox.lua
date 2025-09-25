@@ -6,6 +6,7 @@ else
   error(parentAddonName .. " is not loaded")
 end
 
+local L = addon.L
 local MU = MenuUtil
 
 local Mailbox = addon.Mailbox or {}
@@ -20,9 +21,11 @@ Mailbox.rows = Mailbox.rows or {}
 Mailbox.filtered = Mailbox.filtered or {}
 Mailbox.sortKey = Mailbox.sortKey or "name"
 Mailbox.sortAsc = Mailbox.sortAsc ~= false -- default true
+Mailbox.seeded = Mailbox.seeded or false
 
 local ROW_HEIGHT = 20
-local widths = { 150, 100 } -- name, server (sum=250)
+-- Effective content width equals 222 (see XML). Allocate columns conservatively to avoid clipping
+local widths = { 130, 92 } -- name, server (sum=222)
 
 local function ensureDB()
   if not addon or not addon.db then return end
@@ -145,6 +148,13 @@ function Mailbox:UpdateVisibility()
   local shouldShow = MailFrame:IsShown() and (SendMailFrame and SendMailFrame:IsShown())
   if shouldShow then
     self.frame:Show()
+    -- Match MailFrame height to avoid awkward gaps
+    if MailFrame and self.frame then self.frame:SetHeight(MailFrame:GetHeight() or 430) end
+    if MailFrame and self.frame then self.frame:SetFrameStrata(MailFrame:GetFrameStrata() or "MEDIUM") end
+    -- Make sure we have visible rows once the frame has a real height
+    if not self.rows or #self.rows == 0 then
+      if self.EnsureRows then self:EnsureRows() end
+    end
     self:RefreshList(true)
   else
     self.frame:Hide()
@@ -211,7 +221,31 @@ end
 
 -- Build filtered + sorted table from saved contacts
 local function BuildFiltered()
-  if not addon or not addon.db or not addon.db.mailboxContacts then
+  if not addon or not addon.db then
+    wipe(Mailbox.filtered)
+    return
+  end
+  -- If contacts are empty but we have moneyTracker info, import once
+  if addon.db.mailboxContacts == nil then addon.db.mailboxContacts = {} end
+  if not Mailbox.seeded and next(addon.db.mailboxContacts) == nil and type(addon.db.moneyTracker) == 'table' then
+    for _, info in pairs(addon.db.moneyTracker) do
+      if type(info) == 'table' and info.name then
+        local name = info.name
+        local realm = info.realm or GetRealmName() or ""
+        local class = info.class or select(2, UnitClass("player"))
+        local r, g, b = getClassColor(class)
+        local key = string.format("%s-%s", name, realm)
+        addon.db.mailboxContacts[key] = {
+          name = name,
+          realm = realm,
+          class = class,
+          color = { r = r, g = g, b = b },
+        }
+      end
+    end
+    Mailbox.seeded = true
+  end
+  if not addon.db.mailboxContacts then
     wipe(Mailbox.filtered)
     return
   end
@@ -276,7 +310,8 @@ function Mailbox:UpdateRows()
       row:Hide()
     end
   end
-  HybridScrollFrame_Update(self.scrollFrame, #self.filtered * ROW_HEIGHT, ROW_HEIGHT)
+  local displayed = self.scrollFrame:GetHeight() or (10 * ROW_HEIGHT)
+  HybridScrollFrame_Update(self.scrollFrame, #self.filtered * ROW_HEIGHT, displayed)
 end
 
 function Mailbox:RefreshList(rebuild)
@@ -293,10 +328,21 @@ function EQOLMailboxFrame_OnLoad(frame)
   Mailbox.scrollFrame = _G[frame:GetName() .. "ScrollFrame"]
   Mailbox.scrollFrame.scrollBar = _G[frame:GetName() .. "ScrollFrameScrollBar"]
 
+  -- Title and search label (like Ignore frame)
+  frame:SetFrameStrata("DIALOG")
+  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  frame.title:SetPoint("TOP", frame, "TOP", 0, -6)
+  frame.title:SetText((L and L["MailboxWindowTitle"]) or "Address Book")
+  frame.searchLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  if Mailbox.searchBox then
+    frame.searchLabel:SetPoint("RIGHT", Mailbox.searchBox, "LEFT", -5, 0)
+    frame.searchLabel:SetText(SEARCH .. ":")
+  end
+
   -- Column headers
   local columns = {
-    { key = "name",  text = NAME,               width = widths[1], idx = 1 },
-    { key = "realm", text = FRIENDS_LIST_REALM, width = widths[2], idx = 2 },
+    { key = "name",  text = NAME,                                width = widths[1], idx = 1 },
+    { key = "realm", text = (FRIENDS_LIST_REALM or "Realm"):gsub(":%s*$",""), width = widths[2], idx = 2 },
   }
   local c = 1
   for _, col in ipairs(columns) do
@@ -321,14 +367,18 @@ function EQOLMailboxFrame_OnLoad(frame)
     c = c + 1
   end
 
-  -- Create row buttons
-  HybridScrollFrame_CreateButtons(Mailbox.scrollFrame, "EQOLMailboxRowTemplate", 4, -4)
-  Mailbox.rows = Mailbox.scrollFrame.buttons or {}
-  for _, row in ipairs(Mailbox.rows) do
-    Mixin(row, RowMixin)
-    row:OnAcquired()
+  function Mailbox:EnsureRows()
+    if not self.scrollFrame then return end
+    if self.rows and #self.rows > 0 then return end
+    HybridScrollFrame_CreateButtons(self.scrollFrame, "EQOLMailboxRowTemplate", 4, -4)
+    self.rows = self.scrollFrame.buttons or {}
+    for _, row in ipairs(self.rows) do
+      Mixin(row, RowMixin)
+      row:OnAcquired()
+    end
+    self.scrollFrame.update = function() self:UpdateRows() end
   end
-  Mailbox.scrollFrame.update = function() Mailbox:UpdateRows() end
+  Mailbox:EnsureRows()
 
   -- Search box handler
   if Mailbox.searchBox then
@@ -341,6 +391,13 @@ function EQOLMailboxFrame_OnLoad(frame)
 
   -- Initial build
   BuildFiltered()
+  -- Ensure rows even if OnLoad sizing was 0
+  if not Mailbox.rows or #Mailbox.rows == 0 then
+    C_Timer.After(0, function()
+      Mailbox:EnsureRows()
+      Mailbox:UpdateRows()
+    end)
+  end
   Mailbox:UpdateRows()
   Mailbox:UpdateVisibility()
 end

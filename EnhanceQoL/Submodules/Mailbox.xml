@@ -4,7 +4,8 @@
 
     <!-- Hoverable row template for mailbox list -->
     <Button name="EQOLMailboxRowTemplate" virtual="true">
-        <Size x="250" y="20"/>
+        <!-- Effective content width equals frame width (260) - left margin (10) - scrollbar (28) = 222 -->
+        <Size x="222" y="20"/>
         <Scripts>
             <OnLoad>
                 self:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight");
@@ -16,20 +17,27 @@
         </Scripts>
     </Button>
 
-    <!-- Panel anchored to the right of the MailFrame -->
-    <Frame name="EQOLMailboxFrame" inherits="InsetFrameTemplate3" parent="MailFrame" hidden="true" clampedToScreen="true">
+    <!-- Panel with header + close button, anchored to the right of the MailFrame -->
+    <Frame name="EQOLMailboxFrame" inherits="BasicFrameTemplateWithInset" parent="MailFrame" hidden="true" clampedToScreen="true" enableMouse="true">
         <Size x="260" y="430"/>
         <Anchors>
             <Anchor point="TOPLEFT" relativePoint="TOPRIGHT" x="6" y="0"/>
         </Anchors>
         <Scripts>
             <OnLoad>EQOLMailboxFrame_OnLoad(self);</OnLoad>
+            <OnMouseDown>
+                if self:IsMovable() then self:StartMoving(); end
+                EQOLMailboxFrameSearchBox:ClearFocus();
+            </OnMouseDown>
+            <OnMouseUp>
+                self:StopMovingOrSizing();
+            </OnMouseUp>
         </Scripts>
         <Frames>
-            <EditBox name="$parentSearchBox" inherits="InputBoxTemplate">
-                <Size x="220" y="20"/>
+            <EditBox name="$parentSearchBox" inherits="InputBoxTemplate, AutoCompleteEditBoxTemplate">
+                <Size x="150" y="20"/>
                 <Anchors>
-                    <Anchor point="TOPLEFT" x="10" y="-10"/>
+                    <Anchor point="TOPRIGHT" x="-40" y="-33"/>
                 </Anchors>
                 <Scripts>
                     <OnLoad>self:SetAutoFocus(false);</OnLoad>
@@ -38,8 +46,8 @@
             </EditBox>
             <Frame name="$parentHeader" inherits="BackdropTemplate">
                 <Anchors>
-                    <Anchor point="TOPLEFT" x="10" y="-38"/>
-                    <Anchor point="TOPRIGHT" x="-28" y="-38"/>
+                    <Anchor point="TOPLEFT" x="10" y="-58"/>
+                    <Anchor point="TOPRIGHT" x="-28" y="-58"/>
                 </Anchors>
                 <Frames>
                     <Button name="$parentCol1" inherits="WhoFrameColumnHeaderTemplate">
@@ -54,12 +62,14 @@
                     </Button>
                     <!-- 2 columns only: name + server -->
                 </Frames>
-                <Size x="250" y="20"/>
+                <Size x="222" y="20"/>
             </Frame>
             <ScrollFrame name="$parentScrollFrame" inherits="HybridScrollFrameTemplate">
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="$parentHeader" relativePoint="BOTTOMLEFT" x="0" y="-2"/>
-                    <Anchor point="BOTTOMRIGHT" x="-28" y="10"/>
+                    <Anchor point="TOPRIGHT" relativeTo="$parentHeader" relativePoint="BOTTOMRIGHT" x="0" y="-2"/>
+                    <Anchor point="BOTTOMLEFT" x="10" y="10"/>
+                    <Anchor point="BOTTOMRIGHT" x="-30" y="10"/>
                 </Anchors>
                 <Frames>
                     <Slider name="$parentScrollBar" inherits="HybridScrollBarTemplate">
