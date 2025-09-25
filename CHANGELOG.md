@@ -19,6 +19,9 @@
   - On flyouts, the comparison uses the **actual items** in your inventory (e.g., evaluates both trinket slots), not just the equipped slot
 
 - **Health Macro:** Option to use **combat potions** in combat
+- **Health Macro:** Custom priority order to allow either _custom spells_, _potions_, _healthstones_ or _combat potions_ to be used
+
+- **Mailbox Address book:** Option to add an address book to the send mail frame which consists of your alt chars
 
 - **GameMenu size:** Option to scale the Game Menu
 
@@ -26,6 +29,9 @@
 
 - **Minimap hiding:** Option to hide some icons on the minimap
 - **Minimap border:** Option to add a border around the minimap (only in square mode)
+
+- **Bossframe Health:** Choose to show Health current, percent or both all the time
+  - Only works when you don't use the CVar for statusText = 1 (not always show the numbers on all Unit Frames)
 
 ### 🔄 Changed
 

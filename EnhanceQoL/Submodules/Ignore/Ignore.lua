@@ -399,6 +399,7 @@ function EQOLIgnoreFrame_OnLoad(frame)
 	Ignore.scrollFrame.scrollBar = _G[fn .. "ScrollFrameScrollBar"]
 	Ignore.removeBtn = _G[fn .. "RemoveButton"]
 	Ignore.removeBtn:SetText(REMOVE)
+	Ignore.removeBtn:Hide()
 
 	local listWidth = 0
 	for _, w in ipairs(widths) do
