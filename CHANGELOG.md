@@ -9,6 +9,11 @@
 - **Native look & feel:** Uses Blizzard’s layout, scrolling and categories (Favorites, Home, expansions) for a seamless experience.
 - **Cleaner & faster:** Fewer custom frames, lower taint risk, and better compatibility with other UI mods/skins.
 
+### 🧭 Major change — Options cleanup
+
+- **Removed Mythic+** and implemented it into the basic **General** panel
+- **Completely restructur:** Removed obsolete options, regrouped categories, and streamlined labels for a clearer configuration.
+
 ### ✨ Added
 
 - **Teleport Compendium (data):** Added **30** missing teleport spells/items.
@@ -28,14 +33,11 @@
 - **Boss Frame Health Text:** Always show **percent**, **value**, or **both** on boss frames **independent** of the global CVar.  
   ▸ Especially useful if you keep `statusText = 0`. If you set `statusText = 1` (Blizzard “always show”), this is usually redundant.
 
-### 🔄 Changed
-
-- **Settings Cleanup:** Removed obsolete options, regrouped categories, and streamlined labels for a clearer configuration.
-
 ### 🐛 Fixed
 
 - **Health Macro:** _Invigorating Healing Potion_ used the wrong healing amount — corrected.
 - **Localization:** Fixed several dialogs with missing localized strings.
+- **Bag filter:** Sometimes the bag filter was empty
 
 ---
 
