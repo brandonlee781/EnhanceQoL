@@ -1288,8 +1288,8 @@ function addon.MythicPlus.functions.refreshTalentFrameIfOpen()
 end
 
 -- Register Mythic+ panels under General -> Combat & Dungeons -> Dungeon
-addon.variables.statusTable.groups["general\001combat"] = true
-addon.variables.statusTable.groups["general\001combat\001dungeon"] = true
+-- addon.variables.statusTable.groups["general\001combat"] = true
+-- addon.variables.statusTable.groups["general\001combat\001dungeon"] = true
 
 local mpChildren = {
     { value = "keystone", text = L["Keystone"] },
