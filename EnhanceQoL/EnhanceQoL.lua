@@ -622,45 +622,6 @@ end
 
 local itemCount = 0
 local ilvlSum = 0
-local function removeInspectElements()
-	if nil == InspectPaperDollFrame then return end
-	itemCount = 0
-	ilvlSum = 0
-	if InspectPaperDollFrame.ilvl then InspectPaperDollFrame.ilvl:SetText("") end
-	local itemSlotsInspectList = {
-		[1] = InspectHeadSlot,
-		[2] = InspectNeckSlot,
-		[3] = InspectShoulderSlot,
-		[15] = InspectBackSlot,
-		[5] = InspectChestSlot,
-		[9] = InspectWristSlot,
-		[10] = InspectHandsSlot,
-		[6] = InspectWaistSlot,
-		[7] = InspectLegsSlot,
-		[8] = InspectFeetSlot,
-		[11] = InspectFinger0Slot,
-		[12] = InspectFinger1Slot,
-		[13] = InspectTrinket0Slot,
-		[14] = InspectTrinket1Slot,
-		[16] = InspectMainHandSlot,
-		[17] = InspectSecondaryHandSlot,
-	}
-
-	for key, element in pairs(itemSlotsInspectList) do
-		if element.ilvl then element.ilvl:SetFormattedText("") end
-		if element.ilvlBackground then element.ilvlBackground:Hide() end
-		if element.enchant then element.enchant:SetText("") end
-		if element.borderGradient then element.borderGradient:Hide() end
-		if element.gems and #element.gems > 0 then
-			for i = 1, #element.gems do
-				element.gems[i]:UnregisterAllEvents()
-				element.gems[i]:SetScript("OnUpdate", nil)
-				element.gems[i]:Hide()
-			end
-		end
-	end
-	collectgarbage("collect")
-end
 
 local tooltipCache = {}
 
@@ -2226,6 +2187,7 @@ local function addDungeonFrame(container, d)
 	scroll:AddChild(wrapper)
 
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	groupCore:SetTitle(LOOKING_FOR_DUNGEON_PVEFRAME)
 	wrapper:AddChild(groupCore)
 
 	local data = {
@@ -2425,6 +2387,21 @@ local function addUIFrame(container)
 			callback = function(self, _, value)
 				addon.db["hideZoneText"] = value
 				addon.functions.toggleZoneText(addon.db["hideZoneText"])
+			end,
+		},
+		{
+			parent = "",
+			var = "hideOrderHallBar",
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["hideOrderHallBar"] = value
+				if OrderHallCommandBar then
+					if value then
+						OrderHallCommandBar:Hide()
+					else
+						OrderHallCommandBar:Show()
+					end
+				end
 			end,
 		},
 		{
@@ -2793,36 +2770,13 @@ local function addCharacterFrame(container)
 			end,
 		},
 		{
+			-- TODO remove after 01.01.2026 (or when midnight drops earlier)
 			parent = INFO,
 			var = "showCloakUpgradeButton",
 			type = "CheckBox",
 			callback = function(self, _, value)
 				addon.db["showCloakUpgradeButton"] = value
 				if addon.functions.updateCloakUpgradeButton then addon.functions.updateCloakUpgradeButton() end
-			end,
-		},
-		{
-			parent = INFO,
-			var = "hideOrderHallBar",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["hideOrderHallBar"] = value
-				if OrderHallCommandBar then
-					if value then
-						OrderHallCommandBar:Hide()
-					else
-						OrderHallCommandBar:Show()
-					end
-				end
-			end,
-		},
-		{
-			parent = INSPECT,
-			var = "showInfoOnInspectFrame",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["showInfoOnInspectFrame"] = value
-				removeInspectElements()
 			end,
 		},
 		{
@@ -5929,7 +5883,6 @@ local function initCharacter()
 	addon.functions.InitDBValue("bagUpgradeIconPosition", "BOTTOMRIGHT")
 	addon.functions.InitDBValue("charIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
-	addon.functions.InitDBValue("showInfoOnInspectFrame", false)
 	addon.functions.InitDBValue("showGemsOnCharframe", false)
 	addon.functions.InitDBValue("showGemsTooltipOnCharframe", false)
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
@@ -6924,7 +6877,7 @@ local eventHandlers = {
 		end
 	end,
 	["INSPECT_READY"] = function(arg1)
-		if addon.db["showInfoOnInspectFrame"] then onInspect(arg1) end
+		if addon.db["showIlvlOnCharframe"] or addon.db["showGemsOnCharframe"] or addon.db["showEnchantOnCharframe"] then onInspect(arg1) end
 	end,
 	["ITEM_INTERACTION_ITEM_SELECTION_UPDATED"] = function(arg1)
 		if not ItemInteractionFrame or not ItemInteractionFrame:IsShown() then return end

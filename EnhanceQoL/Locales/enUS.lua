@@ -101,7 +101,6 @@ L["showDurabilityOnCharframe"] = "Display Durability on Character Equipment Fram
 L["showCloakUpgradeButton"] = "Display cloak upgrade button"
 L["cloakUpgradeTooltip"] = "Open cloak skill upgrades"
 L["hideOrderHallBar"] = "Hide Order Hall Command Bar"
-L["showInfoOnInspectFrame"] = "Show additional information on the Inspect Frame"
 L["MissingEnchant"] = "Enchant"
 L["hideHitIndicatorPlayer"] = "Hide floating combat text (damage and healing) over your character"
 L["hideHitIndicatorPet"] = "Hide floating combat text (damage and healing) over your pet"
