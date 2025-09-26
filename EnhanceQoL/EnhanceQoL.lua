@@ -1151,17 +1151,6 @@ local function addChatFrame(container)
 
 	local data = {
 		{
-			var = "chatFrameFadeEnabled",
-			text = L["chatFrameFadeEnabled"],
-			type = "CheckBox",
-			func = function(self, _, value)
-				addon.db["chatFrameFadeEnabled"] = value
-				if ChatFrame1 then ChatFrame1:SetFading(value) end
-				container:ReleaseChildren()
-				addChatFrame(container)
-			end,
-		},
-		{
 			var = "chatHideLearnUnlearn",
 			text = L["chatHideLearnUnlearn"],
 			type = "CheckBox",
@@ -1184,6 +1173,32 @@ local function addChatFrame(container)
 		groupCore:AddChild(cbElement)
 	end
 
+	local groupFade = addon.functions.createContainer("InlineGroup", "List")
+	wrapper:AddChild(groupFade)
+
+	local data = {
+		{
+			var = "chatFrameFadeEnabled",
+			text = L["chatFrameFadeEnabled"],
+			type = "CheckBox",
+			func = function(self, _, value)
+				addon.db["chatFrameFadeEnabled"] = value
+				if ChatFrame1 then ChatFrame1:SetFading(value) end
+				container:ReleaseChildren()
+				addChatFrame(container)
+			end,
+		},
+	}
+
+	table.sort(data, function(a, b) return a.text < b.text end)
+
+	for _, cbData in ipairs(data) do
+		local desc
+		if cbData.desc then desc = cbData.desc end
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+		groupFade:AddChild(cbElement)
+	end
+
 	if addon.db["chatFrameFadeEnabled"] then
 		local sliderTimeVisible = addon.functions.createSliderAce(
 			L["chatFrameFadeTimeVisibleText"] .. ": " .. addon.db["chatFrameFadeTimeVisible"] .. "s",
@@ -1197,9 +1212,9 @@ local function addChatFrame(container)
 				self:SetLabel(L["chatFrameFadeTimeVisibleText"] .. ": " .. value2 .. "s")
 			end
 		)
-		groupCore:AddChild(sliderTimeVisible)
+		groupFade:AddChild(sliderTimeVisible)
 
-		groupCore:AddChild(addon.functions.createSpacerAce())
+		groupFade:AddChild(addon.functions.createSpacerAce())
 
 		local sliderFadeDuration = addon.functions.createSliderAce(
 			L["chatFrameFadeDurationText"] .. ": " .. addon.db["chatFrameFadeDuration"] .. "s",
@@ -1213,11 +1228,12 @@ local function addChatFrame(container)
 				self:SetLabel(L["chatFrameFadeDurationText"] .. ": " .. value2 .. "s")
 			end
 		)
-		groupCore:AddChild(sliderFadeDuration)
+		groupFade:AddChild(sliderFadeDuration)
 	end
 
 	local groupCoreSetting = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCoreSetting)
+
 	data = {
 		{
 			var = "enableChatIM",
@@ -1234,7 +1250,18 @@ local function addChatFrame(container)
 		},
 	}
 
+	for _, cbData in ipairs(data) do
+		local desc
+		if cbData.desc then desc = cbData.desc end
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+		groupCoreSetting:AddChild(cbElement)
+	end
+
 	if addon.db["enableChatIM"] then
+		local groupCoreSettingSub = addon.functions.createContainer("InlineGroup", "List")
+		groupCoreSetting:AddChild(groupCoreSettingSub)
+
+		data = {}
 		table.insert(data, {
 			var = "enableChatIMFade",
 			text = L["enableChatIMFade"],
@@ -1286,18 +1313,16 @@ local function addChatFrame(container)
 			desc = L["chatIMUseAnimationDesc"],
 			func = function(self, _, value) addon.db["chatIMUseAnimation"] = value end,
 		})
-	end
-	table.sort(data, function(a, b) return a.text < b.text end)
+		table.sort(data, function(a, b) return a.text < b.text end)
 
-	for _, cbData in ipairs(data) do
-		local desc
-		if cbData.desc then desc = cbData.desc end
-		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
-		groupCoreSetting:AddChild(cbElement)
-	end
+		for _, cbData in ipairs(data) do
+			local desc
+			if cbData.desc then desc = cbData.desc end
+			local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+			groupCoreSettingSub:AddChild(cbElement)
+		end
 
-	if addon.db["enableChatIM"] then
-		groupCoreSetting:AddChild(addon.functions.createSpacerAce())
+		groupCoreSettingSub:AddChild(addon.functions.createSpacerAce())
 
 		if addon.db["chatIMUseCustomSound"] then
 			local soundList = {}
@@ -1312,8 +1337,8 @@ local function addChatFrame(container)
 				if file then PlaySoundFile(file, "Master") end
 			end)
 			dropSound:SetValue(addon.db["chatIMCustomSoundFile"])
-			groupCoreSetting:AddChild(dropSound)
-			groupCoreSetting:AddChild(addon.functions.createSpacerAce())
+			groupCoreSettingSub:AddChild(dropSound)
+			groupCoreSettingSub:AddChild(addon.functions.createSpacerAce())
 		end
 
 		local sliderHistory = addon.functions.createSliderAce(L["ChatIMHistoryLimit"] .. ": " .. addon.db["chatIMMaxHistory"], addon.db["chatIMMaxHistory"], 0, 1000, 1, function(self, _, value)
@@ -1321,7 +1346,7 @@ local function addChatFrame(container)
 			if addon.ChatIM and addon.ChatIM.SetMaxHistoryLines then addon.ChatIM:SetMaxHistoryLines(value) end
 			self:SetLabel(L["ChatIMHistoryLimit"] .. ": " .. value)
 		end)
-		groupCoreSetting:AddChild(sliderHistory)
+		groupCoreSettingSub:AddChild(sliderHistory)
 
 		local historyList = {}
 		for name in pairs(EnhanceQoL_IMHistory or {}) do
@@ -1371,17 +1396,17 @@ local function addChatFrame(container)
 			StaticPopup_Show("EQOL_CLEAR_IM_HISTORY")
 		end)
 
-		groupCoreSetting:AddChild(dropHistory)
-		groupCoreSetting:AddChild(btnDelete)
-		groupCoreSetting:AddChild(btnClear)
+		groupCoreSettingSub:AddChild(dropHistory)
+		groupCoreSettingSub:AddChild(btnDelete)
+		groupCoreSettingSub:AddChild(btnClear)
 
-		groupCoreSetting:AddChild(addon.functions.createSpacerAce())
+		groupCoreSettingSub:AddChild(addon.functions.createSpacerAce())
 
 		local hint = AceGUI:Create("Label")
 		hint:SetFullWidth(true)
 		hint:SetFont(addon.variables.defaultFont, 14, "OUTLINE")
 		hint:SetText("|cffffd700" .. L["RightClickCloseTab"] .. "|r ")
-		groupCoreSetting:AddChild(hint)
+		groupCoreSettingSub:AddChild(hint)
 	end
 	scroll:DoLayout()
 end
@@ -2304,6 +2329,7 @@ local function addCVarFrame(container, d)
 	container:AddChild(wrapper)
 
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	groupCore:SetTitle(L["CVar"])
 	wrapper:AddChild(groupCore)
 
 	local data = addon.variables.cvarOptions
@@ -3045,14 +3071,6 @@ local function getMiscOptions()
 			desc = L["confirmSocketReplaceDesc"],
 			callback = function(self, _, value) addon.db["confirmSocketReplace"] = value end,
 		},
-
-		{
-			parent = "",
-			var = "autoCancelCinematic",
-			type = "CheckBox",
-			desc = L["autoCancelCinematicDesc"] .. "\n" .. L["interruptWithShift"],
-			callback = function(self, _, value) addon.db["autoCancelCinematic"] = value end,
-		},
 	}
 	return data
 end
@@ -3461,6 +3479,14 @@ local function addQuestFrame(container, d)
 			text = L["questWowheadLink"],
 			type = "CheckBox",
 			callback = function(self, _, value) addon.db[self.var] = value end,
+		},
+		{
+			parent = "",
+			var = "autoCancelCinematic",
+			text = L["autoCancelCinematic"],
+			type = "CheckBox",
+			desc = L["autoCancelCinematicDesc"] .. "\n" .. L["interruptWithShift"],
+			callback = function(self, _, value) addon.db["autoCancelCinematic"] = value end,
 		},
 	}
 	table.sort(groupData, function(a, b)
@@ -6187,7 +6213,6 @@ local function CreateUI()
 				value = "ui",
 				text = L["UIInput"],
 				children = {
-					{ value = "core", text = BUG_CATEGORY5 },
 					{ value = "actionbar", text = ACTIONBARS_LABEL },
 					{ value = "chatframe", text = HUD_EDIT_MODE_CHAT_FRAME_LABEL },
 					{ value = "unitframe", text = UNITFRAME_LABEL },
@@ -6195,15 +6220,12 @@ local function CreateUI()
 				},
 			},
 			-- Quests & Social
-			{ value = "quest", text = L["Quest"], children = { { value = "cinematics", text = CINEMATICS } } },
+			{ value = "quest", text = L["Quest"] },
 			{ value = "social", text = L["Social"] },
 			-- System
 			{
 				value = "system",
 				text = L["System"],
-				children = {
-					{ value = "cvar", text = L["CVar"] },
-				},
 			},
 		},
 	})
@@ -6284,8 +6306,6 @@ local function CreateUI()
 			addon.MythicPlus.functions.treeCallback(container, group)
 		-- UI & Input
 		elseif group == "general\001ui" then
-			addCategoryIntro(container, "UIInput", "UIInputIntro")
-		elseif group == "general\001ui\001core" then
 			addUIFrame(container)
 		elseif group == "general\001ui\001actionbar" then
 			addActionBarFrame(container)
@@ -6298,12 +6318,10 @@ local function CreateUI()
 		-- Quests & Social
 		elseif group == "general\001quest" then
 			addQuestFrame(container, true) -- Ruft die Funktion zum Hinzufügen der Quest-Optionen auf
-		elseif group == "general\001quest\001cinematics" then
-			addMiscSubsetFrame(container, { "autoCancelCinematic" })
 		elseif group == "general\001social" then
 			addSocialFrame(container)
 		-- System
-		elseif group == "general\001system\001cvar" then
+		elseif group == "general\001system" then
 			addCVarFrame(container, true)
 		elseif group == "profiles" then
 			local sub = AceGUI:Create("SimpleGroup")
