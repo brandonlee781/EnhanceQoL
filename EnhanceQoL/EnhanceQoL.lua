@@ -2346,50 +2346,7 @@ local function addCVarFrame(container, d)
 	end
 end
 
-local function addPartyFrame(container)
-	local data = {
-		{
-			parent = "",
-			var = "autoAcceptGroupInvite",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["autoAcceptGroupInvite"] = value
-				container:ReleaseChildren()
-				addPartyFrame(container)
-			end,
-		},
-		{
-			parent = "",
-			var = "showLeaderIconRaidFrame",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["showLeaderIconRaidFrame"] = value
-				if value == true then
-					setLeaderIcon()
-				else
-					removeLeaderIcon()
-				end
-			end,
-		},
-	}
-
-	if addon.db["autoAcceptGroupInvite"] == true then
-		table.insert(data, {
-			parent = L["autoAcceptGroupInviteOptions"],
-			var = "autoAcceptGroupInviteGuildOnly",
-			type = "CheckBox",
-			callback = function(self, _, value) addon.db["autoAcceptGroupInviteGuildOnly"] = value end,
-		})
-		table.insert(data, {
-			parent = L["autoAcceptGroupInviteOptions"],
-			var = "autoAcceptGroupInviteFriendOnly",
-			type = "CheckBox",
-			callback = function(self, _, value) addon.db["autoAcceptGroupInviteFriendOnly"] = value end,
-		})
-	end
-
-	addon.functions.createWrapperData(data, container, L)
-end
+-- removed: addPartyFrame (party settings relocated to Social/UI sections)
 
 local function addUIFrame(container)
 	local data = {
@@ -6212,8 +6169,6 @@ local function CreateUI()
 			{
 				value = "combat",
 				text = L["CombatDungeons"],
-				children = {
-				},
 			},
 			-- Map & Navigation
 			{
@@ -6302,7 +6257,7 @@ local function CreateUI()
 			addMoneyFrame(container)
 		-- Combat & Dungeons
 		elseif group == "general\001combat" then
-			addCategoryIntro(container, "CombatDungeons", "CombatDungeonsIntro")
+			addDungeonFrame(container)
 		-- Forward former Dungeon (Mythic+) subpages directly under Combat
 		elseif string.sub(group, 1, string.len("general\001combat\001")) == "general\001combat\001" then
 			addon.MythicPlus.functions.treeCallback(container, group)
@@ -6379,7 +6334,7 @@ local function CreateUI()
 	frame:AddChild(addon.treeGroup)
 
 	-- Select a meaningful default page
-	addon.treeGroup:SelectByPath("general\001items")
+	addon.treeGroup:SelectByPath("general")
 
 	-- Datenobjekt fr den Minimap-Button
 	local EnhanceQoLLDB = LDB:NewDataObject("EnhanceQoL", {
