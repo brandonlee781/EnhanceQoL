@@ -2557,14 +2557,16 @@ local function addBagFrame(container)
 		},
 		{
 			parent = BAGSLOT,
-			var = "enableMoneyTracker",
-			text = L["enableMoneyTracker"],
-			desc = L["enableMoneyTrackerDesc"],
+			var = "fadeBagQualityIcons",
+			text = L["fadeBagQualityIcons"],
 			type = "CheckBox",
 			callback = function(self, _, value)
-				addon.db["enableMoneyTracker"] = value
-				container:ReleaseChildren()
-				addBagFrame(container)
+				addon.db["fadeBagQualityIcons"] = value
+				for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+					if frame:IsShown() then addon.functions.updateBags(frame) end
+				end
+				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
 			end,
 		},
 		{
@@ -2622,20 +2624,7 @@ local function addBagFrame(container)
 				addBagFrame(container)
 			end,
 		},
-		{
-			parent = BAGSLOT,
-			var = "fadeBagQualityIcons",
-			text = L["fadeBagQualityIcons"],
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["fadeBagQualityIcons"] = value
-				for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-					if frame:IsShown() then addon.functions.updateBags(frame) end
-				end
-				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
-				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
-			end,
-		},
+		-- moved Money Tracker to Vendors & Economy → Money
 	}
 	table.sort(data, function(a, b)
 		local textA = a.var
@@ -2695,77 +2684,62 @@ local function addBagFrame(container)
 		dropUpPos:SetRelativeWidth(0.4)
 		groupCore:AddChild(dropUpPos)
 	end
+end
+
+-- Vendors & Economy: Money options
+local function addMoneyFrame(container)
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	container:AddChild(wrapper)
+
+	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	wrapper:AddChild(groupCore)
+
+	local cbEnable = addon.functions.createCheckboxAce(L["enableMoneyTracker"], addon.db["enableMoneyTracker"], function(_, _, v)
+		addon.db["enableMoneyTracker"] = v
+		container:ReleaseChildren()
+		addMoneyFrame(container)
+	end, L["enableMoneyTrackerDesc"])
+	groupCore:AddChild(cbEnable)
 
 	if addon.db["enableMoneyTracker"] then
 		local groupMoney = addon.functions.createContainer("InlineGroup", "List")
 		groupMoney:SetTitle(MONEY)
 		wrapper:AddChild(groupMoney)
 
-		local data = {
-			{
-				var = "showOnlyGoldOnMoney",
-				text = L["showOnlyGoldOnMoney"],
-				type = "CheckBox",
-				callback = function(self, _, value) addon.db["showOnlyGoldOnMoney"] = value end,
-			},
-		}
-		table.sort(data, function(a, b)
-			local textA = a.var
-			local textB = b.var
-			if a.text then
-				textA = a.text
-			else
-				textA = L[a.var]
-			end
-			if b.text then
-				textB = b.text
-			else
-				textB = L[b.var]
-			end
-			return textA < textB
-		end)
-		for _, checkboxData in ipairs(data) do
-			local desc
-			if checkboxData.desc then desc = checkboxData.desc end
-			local cbautoChooseQuest = addon.functions.createCheckboxAce(checkboxData.text, addon.db[checkboxData.var], checkboxData.callback, desc)
-			groupMoney:AddChild(cbautoChooseQuest)
-		end
+		local cbGoldOnly = addon.functions.createCheckboxAce(L["showOnlyGoldOnMoney"], addon.db["showOnlyGoldOnMoney"], function(_, _, v) addon.db["showOnlyGoldOnMoney"] = v end)
+		groupMoney:AddChild(cbGoldOnly)
 
+		-- Character removal list (moved from Bags)
 		local tList = {}
-
-		for i, v in pairs(addon.db["moneyTracker"]) do
-			if i ~= UnitGUID("player") then
+		for guid, v in pairs(addon.db["moneyTracker"]) do
+			if guid ~= UnitGUID("player") then
 				local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
-				local displayName
-				displayName = string.format("|cff%02x%02x%02x%s-%s|r", col.r * 255, col.g * 255, col.b * 255, v.name, v.realm)
-				tList[i] = displayName
+				local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
+				tList[guid] = displayName
 			end
 		end
 
 		local list, order = addon.functions.prepareListForDropdown(tList)
-		local dropIncludeList = addon.functions.createDropdownAce(L["moneyTrackerRemovePlayer"], list, order, nil)
-		local btnRemoveNPC = addon.functions.createButtonAce(REMOVE, 100, function(self, _, value)
-			local selectedValue = dropIncludeList:GetValue()
-			if selectedValue then
-				if addon.db["moneyTracker"][selectedValue] then
-					addon.db["moneyTracker"][selectedValue] = nil
-					local tList = {}
-					for i, v in pairs(addon.db["moneyTracker"]) do
-						if i ~= UnitGUID("player") then
-							local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
-							local displayName
-							displayName = string.format("|cff%02x%02x%02x%s-%s|r", col.r * 255, col.g * 255, col.b * 255, v.name, v.realm)
-							tList[i] = displayName
-						end
+		local dropRemove = addon.functions.createDropdownAce(L["moneyTrackerRemovePlayer"], list, order, nil)
+		local btnRemove = addon.functions.createButtonAce(REMOVE, 100, function()
+			local sel = dropRemove:GetValue()
+			if sel and addon.db["moneyTracker"][sel] then
+				addon.db["moneyTracker"][sel] = nil
+				local tList2 = {}
+				for guid, v in pairs(addon.db["moneyTracker"]) do
+					if guid ~= UnitGUID("player") then
+						local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
+						local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
+						tList2[guid] = displayName
 					end
-					local list, order = addon.functions.prepareListForDropdown(tList)
-					dropIncludeList:SetList(list, order)
-					dropIncludeList:SetValue(nil)
 				end
+				local nl, no = addon.functions.prepareListForDropdown(tList2)
+				dropRemove:SetList(nl, no)
+				dropRemove:SetValue(nil)
 			end
 		end)
-		groupMoney:AddChild(dropIncludeList)
-		groupMoney:AddChild(btnRemoveNPC)
+		groupMoney:AddChild(dropRemove)
+		groupMoney:AddChild(btnRemove)
 	end
 end
 
@@ -3120,7 +3094,9 @@ end
 local function addMiscSubsetFrame(container, include)
 	local list = {}
 	local allowed = {}
-	for _, k in ipairs(include or {}) do allowed[k] = true end
+	for _, k in ipairs(include or {}) do
+		allowed[k] = true
+	end
 	for _, entry in ipairs(getMiscOptions()) do
 		if allowed[entry.var] then table.insert(list, entry) end
 	end
@@ -3156,21 +3132,21 @@ end
 
 -- Check if a misc option exists (avoids empty debug-only pages)
 local function hasMiscOption(var)
-    for _, entry in ipairs(getMiscOptions()) do
-        if entry.var == var then return true end
-    end
-    return false
+	for _, entry in ipairs(getMiscOptions()) do
+		if entry.var == var then return true end
+	end
+	return false
 end
 
 -- Show a simple informational text on empty category roots
 local function addCategoryIntro(container, titleKey, bodyKey)
-    local group = addon.functions.createContainer("InlineGroup", "List")
-    group:SetTitle(L[titleKey] or "")
-    container:AddChild(group)
+	local group = addon.functions.createContainer("InlineGroup", "List")
+	group:SetTitle(L[titleKey] or "")
+	container:AddChild(group)
 
-    local lbl = addon.functions.createLabelAce(L[bodyKey] or "", nil, nil, 12)
-    lbl:SetFullWidth(true)
-    group:AddChild(lbl)
+	local lbl = addon.functions.createLabelAce(L[bodyKey] or "", nil, nil, 12)
+	lbl:SetFullWidth(true)
+	group:AddChild(lbl)
 end
 
 local function addMiscFrame(container, d)
@@ -6192,6 +6168,7 @@ local function CreateUI()
 					{ value = "auctionhouse", text = BUTTON_LAG_AUCTIONHOUSE },
 					{ value = "mailbox", text = MINIMAP_TRACKING_MAILBOX },
 					{ value = "convenience", text = L["Convenience"] },
+					{ value = "money", text = MONEY },
 				},
 			},
 			-- Combat & Dungeons
@@ -6239,12 +6216,12 @@ local function CreateUI()
 		},
 	})
 
-    -- Conditionally add "Container Actions" under Items if it exists
-    if hasMiscOption("automaticallyOpenContainer") then
-        addon.functions.addToTree("general\001items", { value = "container", text = L["ContainerActions"] }, true)
-        -- true = noSort; we keep earlier order (loot before container)
-        addon.treeGroup:SetTree(addon.treeGroupData)
-    end
+	-- Conditionally add "Container Actions" under Items if it exists
+	if hasMiscOption("automaticallyOpenContainer") then
+		addon.functions.addToTree("general\001items", { value = "container", text = L["ContainerActions"] }, true)
+		-- true = noSort; we keep earlier order (loot before container)
+		addon.treeGroup:SetTree(addon.treeGroupData)
+	end
 	table.insert(addon.treeGroupData, {
 		value = "profiles",
 		text = L["Profiles"],
@@ -6258,7 +6235,7 @@ local function CreateUI()
 		if group == "general\001items" then
 			addCategoryIntro(container, "ItemsInventory", "ItemsInventoryIntro")
 		elseif group == "general\001items\001bags" then
-				addBagFrame(container)
+			addBagFrame(container)
 		elseif group == "general\001items\001loot" then
 			addLootFrame(container, true)
 		elseif group == "general\001items\001container" then
@@ -6272,26 +6249,33 @@ local function CreateUI()
 				"confirmTimerRemovalTrade",
 			})
 		-- Gear & Upgrades
-			elseif group == "general\001gear" then
-				addCategoryIntro(container, "GearUpgrades", "GearUpgradesIntro")
+		elseif group == "general\001gear" then
+			addCategoryIntro(container, "GearUpgrades", "GearUpgradesIntro")
 		elseif group == "general\001gear\001character" then
 			addCharacterFrame(container)
 		elseif group == "general\001gear\001upgrades" then
 			addMiscSubsetFrame(container, { "instantCatalystEnabled", "openCharframeOnUpgrade" })
 		-- Vendors & Economy
-			elseif group == "general\001economy" then
-				addCategoryIntro(container, "VendorsEconomy", "VendorsEconomyIntro")
+		elseif group == "general\001economy" then
+			addCategoryIntro(container, "VendorsEconomy", "VendorsEconomyIntro")
 		elseif group == "general\001economy\001merchant" then
 			addMerchantFrame(container)
 		elseif group == "general\001economy\001auctionhouse" then
 			addAuctionHouseFrame(container)
 		elseif group == "general\001economy\001mailbox" then
 			addMailboxFrame(container)
+		elseif string.sub(group, 1, string.len("general\001economy\001selling")) == "general\001economy\001selling" then
+			-- Forward Selling (Auto-Sell) pages to Vendor UI
+			addon.Vendor.functions.treeCallback(container, group)
+		elseif group == "general\001economy\001craftshopper" then
+			addon.Vendor.functions.treeCallback(container, group)
 		elseif group == "general\001economy\001convenience" then
 			addMiscSubsetFrame(container, { "autoRepair", "sellAllJunk" })
+		elseif group == "general\001economy\001money" then
+			addMoneyFrame(container)
 		-- Combat & Dungeons
-			elseif group == "general\001combat" then
-				addCategoryIntro(container, "CombatDungeons", "CombatDungeonsIntro")
+		elseif group == "general\001combat" then
+			addCategoryIntro(container, "CombatDungeons", "CombatDungeonsIntro")
 		elseif group == "general\001combat\001party" then
 			addPartyFrame(container)
 		elseif group == "general\001combat\001dungeon" then
@@ -6301,18 +6285,22 @@ local function CreateUI()
 			addon.MythicPlus.functions.treeCallback(container, group)
 		elseif group == "general\001combat\001party\001groupfilter" then
 			addon.MythicPlus.functions.treeCallback(container, group)
+		elseif group == "general\001combat\001party\001potiontracker" then
+			addon.MythicPlus.functions.treeCallback(container, group)
 		-- Map & Navigation
-			elseif group == "general\001nav" then
-				addCategoryIntro(container, "MapNavigation", "MapNavigationIntro")
+		elseif group == "general\001nav" then
+			addCategoryIntro(container, "MapNavigation", "MapNavigationIntro")
 		elseif group == "general\001nav\001map" then
 			addMapFrame(container)
 		elseif group == "general\001nav\001minimap" then
 			addMinimapFrame(container)
 		elseif group == "general\001nav\001dynamicflight" then
 			addDynamicFlightFrame(container)
+		elseif group == "general\001nav\001teleports" then
+			addon.MythicPlus.functions.treeCallback(container, group)
 		-- UI & Input
-			elseif group == "general\001ui" then
-				addCategoryIntro(container, "UIInput", "UIInputIntro")
+		elseif group == "general\001ui" then
+			addCategoryIntro(container, "UIInput", "UIInputIntro")
 		elseif group == "general\001ui\001core" then
 			addUIFrame(container)
 		elseif group == "general\001ui\001actionbar" then
@@ -6362,7 +6350,7 @@ local function CreateUI()
 		end
 	end)
 	addon.treeGroup:SetStatusTable(addon.variables.statusTable)
-	addon.variables.statusTable.groups["general\001ui"] = true
+	addon.variables.statusTable.groups["general"] = true
 	frame:AddChild(addon.treeGroup)
 
 	-- Select a meaningful default page

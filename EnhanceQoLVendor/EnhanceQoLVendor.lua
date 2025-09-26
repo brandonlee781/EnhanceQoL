@@ -483,19 +483,6 @@ local function addGeneralFrame(container)
 	wrapper:AddChild(groupCore)
 
 	local data = {
-		{
-			text = L["vendorCraftShopperEnable"],
-			var = "vendorCraftShopperEnable",
-			func = function(self, _, checked)
-				addon.db["vendorCraftShopperEnable"] = checked
-				if checked then
-					addon.Vendor.CraftShopper.EnableCraftShopper()
-				else
-					addon.Vendor.CraftShopper.DisableCraftShopper()
-				end
-			end,
-			desc = L["vendorCraftShopperEnableDesc"],
-		},
 		{ text = L["vendorSwapAutoSellShift"], var = "vendorSwapAutoSellShift" },
 		{
 			text = L["vendorOnly12Items"],
@@ -570,28 +557,61 @@ local function addGeneralFrame(container)
 	scroll:DoLayout()
 end
 
-addon.variables.statusTable.groups["vendor"] = true
-addon.functions.addToTree(nil, {
-	value = "vendor",
-	text = L["Vendor"],
-	children = {
-		{ value = "common", text = ITEM_QUALITY_COLORS[1].hex .. _G["ITEM_QUALITY1_DESC"] .. "|r" },
-		{ value = "uncommon", text = ITEM_QUALITY_COLORS[2].hex .. _G["ITEM_QUALITY2_DESC"] .. "|r" },
-		{ value = "rare", text = ITEM_QUALITY_COLORS[3].hex .. _G["ITEM_QUALITY3_DESC"] .. "|r" },
-		{ value = "epic", text = ITEM_QUALITY_COLORS[4].hex .. _G["ITEM_QUALITY4_DESC"] .. "|r" },
-		{ value = "include", text = L["Include"] },
-		{ value = "exclude", text = L["Exclude"] },
-	},
+-- Integrate Vendor into General -> Vendors & Economy -> Selling (Auto‑Sell)
+-- addon.variables.statusTable.groups["general\001economy"] = true
+-- addon.variables.statusTable.groups["general\001economy\001selling"] = true
+
+-- Add a dedicated Craft Shopper node under Vendors & Economy
+addon.functions.addToTree("general\001economy", { value = "craftshopper", text = L["vendorCraftShopperTitle"] })
+
+-- Create the Selling node under Vendors & Economy
+addon.functions.addToTree("general\001economy", {
+	value = "selling",
+	text = L["SellingAutoSell"] or "Selling (Auto-Sell)",
 }, true)
+
+-- Add Vendor pages under Selling
+local sellingPath = "general\001economy\001selling"
+addon.functions.addToTree(sellingPath, { value = "common", text = ITEM_QUALITY_COLORS[1].hex .. _G["ITEM_QUALITY1_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "uncommon", text = ITEM_QUALITY_COLORS[2].hex .. _G["ITEM_QUALITY2_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "rare", text = ITEM_QUALITY_COLORS[3].hex .. _G["ITEM_QUALITY3_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "epic", text = ITEM_QUALITY_COLORS[4].hex .. _G["ITEM_QUALITY4_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "include", text = L["Include"] }, true)
+addon.functions.addToTree(sellingPath, { value = "exclude", text = L["Exclude"] }, true)
+
+local function addCraftShopperConfig(container)
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	container:AddChild(wrapper)
+
+	local group = addon.functions.createContainer("InlineGroup", "List")
+	wrapper:AddChild(group)
+
+	local cb = addon.functions.createCheckboxAce(L["vendorCraftShopperEnable"], addon.db["vendorCraftShopperEnable"], function(_, _, checked)
+		addon.db["vendorCraftShopperEnable"] = checked
+		if checked then
+			addon.Vendor.CraftShopper.EnableCraftShopper()
+		else
+			addon.Vendor.CraftShopper.DisableCraftShopper()
+		end
+	end, L["vendorCraftShopperEnableDesc"])
+	group:AddChild(cb)
+end
 
 function addon.Vendor.functions.treeCallback(container, group)
 	lastEbox = nil
 	container:ReleaseChildren() -- Entfernt vorherige Inhalte
 	local _, avgItemLevelEquipped = GetAverageItemLevel()
 	addon.Vendor.variables.avgItemLevelEquipped = avgItemLevelEquipped
+	-- Normalize to old paths so existing logic can be reused
+	local prefix = "general\001economy\001selling"
+	if group == prefix then group = "vendor" end
+	if group:sub(1, #prefix + 1) == prefix .. "\001" then group = "vendor" .. group:sub(#prefix + 1) end
+
 	-- Prüfen, welche Gruppe ausgewählt wurde
 	if group == "vendor" then
 		addGeneralFrame(container)
+	elseif group == "general\001economy\001craftshopper" or group == "vendor\001craftshopper" then
+		addCraftShopperConfig(container)
 	elseif group == "vendor\001common" then
 		addVendorFrame(container, 1)
 	elseif group == "vendor\001uncommon" then

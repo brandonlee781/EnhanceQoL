@@ -832,7 +832,7 @@ local function CreateFilterMenu()
 	scrollContainer.frame:ClearAllPoints()
 	scrollContainer.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -10)
 	scrollContainer.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 10)
-
+	scrollContainer.frame:Show()
 	frame.widgets = {}
 
 	local function AnyFilterActive()
