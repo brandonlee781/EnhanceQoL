@@ -45,9 +45,9 @@ local function buildMacroString(drinkItem, manaPotionItem)
 	local resetType = "combat"
 	local recuperateString = ""
 
-	if addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks and addon.Recuperate and addon.Recuperate.name and addon.Recuperate.known then
-		recuperateString = "\n/cast " .. addon.Recuperate.name
-	end
+    if addon.db.allowRecuperate and addon.Recuperate and addon.Recuperate.name and addon.Recuperate.known then
+        recuperateString = "\n/cast " .. addon.Recuperate.name
+    end
 
 	local parts = { "#showtooltip" }
 
@@ -88,20 +88,20 @@ local function addDrinks()
 	local manaItem = nil
 	if addon.db.useManaPotionInCombat and unitHasMana() then manaItem = findBestManaPotion() end
 
-	if foundItem ~= lastItemPlaced or manaItem ~= lastManaPotionPlaced or addon.db.allowRecuperate ~= lastAllowRecuperate or addon.db.useRecuperateWithDrinks ~= lastUseRecuperate then
+    if foundItem ~= lastItemPlaced or manaItem ~= lastManaPotionPlaced or addon.db.allowRecuperate ~= lastAllowRecuperate or addon.db.allowRecuperate ~= lastUseRecuperate then
 		-- Avoid protected EditMacro during combat lockdown
 		if InCombatLockdown and InCombatLockdown() then return end
 		EditMacro(drinkMacroName, drinkMacroName, nil, buildMacroString(foundItem, manaItem))
 		lastItemPlaced = foundItem
 		lastManaPotionPlaced = manaItem
-		lastAllowRecuperate = addon.db.allowRecuperate
-		lastUseRecuperate = addon.db.useRecuperateWithDrinks
-	end
+        lastAllowRecuperate = addon.db.allowRecuperate
+        lastUseRecuperate = addon.db.allowRecuperate
+    end
 end
 
 function addon.functions.updateAvailableDrinks(ignoreCombat)
-	if UnitAffectingCombat("player") and ignoreCombat == false then return end
-	if unitHasMana() == false and not (addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks) then return end
+    if UnitAffectingCombat("player") and ignoreCombat == false then return end
+    if unitHasMana() == false and not addon.db.allowRecuperate then return end
 	createMacroIfMissing()
 	addDrinks()
 end
@@ -117,10 +117,7 @@ end
 -- TODO automatically ignore Gems for earthen, there don't need to be a setting for that, just make a small information, that gems will be ignored automatically
 -- TODO always ignore buff food, just "disable" this setting for now, when any person says he needs it, we will be enabling it again, but for now less clutter
 addon.functions.InitDBValue("preferMageFood", true)
-addon.functions.InitDBValue("ignoreBuffFood", true)
-addon.functions.InitDBValue("ignoreGemsEarthen", true)
 addon.functions.InitDBValue("allowRecuperate", true)
-addon.functions.InitDBValue("useRecuperateWithDrinks", false)
 addon.functions.InitDBValue("useManaPotionInCombat", false)
 addon.functions.updateAllowedDrinks()
 
@@ -180,10 +177,8 @@ local function addDrinkFrame(container)
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCore)
 
-	local data = {
-		{ text = L["Prefer mage food"], var = "preferMageFood" },
-		{ text = L["Ignore bufffood"], var = "ignoreBuffFood" },
-		{ text = L["ignoreGemsEarthen"], var = "ignoreGemsEarthen" },
+    local data = {
+        { text = L["Prefer mage food"], var = "preferMageFood" },
 		{
 			text = L["allowRecuperate"],
 			var = "allowRecuperate",
@@ -228,9 +223,9 @@ local function addDrinkFrame(container)
 		},
 	}
 
-	if addon.db["allowRecuperate"] then table.insert(data, { text = L["useRecuperateWithDrinks"], var = "useRecuperateWithDrinks", desc = L["useRecuperateWithDrinksDesc"] }) end
+    -- Using Recuperate is always combined with drinks if allowed; no separate option
 
-	table.sort(data, function(a, b) return a.text < b.text end)
+    table.sort(data, function(a, b) return a.text < b.text end)
 
 	for _, cbData in ipairs(data) do
 		local uFunc = function(self, _, value)
