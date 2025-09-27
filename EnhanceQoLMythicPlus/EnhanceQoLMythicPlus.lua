@@ -114,54 +114,42 @@ local function setBRInfo(info)
 end
 
 hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "UpdateTime", function(self, elapsedTime)
-	if addon.db["mythicPlusBRTrackerEnabled"] then
-		if not brButton or not brButton.cooldownFrame or not brButton.cooldownFrame.cooldownSet then
-			createBRFrame()
-			if brButton and brButton.cooldownFrame then
-				brButton.cooldownFrame.cooldownSet = true
-				local info = C_Spell.GetSpellCharges(20484)
-				setBRInfo(info)
-			end
-		end
-	end
+    if addon.db["mythicPlusBRTrackerEnabled"] then
+        if not brButton or not brButton.cooldownFrame or not brButton.cooldownFrame.cooldownSet then
+            createBRFrame()
+            if brButton and brButton.cooldownFrame then
+                brButton.cooldownFrame.cooldownSet = true
+                local info = C_Spell.GetSpellCharges(20484)
+                setBRInfo(info)
+            end
+        end
+    end
+    -- Always show chest timers in challenge mode
+    local timeLeft = math.max(0, self.timeLimit - elapsedTime)
+    local chest3Time = self.timeLimit * 0.4
+    local chest2Time = self.timeLimit * 0.2
 
-	if addon.db["mythicPlusChestTimer"] then
-		local timeLeft = math.max(0, self.timeLimit - elapsedTime)
-		local chest3Time = self.timeLimit * 0.4
-		local chest2Time = self.timeLimit * 0.2
+    if not self.CustomTextAdded then
+        self.ChestTimeText2 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 3, 2)
+        self.ChestTimeText3 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 3, 0)
+        self.CustomTextAdded = true
+    end
 
-		if not self.CustomTextAdded then
-			self.ChestTimeText2 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-			self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 3, 2) -- Position rechts unter der Statusleiste
-			self.ChestTimeText3 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-			self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 3, 0) -- Position rechts unter der Statusleiste
-			self.CustomTextAdded = true
-		end
+    if timeLeft > 0 then
+        local chestText3 = ""
+        local chestText2 = ""
 
-		if timeLeft > 0 then
-			local chestText3 = ""
-			local chestText2 = ""
+        if timeLeft >= chest3Time then chestText3 = string.format("+3: %s", SecondsToClock(timeLeft - chest3Time)) end
+        if timeLeft >= chest2Time then chestText2 = string.format("+2: %s", SecondsToClock(timeLeft - chest2Time)) end
 
-			if timeLeft >= chest3Time then chestText3 = string.format("+3: %s", SecondsToClock(timeLeft - chest3Time)) end
-			if timeLeft >= chest2Time then chestText2 = string.format("+2: %s", SecondsToClock(timeLeft - chest2Time)) end
-
-			self.ChestTimeText2:SetText(chestText2)
-			self.ChestTimeText3:SetText(chestText3)
-		else
-			self.ChestTimeText2:SetText("")
-			self.ChestTimeText3:SetText("")
-		end
-	elseif self.CustomTextAdded then
-		self.CustomTextAdded = false
-		if self.ChestTimeText2 then
-			self.ChestTimeText2:Hide()
-			self.ChestTimeText2 = nil
-		end
-		if self.ChestTimeText3 then
-			self.ChestTimeText3:Hide()
-			self.ChestTimeText3 = nil
-		end
-	end
+        self.ChestTimeText2:SetText(chestText2)
+        self.ChestTimeText3:SetText(chestText3)
+    else
+        self.ChestTimeText2:SetText("")
+        self.ChestTimeText3:SetText("")
+    end
 end)
 
 local function GetScenarioPercent(criteriaIndex)
@@ -178,102 +166,30 @@ local function GetScenarioPercent(criteriaIndex)
 end
 
 hooksecurefunc(ScenarioTrackerProgressBarMixin, "SetValue", function(self, percentage)
-	if addon.db["mythicPlusTruePercent"] then
-		if not IsInInstance() or not self:IsVisible() then return end
-		local _, _, diff = GetInstanceInfo()
-		if diff ~= 8 then return end -- only in mythic challenge mode
-		local sData = C_ScenarioInfo.GetScenarioStepInfo()
-		if nil == sData then return end
+    -- Always show decimal progress for enemy forces in M+
+    if not IsInInstance() or not self:IsVisible() then return end
+    local _, _, diff = GetInstanceInfo()
+    if diff ~= 8 then return end -- only in mythic challenge mode
+    local sData = C_ScenarioInfo.GetScenarioStepInfo()
+    if nil == sData then return end
 
-		local truePercent
-		if self.criteriaIndex then self.criteriaIndex = nil end
-		for criteriaIndex = 1, sData.numCriteria do
-			if nil == truePercent then
-				truePercent = GetScenarioPercent(criteriaIndex)
-				if truePercent then
-					self.Bar.Label:SetFormattedText(truePercent .. "%%")
-					self.percentage = percentage
-				end
-			end
-		end
-	end
+    local truePercent
+    if self.criteriaIndex then self.criteriaIndex = nil end
+    for criteriaIndex = 1, sData.numCriteria do
+        if nil == truePercent then
+            truePercent = GetScenarioPercent(criteriaIndex)
+            if truePercent then
+                self.Bar.Label:SetFormattedText(truePercent .. "%%")
+                self.percentage = percentage
+            end
+        end
+    end
 end)
 
 local function createButtons()
-	if not addon.db["enableKeystoneHelperNewUI"] then
-		addon.MythicPlus.functions.addButton(ChallengesKeystoneFrame, "ReadyCheck", L["ReadyCheck"], function(self, button)
-			if self:GetText() == L["ReadyCheck"] then
-				DoReadyCheck()
-				self:SetText(L["ReadyCheckWaiting"])
-			end
-		end)
-		-- Button for Pulltimer
-		addon.MythicPlus.functions.addButton(ChallengesKeystoneFrame, "PullTimer", L["PullTimer"], function(self, button)
-			if addon.MythicPlus.variables.handled == false then
-				addon.MythicPlus.Buttons["PullTimer"]:SetText(L["Stating"])
-				addon.MythicPlus.variables.breakIt = false
-				addon.MythicPlus.variables.handled = true
-				local x = nil
-				-- Set time based on settings choosen
-				if button == "RightButton" then
-					x = addon.db["pullTimerShortTime"]
-				else
-					x = addon.db["pullTimerLongTime"]
-				end
-				local cTime = x
-
-				C_Timer.NewTicker(1, function(self)
-					if addon.MythicPlus.variables.breakIt then
-						self:Cancel()
-						C_PartyInfo.DoCountdown(0)
-						if addon.db["noChatOnPullTimer"] == false then C_ChatInfo.SendChatMessage("PULL Canceled", "PARTY") end
-						C_ChatInfo.SendAddonMessage("D4", ("PT\t%s\t%d"):format(0, instanceId), IsInGroup(2) and "INSTANCE_CHAT" or "RAID")
-					end
-
-					if x == 0 then
-						self:Cancel()
-						addon.MythicPlus.variables.handled = false
-						if addon.db["noChatOnPullTimer"] == false then C_ChatInfo.SendChatMessage(">>PULL NOW<<", "PARTY") end
-						if addon.db["autoKeyStart"] == false then
-							addon.MythicPlus.Buttons["PullTimer"]:SetText(L["PullTimer"])
-						elseif addon.db["autoKeyStart"] and nil ~= C_ChallengeMode.GetSlottedKeystoneInfo() then
-							C_ChallengeMode.StartChallengeMode()
-							ChallengesKeystoneFrame:Hide()
-						end
-					else
-						if x == cTime then
-							local _, _, _, _, _, _, _, id = GetInstanceInfo()
-							local instanceId = tonumber(id) or 0
-							if addon.db["PullTimerType"] == 2 or addon.db["PullTimerType"] == 4 then C_PartyInfo.DoCountdown(cTime) end
-							if addon.db["PullTimerType"] == 3 or addon.db["PullTimerType"] == 4 then
-								C_ChatInfo.SendAddonMessage("D4", ("PT\t%s\t%d"):format(cTime, instanceId), IsInGroup(2) and "INSTANCE_CHAT" or "RAID")
-							end
-						end
-						if addon.MythicPlus.variables.breakIt == false then
-							if addon.db["cancelPullTimerOnClick"] == true then
-								addon.MythicPlus.Buttons["PullTimer"]:SetText(L["Cancel"] .. " (" .. x .. ")")
-							else
-								addon.MythicPlus.Buttons["PullTimer"]:SetText(L["Pull"] .. " (" .. x .. ")")
-							end
-						end
-						if addon.MythicPlus.variables.breakIt == false then
-							if addon.db["noChatOnPullTimer"] == false then C_ChatInfo.SendChatMessage(format("PULL in %ds", x), "PARTY") end
-						end
-					end
-					x = x - 1
-				end)
-			else
-				if addon.db["cancelPullTimerOnClick"] == true then
-					self:SetText(L["PullTimer"])
-					addon.MythicPlus.variables.breakIt = true
-					addon.MythicPlus.variables.handled = false
-				end
-			end
-		end)
-	else
-		addon.MythicPlus.functions.addRCButton()
-		addon.MythicPlus.functions.addPullButton()
-	end
+    -- Always use improved Keystone Helper UI
+    addon.MythicPlus.functions.addRCButton()
+    addon.MythicPlus.functions.addPullButton()
 end
 
 local function checkKeyStone()
@@ -481,37 +397,12 @@ local function addKeystoneFrame(container)
 				var = "autoInsertKeystone",
 			},
 			{
-				text = L["enableKeystoneHelperNewUI"],
-				var = "enableKeystoneHelperNewUI",
-				func = function(self, _, value)
-					addon.db["enableKeystoneHelperNewUI"] = value
-					if _G["ChallengesKeystoneFrame"] and ChallengesKeystoneFrame:IsShown() then checkKeyStone() end
-				end,
-			},
-			{
 				text = L["Close all bags on keystone insert"],
 				var = "closeBagsOnKeyInsert",
 			},
 			{
-				text = L["Cancel Pull Timer on click"],
-				var = "cancelPullTimerOnClick",
-			},
-			{
-				text = L["noChatOnPullTimer"],
-				var = "noChatOnPullTimer",
-			},
-			{
 				text = L["autoKeyStart"],
 				var = "autoKeyStart",
-			},
-			{
-				text = L["mythicPlusTruePercent"],
-				var = "mythicPlusTruePercent",
-				func = function(self, _, value) addon.db["mythicPlusTruePercent"] = value end,
-			},
-			{
-				text = L["mythicPlusChestTimer"],
-				var = "mythicPlusChestTimer",
 			},
 			{
 				text = L["groupfinderShowPartyKeystone"],
@@ -535,12 +426,17 @@ local function addKeystoneFrame(container)
 
 		local list, order = addon.functions.prepareListForDropdown({ [1] = L["None"], [2] = L["Blizzard Pull Timer"], [3] = L["DBM / BigWigs Pull Timer"], [4] = L["Both"] })
 
+        local row0 = addon.functions.createContainer("SimpleGroup", "Flow")
+        groupEnabled:AddChild(row0)
         local dropPullTimerType = addon.functions.createDropdownAce(L["PullTimer"], list, order, function(self, _, value) addon.db["PullTimerType"] = value end)
         dropPullTimerType:SetValue(addon.db["PullTimerType"])
         dropPullTimerType:SetFullWidth(false)
-        dropPullTimerType:SetWidth(200)
-        groupEnabled:AddChild(dropPullTimerType)
-        groupEnabled:AddChild(addon.functions.createSpacerAce())
+        if dropPullTimerType.SetRelativeWidth then dropPullTimerType:SetRelativeWidth(0.5) end
+        row0:AddChild(dropPullTimerType)
+
+        local cbNoChat = addon.functions.createCheckboxAce(L["noChatOnPullTimer"], addon.db["noChatOnPullTimer"], function(_, _, v) addon.db["noChatOnPullTimer"] = v end)
+        if cbNoChat.SetRelativeWidth then cbNoChat:SetRelativeWidth(0.5) end
+        row0:AddChild(cbNoChat)
 
 		local longSlider = addon.functions.createSliderAce(L["sliderLongTime"] .. ": " .. addon.db["pullTimerLongTime"] .. "s", addon.db["pullTimerLongTime"], 0, 60, 1, function(self, _, value2)
 			addon.db["pullTimerLongTime"] = value2
@@ -1396,13 +1292,8 @@ addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] },
             if addon.db["enableKeystoneHelper"] then
                 local data = {
                     { text = L["Automatically insert keystone"], var = "autoInsertKeystone" },
-                    { text = L["enableKeystoneHelperNewUI"], var = "enableKeystoneHelperNewUI", func = function(_, _, v) addon.db["enableKeystoneHelperNewUI"] = v if _G["ChallengesKeystoneFrame"] and ChallengesKeystoneFrame:IsShown() then checkKeyStone() end end },
                     { text = L["Close all bags on keystone insert"], var = "closeBagsOnKeyInsert" },
-                    { text = L["Cancel Pull Timer on click"], var = "cancelPullTimerOnClick" },
-                    { text = L["noChatOnPullTimer"], var = "noChatOnPullTimer" },
                     { text = L["autoKeyStart"], var = "autoKeyStart" },
-                    { text = L["mythicPlusTruePercent"], var = "mythicPlusTruePercent", func = function(_, _, v) addon.db["mythicPlusTruePercent"] = v end },
-                    { text = L["mythicPlusChestTimer"], var = "mythicPlusChestTimer" },
                     { text = L["groupfinderShowPartyKeystone"], var = "groupfinderShowPartyKeystone", func = function(_, _, v) addon.db["groupfinderShowPartyKeystone"] = v; addon.MythicPlus.functions.togglePartyKeystone() end, desc = L["groupfinderShowPartyKeystoneDesc"] },
                 }
                 table.sort(data, function(a, b) return a.text < b.text end)
@@ -1413,30 +1304,37 @@ addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] },
                 end
 
                 local list, order = addon.functions.prepareListForDropdown({ [1] = L["None"], [2] = L["Blizzard Pull Timer"], [3] = L["DBM / BigWigs Pull Timer"], [4] = L["Both"] })
+                local row0 = addon.functions.createContainer("SimpleGroup", "Flow")
+                g:AddChild(row0)
                 local dropPullTimerType = addon.functions.createDropdownAce(L["PullTimer"], list, order, function(self, _, value) addon.db["PullTimerType"] = value end)
                 dropPullTimerType:SetValue(addon.db["PullTimerType"])
                 dropPullTimerType:SetFullWidth(false)
-                dropPullTimerType:SetWidth(200)
-                g:AddChild(dropPullTimerType)
-                g:AddChild(addon.functions.createSpacerAce())
+                if dropPullTimerType.SetRelativeWidth then dropPullTimerType:SetRelativeWidth(0.5) end
+                row0:AddChild(dropPullTimerType)
+
+                local cbNoChat = addon.functions.createCheckboxAce(L["noChatOnPullTimer"], addon.db["noChatOnPullTimer"], function(_, _, v) addon.db["noChatOnPullTimer"] = v end)
+                if cbNoChat.SetRelativeWidth then cbNoChat:SetRelativeWidth(0.5) end
+                row0:AddChild(cbNoChat)
+
+                -- Sliders in one row (50% width each)
+                local row = addon.functions.createContainer("SimpleGroup", "Flow")
+                g:AddChild(row)
 
                 local longSlider = addon.functions.createSliderAce(L["sliderLongTime"] .. ": " .. addon.db["pullTimerLongTime"] .. "s", addon.db["pullTimerLongTime"], 0, 60, 1, function(self, _, v)
                     addon.db["pullTimerLongTime"] = v
                     self:SetLabel(L["sliderLongTime"] .. ": " .. v .. "s")
                 end)
                 longSlider:SetFullWidth(false)
-                longSlider:SetWidth(300)
-                g:AddChild(longSlider)
-
-                g:AddChild(addon.functions.createSpacerAce())
+                if longSlider.SetRelativeWidth then longSlider:SetRelativeWidth(0.5) end
+                row:AddChild(longSlider)
 
                 local shortSlider = addon.functions.createSliderAce(L["sliderShortTime"] .. ": " .. addon.db["pullTimerShortTime"] .. "s", addon.db["pullTimerShortTime"], 0, 60, 1, function(self, _, v)
                     addon.db["pullTimerShortTime"] = v
                     self:SetLabel(L["sliderShortTime"] .. ": " .. v .. "s")
                 end)
                 shortSlider:SetFullWidth(false)
-                shortSlider:SetWidth(300)
-                g:AddChild(shortSlider)
+                if shortSlider.SetRelativeWidth then shortSlider:SetRelativeWidth(0.5) end
+                row:AddChild(shortSlider)
             end
 
             if known then g:ResumeLayout(); doLayout() end
@@ -1548,38 +1446,22 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 	end
 
 	-- Force combined view for direct leaf routes under mythicplus
-	if
-		group == "mythicplus"
-		or group == "mythicplus\001mythicplus"
-		or group == "mythicplus\001keystone"
-		or group == "mythicplus\001brtracker"
-		or group == "mythicplus\001rating"
-		or group == "mythicplus\001objectivetracker"
-	then
-		addMythicPlusRootFrame(container)
-		return
-	elseif group == "mythicplus\001keystone" then
-		addKeystoneFrame(container)
-	elseif group == "mythicplus\001potiontracker" then
-		addPotionTrackerFrame(container)
-		-- TODO rename automark to Dungeon and put brtracker into that frame, each in his own group in the container
-	elseif group == "mythicplus\001automark" then
-		addAutoMarkFrame(container)
-	elseif group == "mythicplus\001teleports" then
-		addTeleportFrame(container)
-	elseif group == "mythicplus\001brtracker" then
-		addBRFrame(container)
-	elseif group == "mythicplus\001rating" then
-		addRatingFrame(container)
-	elseif group == "mythicplus\001talents" then
-		addTalentFrame(container)
-		-- TODO pack groupfilter also to the new "Dungeon" container to have less clutter
-	elseif group == "mythicplus\001groupfilter" then
-		addGroupFilterFrame(container)
-		-- TODO pack objectivetracker also to the new "Dungeon" container
-	elseif group == "mythicplus\001objectivetracker" then
-		addObjectiveTrackerFrame(container)
-	end
+    if group == "mythicplus" or group == "mythicplus\001mythicplus" or group == "mythicplus\001keystone" or group == "mythicplus\001brtracker" or group == "mythicplus\001rating" or group == "mythicplus\001objectivetracker" then
+        addMythicPlusRootFrame(container)
+        return
+    elseif group == "mythicplus\001potiontracker" then
+        addPotionTrackerFrame(container)
+        -- TODO rename automark to Dungeon and put brtracker into that frame, each in his own group in the container
+    elseif group == "mythicplus\001automark" then
+        addAutoMarkFrame(container)
+    elseif group == "mythicplus\001teleports" then
+        addTeleportFrame(container)
+    elseif group == "mythicplus\001talents" then
+        addTalentFrame(container)
+        -- TODO pack groupfilter also to the new "Dungeon" container to have less clutter
+    elseif group == "mythicplus\001groupfilter" then
+        addGroupFilterFrame(container)
+    end
 end
 
 if addon.db["mythicPlusEnableDungeonFilter"] then addon.MythicPlus.functions.addDungeonFilter() end

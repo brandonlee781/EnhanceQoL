@@ -2,7 +2,6 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_MythicPlus", "enUS", tr
 
 L["enableKeystoneHelper"] = "Enable Keystone Helper"
 L["enableKeystoneHelperDesc"] = "Adds ready check and pull timer buttons to the Keystone frame. Requires party leader privileges"
-L["enableKeystoneHelperNewUI"] = "Enable the improved Keystone Helper UI"
 L["Keystone"] = "Keystone"
 L["NoKeystone"] = "No Info"
 L["Automatically insert keystone"] = "Automatically insert keystone"
@@ -19,8 +18,6 @@ L["sliderShortTime"] = "Pull Timer rightclick"
 L["sliderLongTime"] = "Pull Timer"
 L["Stating"] = "Starting..."
 L["autoKeyStart"] = "Start key automatically after Pull Timer"
-L["mythicPlusTruePercent"] = "Show decimal value of Enemy Forces"
-L["mythicPlusChestTimer"] = "Show chest timers"
 L["interruptWithShift"] = "Hold shift to interrupt that feature"
 
 L["None"] = "No Pull Timer"
