@@ -30,8 +30,7 @@
 - **Health Macro:**  
   ▸ Option to use **combat potions/custom spells** in combat.  
   ▸ Customizable priority: **custom spells**, **potions**, **healthstones**, **combat potions**.
-- **Boss Frame Health Text:** Always show **percent**, **value**, or **both** on boss frames **independent** of the global CVar.  
-  ▸ Especially useful if you keep `statusText = 0`. If you set `statusText = 1` (Blizzard “always show”), this is usually redundant.
+- **Player, Target and Boss Frame Health Text:** Always show **percent**, **value**, or **both** on frames **independent** of the global CVar.
 
 ### 🐛 Fixed
 

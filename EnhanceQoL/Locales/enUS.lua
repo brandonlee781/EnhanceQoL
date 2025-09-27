@@ -24,6 +24,7 @@ L["CombatDungeons"] = "Combat & Dungeons"
 L["MapNavigation"] = "Map & Navigation"
 L["UIInput"] = "UI & Input"
 L["System"] = "System"
+L["Media & Sound"] = "Media & Sound"
 
 -- Category intro texts
 L["ItemsInventoryIntro"] = "Configure bag overlays, loot handling, and item safety confirmations."
@@ -252,6 +253,12 @@ L["UnitFrameUFExplain"] = "Applies to RAID and Party Frames"
 L["Boss Frames"] = "Boss Frames"
 L["BossHealthText"] = "Boss health text"
 L["BossHealthCVarNote"] = "Note: Has no effect if the 'statusText' CVar is enabled (Blizzard always shows health)."
+
+-- Health Text (player/target/boss)
+L["Health Text"] = "Health Text"
+L["PlayerHealthText"] = "Player health text"
+L["TargetHealthText"] = "Target health text"
+L["HealthTextExplain"] = "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames."
 
 L["ActionbarHideExplain"] = 'Set the action bar to hidden and show on mouseover. This works only when your Action Bar is set to "%s" and "%s" in %s'
 L["fullButtonRangeColoring"] = "Full button range coloring"

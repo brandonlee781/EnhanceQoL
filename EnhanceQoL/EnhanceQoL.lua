@@ -1795,31 +1795,53 @@ local function addUnitFrame(container)
 		groupCore:AddChild(cbElement)
 	end
 
-	-- Boss Frames: health text mode dropdown
-	local groupBoss = addon.functions.createContainer("InlineGroup", "List")
-	groupBoss:SetTitle(L["Boss Frames"] or "Boss Frames")
-	wrapper:AddChild(groupBoss)
+	-- Unit health text (Player, Target, Boss)
+	local groupHT = addon.functions.createContainer("InlineGroup", "Flow")
+	groupHT:SetTitle(L["Health Text"] or "Health Text")
+	wrapper:AddChild(groupHT)
 
-	local bossDD = AceGUI:Create("Dropdown")
-	bossDD:SetLabel(L["BossHealthText"] or "Boss health text")
-	local bossList = {
-		OFF = VIDEO_OPTIONS_DISABLED,
-		PERCENT = STATUS_TEXT_PERCENT,
-		ABS = STATUS_TEXT_VALUE,
-		BOTH = STATUS_TEXT_BOTH,
-	}
-	local bossOrder = { "OFF", "PERCENT", "ABS", "BOTH" }
-	bossDD:SetList(bossList, bossOrder)
-	bossDD:SetValue(addon.db and addon.db["bossHealthMode"] or "OFF")
-	bossDD:SetCallback("OnValueChanged", function(_, _, key)
-		addon.db["bossHealthMode"] = key or "OFF"
-		if addon.BossFrames and addon.BossFrames.SetMode then addon.BossFrames:SetMode(addon.db["bossHealthMode"]) end
+	local htExplainText = string.format(L["HealthTextExplain"] or "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames.", VIDEO_OPTIONS_DISABLED)
+	local labelHTExplain = addon.functions.createLabelAce("|cffffd700" .. htExplainText .. "|r", nil, nil, 10)
+	labelHTExplain:SetFullWidth(true)
+	groupHT:AddChild(labelHTExplain)
+
+	local htList = { OFF = VIDEO_OPTIONS_DISABLED, PERCENT = STATUS_TEXT_PERCENT, ABS = STATUS_TEXT_VALUE, BOTH = STATUS_TEXT_BOTH }
+	local htOrder = { "OFF", "PERCENT", "ABS", "BOTH" }
+
+	local ddPlayer = AceGUI:Create("Dropdown")
+	ddPlayer:SetLabel(L["PlayerHealthText"] or "Player health text")
+	ddPlayer:SetList(htList, htOrder)
+	ddPlayer:SetValue(addon.db and addon.db["healthTextPlayerMode"] or "OFF")
+	ddPlayer:SetRelativeWidth(0.33)
+	ddPlayer:SetCallback("OnValueChanged", function(_, _, key)
+		addon.db["healthTextPlayerMode"] = key or "OFF"
+		if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("player", addon.db["healthTextPlayerMode"]) end
 	end)
-	groupBoss:AddChild(bossDD)
+	groupHT:AddChild(ddPlayer)
 
-	local bossNote = addon.functions.createLabelAce("|cffffd700" .. (L["BossHealthCVarNote"] or "This setting has no effect if 'statusText' CVar is enabled.") .. "|r", nil, nil, 10)
-	bossNote:SetFullWidth(true)
-	groupBoss:AddChild(bossNote)
+	local ddTarget = AceGUI:Create("Dropdown")
+	ddTarget:SetLabel(L["TargetHealthText"] or "Target health text")
+	ddTarget:SetList(htList, htOrder)
+	ddTarget:SetValue(addon.db and addon.db["healthTextTargetMode"] or "OFF")
+	ddTarget:SetRelativeWidth(0.33)
+	ddTarget:SetCallback("OnValueChanged", function(_, _, key)
+		addon.db["healthTextTargetMode"] = key or "OFF"
+		if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("target", addon.db["healthTextTargetMode"]) end
+	end)
+	groupHT:AddChild(ddTarget)
+
+	local ddBoss = AceGUI:Create("Dropdown")
+	ddBoss:SetLabel(L["BossHealthText"] or "Boss health text")
+	ddBoss:SetList(htList, htOrder)
+	ddBoss:SetValue(addon.db and addon.db["healthTextBossMode"] or addon.db["bossHealthMode"] or "OFF")
+	ddBoss:SetRelativeWidth(0.33)
+	ddBoss:SetCallback("OnValueChanged", function(_, _, key)
+		addon.db["healthTextBossMode"] = key or "OFF"
+		if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("boss", addon.db["healthTextBossMode"]) end
+	end)
+	groupHT:AddChild(ddBoss)
+
+	-- OFF = obey Blizzard CVar, others override; no extra toggles
 
 	local groupCoreUF = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCoreUF)
@@ -2030,23 +2052,53 @@ local function addUnitFrame2(container)
 		end
 	end
 
-	local function buildBoss()
-		local g, known = ensureGroup("boss", L["Boss Frames"] or "Boss Frames")
-		local dd = AceGUI:Create("Dropdown")
-		dd:SetLabel(L["BossHealthText"] or "Boss health text")
-		local bossList = { OFF = VIDEO_OPTIONS_DISABLED, PERCENT = STATUS_TEXT_PERCENT, ABS = STATUS_TEXT_VALUE, BOTH = STATUS_TEXT_BOTH }
-		local bossOrder = { "OFF", "PERCENT", "ABS", "BOTH" }
-		dd:SetList(bossList, bossOrder)
-		dd:SetValue(addon.db and addon.db["bossHealthMode"] or "OFF")
-		dd:SetCallback("OnValueChanged", function(_, _, key)
-			addon.db["bossHealthMode"] = key or "OFF"
-			if addon.BossFrames and addon.BossFrames.SetMode then addon.BossFrames:SetMode(addon.db["bossHealthMode"]) end
-		end)
-		g:AddChild(dd)
+	local function buildHealthText()
+		local g, known = ensureGroup("healthText", L["Health Text"] or "Health Text")
+		g:SetLayout("Flow")
 
-		local note = addon.functions.createLabelAce("|cffffd700" .. (L["BossHealthCVarNote"] or "This setting has no effect if 'statusText' CVar is enabled.") .. "|r", nil, nil, 10)
-		note:SetFullWidth(true)
-		g:AddChild(note)
+		local list = { OFF = VIDEO_OPTIONS_DISABLED, PERCENT = STATUS_TEXT_PERCENT, ABS = STATUS_TEXT_VALUE, BOTH = STATUS_TEXT_BOTH }
+		local order = { "OFF", "PERCENT", "ABS", "BOTH" }
+
+		local htExplainText = string.format(L["HealthTextExplain"] or "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames.", VIDEO_OPTIONS_DISABLED)
+		local lbl = addon.functions.createLabelAce("|cffffd700" .. htExplainText .. "|r", nil, nil, 10)
+		lbl:SetFullWidth(true)
+		g:AddChild(lbl)
+
+		local dp = AceGUI:Create("Dropdown")
+		dp:SetLabel(L["PlayerHealthText"] or "Player health text")
+		dp:SetList(list, order)
+		dp:SetValue(addon.db and addon.db["healthTextPlayerMode"] or "OFF")
+		dp:SetRelativeWidth(0.33)
+		dp:SetCallback("OnValueChanged", function(_, _, key)
+			addon.db["healthTextPlayerMode"] = key or "OFF"
+			if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("player", addon.db["healthTextPlayerMode"]) end
+		end)
+		g:AddChild(dp)
+
+		local dt = AceGUI:Create("Dropdown")
+		dt:SetLabel(L["TargetHealthText"] or "Target health text")
+		dt:SetList(list, order)
+		dt:SetValue(addon.db and addon.db["healthTextTargetMode"] or "OFF")
+		dt:SetRelativeWidth(0.33)
+		dt:SetCallback("OnValueChanged", function(_, _, key)
+			addon.db["healthTextTargetMode"] = key or "OFF"
+			if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("target", addon.db["healthTextTargetMode"]) end
+		end)
+		g:AddChild(dt)
+
+		local db = AceGUI:Create("Dropdown")
+		db:SetLabel(L["BossHealthText"] or "Boss health text")
+		db:SetList(list, order)
+		db:SetValue(addon.db and (addon.db["healthTextBossMode"] or addon.db["bossHealthMode"]) or "OFF")
+		db:SetRelativeWidth(0.33)
+		db:SetCallback("OnValueChanged", function(_, _, key)
+			addon.db["healthTextBossMode"] = key or "OFF"
+			if addon.HealthText and addon.HealthText.SetMode then addon.HealthText:SetMode("boss", addon.db["healthTextBossMode"]) end
+		end)
+		g:AddChild(db)
+
+		-- OFF = obey Blizzard CVar, others override; no extra toggles
+
 		if known then
 			g:ResumeLayout()
 			doLayout()
@@ -2177,7 +2229,7 @@ local function addUnitFrame2(container)
 
 	buildHitIndicator()
 	buildCore()
-	buildBoss()
+	buildHealthText()
 	buildCoreUF()
 	buildCast()
 	wrapper:ResumeLayout()
@@ -5021,7 +5073,11 @@ local function initUnitFrame()
 	addon.functions.InitDBValue("unitFrameScaleEnabled", false)
 	addon.functions.InitDBValue("unitFrameScale", addon.variables.unitFrameScale)
 	addon.functions.InitDBValue("hiddenCastBars", addon.db["hiddenCastBars"] or {})
-	addon.functions.InitDBValue("bossHealthMode", addon.db["bossHealthMode"] or "OFF")
+	-- Health text settings (player/target/boss)
+	addon.functions.InitDBValue("healthTextPlayerMode", addon.db["healthTextPlayerMode"] or "OFF")
+	addon.functions.InitDBValue("healthTextTargetMode", addon.db["healthTextTargetMode"] or "OFF")
+	addon.functions.InitDBValue("healthTextBossMode", addon.db["healthTextBossMode"] or addon.db["bossHealthMode"] or "OFF")
+	-- No separate CVar-override flags; OFF means follow Blizzard statusText
 	if addon.db["hideHitIndicatorPlayer"] then PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HitIndicator:Hide() end
 
 	if PetHitIndicator then hooksecurefunc(PetHitIndicator, "Show", function(self)
@@ -5151,8 +5207,14 @@ local function initUnitFrame()
 	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
 	if addon.db["unitFrameTruncateNames"] then addon.functions.updateUnitFrameNames() end
 	if addon.db["unitFrameScaleEnabled"] then addon.functions.updatePartyFrameScale() end
-	-- Initialize Boss Frames module mode
-	if addon.BossFrames and addon.BossFrames.SetMode then addon.BossFrames:SetMode(addon.db["bossHealthMode"]) end
+	-- Initialize HealthText module
+	if addon.HealthText then
+		if addon.HealthText.SetMode then
+			addon.HealthText:SetMode("player", addon.db["healthTextPlayerMode"])
+			addon.HealthText:SetMode("target", addon.db["healthTextTargetMode"])
+			addon.HealthText:SetMode("boss", addon.db["healthTextBossMode"])
+		end
+	end
 	addon.functions.ApplyCastBarVisibility()
 
 	for _, cbData in ipairs(addon.variables.unitFrameNames) do
@@ -6458,7 +6520,7 @@ local function CreateUI()
 	end
 	if ok1 or ok2 then addMediaRoot = true end
 
-	if addMediaRoot then addon.functions.addToTree(nil, { value = "media", text = "Media & Sound" }) end
+	if addMediaRoot then addon.functions.addToTree(nil, { value = "media", text = L["Media & Sound"] or "Media & Sound" }) end
 
 	-- Conditionally add "Container Actions" under Items if it exists
 	if hasMiscOption("automaticallyOpenContainer") then
