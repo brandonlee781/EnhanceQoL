@@ -12,14 +12,12 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0")
 local AceGUI = addon.AceGUI
 
-addon.variables.statusTable.groups["aura"] = true
-
-addon.functions.addToTree(nil, {
-	value = "aura",
-	text = L["Aura"],
+-- Group Aura subfeatures under Combat Assist within Combat & Dungeons
+addon.functions.addToTree("combat", {
+	value = "combatassist",
+	text = L["CombatAssist"] or "Combat Assist",
 	children = {
-		{ value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
-		{ value = "bufftracker", text = L["BuffTracker"] },
+		{ value = "bufftracker", text = L["BuffTracker"] }, -- Aura Tracker
 		{ value = "casttracker", text = L["CastTracker"] or "Cast Tracker" },
 		{ value = "cooldownnotify", text = L["CooldownNotify"] or "Cooldown Notify" },
 	},
@@ -28,17 +26,24 @@ addon.functions.addToTree(nil, {
 -- TODO add an information dialog to the root node with informations and a discord link for "minimal Auras in M+ etc."
 function addon.Aura.functions.treeCallback(container, group)
 	container:ReleaseChildren()
-	if group == "aura\001resourcebar" then
+	-- Normalize group to last segment (supports legacy "aura\001..." and new "combat\001..." paths)
+	local seg = group
+	local ap = group:find("aura\001", 1, true)
+	local cp = group:find("combat\001", 1, true)
+	if ap then seg = group:sub(ap + #"aura\001") end
+	if cp then seg = group:sub(cp + #"combat\001") end
+	-- Strip optional Combat Assist prefix when nested: combat\001combatassist\001...
+	if type(seg) == "string" and seg:sub(1, #"combatassist\001") == "combatassist\001" then seg = seg:sub(#"combatassist\001" + 1) end
+
+	if seg == "combatassist" then
 		addon.Aura.functions.addResourceFrame(container)
-	elseif group == "aura\001bufftracker" then
+	elseif seg == "bufftracker" then
 		addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.Aura.scanBuffs()
-	elseif group == "aura\001casttracker" and addon.Aura.CastTracker and addon.Aura.CastTracker.functions then
+	elseif seg == "casttracker" and addon.Aura.CastTracker and addon.Aura.CastTracker.functions then
 		addon.Aura.CastTracker.functions.addCastTrackerOptions(container)
-
-		-- refresh layout in case options changed
 		if addon.Aura.CastTracker.functions.Refresh then addon.Aura.CastTracker.functions.Refresh() end
-	elseif group == "aura\001cooldownnotify" and addon.Aura.CooldownNotify and addon.Aura.CooldownNotify.functions then
+	elseif seg == "cooldownnotify" and addon.Aura.CooldownNotify and addon.Aura.CooldownNotify.functions then
 		addon.Aura.CooldownNotify.functions.addCooldownNotifyOptions(container)
 	end
 end

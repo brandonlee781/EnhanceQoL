@@ -529,9 +529,8 @@ end
 local function buildCategoryOptions(container, catId)
 	addon.db.cooldownNotifySelectedCategory = catId
 	local cat = addon.db.cooldownNotifyCategories[catId]
-	local group = addon.functions.createContainer("InlineGroup", "List")
+	local group = addon.functions.createContainer("SimpleGroup", "List")
 	container:AddChild(group)
-	group:SetFullHeight(true)
 
 	local enableCB = addon.functions.createCheckboxAce(L["EnableCooldownNotify"]:format(cat.name), addon.db.cooldownNotifyEnabled[catId], function(_, _, val)
 		addon.db.cooldownNotifyEnabled[catId] = val
@@ -638,13 +637,18 @@ local function buildCategoryOptions(container, catId)
 	spellEdit:SetRelativeWidth(0.6)
 	group:AddChild(spellEdit)
 
+	-- Action buttons in a 2-column flow (50% width each)
+	local actionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	group:AddChild(actionsRow)
+
 	local trinket13Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(13), 150, function()
 		CN.functions.addTrinketCooldown(catId, 13)
 		refreshTree(catId)
 		container:ReleaseChildren()
 		buildCategoryOptions(container, catId)
 	end)
-	group:AddChild(trinket13Btn)
+	trinket13Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket13Btn)
 
 	local trinket14Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(14), 150, function()
 		CN.functions.addTrinketCooldown(catId, 14)
@@ -652,7 +656,8 @@ local function buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		buildCategoryOptions(container, catId)
 	end)
-	group:AddChild(trinket14Btn)
+	trinket14Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket14Btn)
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
@@ -668,19 +673,21 @@ local function buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
-			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-			self:SetFrameStrata("FULLSCREEN_DIALOG")
-			editBox:SetText(data)
-			editBox:HighlightText()
-			editBox:SetFocus()
-		end
+    StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+        local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+        self:SetFrameStrata("TOOLTIP")
+        editBox:SetText(data)
+        editBox:HighlightText()
+        editBox:SetFocus()
+    end
 		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
 	end)
-	group:AddChild(exportBtn)
+	exportBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(exportBtn)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
-	group:AddChild(shareBtn)
+	shareBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(shareBtn)
 
 	local testBtn = addon.functions.createButtonAce(L["Test"] or "Test", 150, function()
 		ensureAnchor(catId)
@@ -716,7 +723,8 @@ local function buildCategoryOptions(container, catId)
 			DCP:Show()
 		end
 	end)
-	group:AddChild(testBtn)
+	testBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(testBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db.cooldownNotifyCategories[catId].name or ""
@@ -730,7 +738,7 @@ local function buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
+    StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"].OnShow = function(self) self:SetFrameStrata("TOOLTIP") end
 		StaticPopupDialogs["EQOL_DELETE_CDN_CATEGORY"].OnAccept = function()
 			addon.db.cooldownNotifyCategories[catId] = nil
 			addon.db.cooldownNotifyEnabled[catId] = nil
@@ -750,7 +758,8 @@ local function buildCategoryOptions(container, catId)
 		end
 		StaticPopup_Show("EQOL_DELETE_CDN_CATEGORY", catName)
 	end)
-	group:AddChild(delBtn)
+	delBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(delBtn)
 	container:DoLayout()
 end
 
@@ -758,9 +767,7 @@ local function buildSpellOptions(container, catId, spellId)
 	local cat = addon.db.cooldownNotifyCategories[catId]
 	if not (cat and cat.spells and cat.spells[spellId]) then return end
 
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	wrapper:SetFullWidth(true)
-	wrapper:SetFullHeight(true)
+	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
 	container:AddChild(wrapper)
 
 	local name
@@ -874,13 +881,14 @@ function CN.functions.addCooldownNotifyOptions(container)
 					hideOnEscape = true,
 					preferredIndex = 3,
 				}
-			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
-				local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-				editBox:SetText("")
-				editBox:SetFocus()
-				local txt = self.text or self.Text
-				if txt then txt:SetText(L["ImportCategory"]) end
-			end
+            StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+                local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+                self:SetFrameStrata("TOOLTIP")
+                editBox:SetText("")
+                editBox:SetFocus()
+                local txt = self.text or self.Text
+                if txt then txt:SetText(L["ImportCategory"]) end
+            end
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].EditBoxOnTextChanged = function(editBox)
 				local frame = editBox:GetParent()
 				local name, count = previewImportCategory(editBox:GetText())
@@ -909,7 +917,7 @@ function CN.functions.addCooldownNotifyOptions(container)
 		catId = tonumber(catId)
 		widget:ReleaseChildren()
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)
@@ -923,6 +931,7 @@ function CN.functions.addCooldownNotifyOptions(container)
 	wrapper:AddChild(treeGroup)
 	treeGroup:SetFullHeight(true)
 	treeGroup:SetFullWidth(true)
+	treeGroup:SetLayout("Fill")
 	treeGroup:SetTreeWidth(200, true)
 	local ok = treeGroup:SelectByValue(tostring(addon.db.cooldownNotifySelectedCategory or 1))
 	if not ok and tree[1] and tree[1].value then treeGroup:SelectByValue(tree[1].value) end
@@ -1113,17 +1122,18 @@ local function HandleEQOLLink(link, text, button, frame)
 				if newId then refreshTree(newId) end
 			end,
 		}
-	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
-		local encoded = incoming[data]
-		local name, count = previewImportCategory(encoded or "")
-		local txt = self.text or self.Text
-		if not txt then return end
-		if name then
-			txt:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
-		else
-			txt:SetText(L["ImportCategory"])
-		end
-	end
+    StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+        self:SetFrameStrata("TOOLTIP")
+        local encoded = incoming[data]
+        local name, count = previewImportCategory(encoded or "")
+        local txt = self.text or self.Text
+        if not txt then return end
+        if name then
+            txt:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+        else
+            txt:SetText(L["ImportCategory"])
+        end
+    end
 	StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
 end
 

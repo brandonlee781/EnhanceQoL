@@ -12,8 +12,7 @@ addon.SharedMedia.functions = addon.SharedMedia.functions or {}
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_SharedMedia")
 local LSM = LibStub("LibSharedMedia-3.0")
 
-addon.variables.statusTable.groups["sharedmedia"] = true
-addon.functions.addToTree(nil, { value = "sharedmedia", text = L["Shared Media"] })
+-- No explicit tree node; content is shown directly under "Media & Sound" in Core
 
 addon.functions.InitDBValue("sharedMediaSounds", {})
 

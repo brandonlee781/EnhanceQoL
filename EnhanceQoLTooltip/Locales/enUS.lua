@@ -18,8 +18,6 @@ L["TooltipAnchorOffsetY"] = "Vertical Offset"
 L["Unit"] = "Unit"
 L["Spell"] = "Spell"
 L["Item"] = "Item"
-L["Buff"] = "Buff"
-L["Debuff"] = "Debuff"
 L["Buff_Debuff"] = "Buff/Debuff"
 -- Buff
 L["TooltipBuffHideType"] = "Hide tooltip on Buff/Debuff"
@@ -27,9 +25,6 @@ L["TooltipBuffHideInCombat"] = "Only hide it in combat"
 L["TooltipBuffHideInDungeon"] = "Only hide it in dungeons"
 
 -- Debuff
-L["TooltipDebuffHideType"] = "Hide tooltip on debuffs"
-L["TooltipDebuffHideInCombat"] = "Only hide it in combat"
-L["TooltipDebuffHideInDungeon"] = "Only hide it in dungeons"
 
 -- Unit
 L["TooltipUnitHideType"] = "Hide tooltip on Unit"

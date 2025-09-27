@@ -663,9 +663,10 @@ function addon.functions.updateAllowedDrinks()
 	local filtered = {}
 	local mageFoodMap = {}
 
-	local preferMage = db.preferMageFood
-	local ignoreBuff = db.ignoreBuffFood
-	local ignoreGems = db.ignoreGemsEarthen
+    local preferMage = db.preferMageFood
+    -- Always ignore Well Fed buff food and Jewelcrafting gem foods
+    local ignoreBuff = true
+    local ignoreGems = true
 	local allowRecuperate = db.allowRecuperate
 
 	-- iterate only once over the master list

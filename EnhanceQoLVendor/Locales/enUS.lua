@@ -1,7 +1,6 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_Vendor", "enUS", true)
 
-L["SellingAutoSell"] = "Selling (Auto-Sell)"
-L["Vendor"] = "Vendor"
+L["SellingAndShopping"] = "Selling & Shopping"
 L["MerchantWindowClosed"] = "Merchant window is closed. Stopping sales"
 
 -- General
@@ -22,19 +21,13 @@ L["vendorShowSellHighContrast"] = "High-contrast red overlay on items marked for
 L["vendorShowSellTooltip"] = "Show sale marker info in tooltips"
 L["vendorCraftShopperEnable"] = "Enable Craft Shopper (Only works in Rested areas)"
 L["vendorCraftShopperEnableDesc"] = "Displays a shopping list next to the Auction House with all missing reagents from your tracked recipes. Search and buy each item with a single click."
-L["bagFilterUpgradeLevel"] = "Upgrade Level"
-L["upgradeLevelVeteran"] = "Veteran"
-L["upgradeLevelChampion"] = "Champion"
 L["upgradeLevelHero"] = "Hero"
 L["upgradeLevelMythic"] = "Myth"
 
 L["IncludeVendorList"] = "Itemlist"
-L["ExcludeVendorList"] = "Itemlist"
 L["Include"] = "Include"
 L["Exclude"] = "Exclude"
 
-L["Add"] = "Add"
-L["Remove"] = "Remove"
 L["Item id or drag item"] = "Item id or drag item"
 L["Item id does not exist"] = "Item id does not exist"
 L["vendorAddItemToInclude"] = "Add items to this list to include for sale. IMPORTANT: This ignores all other checks for this item"

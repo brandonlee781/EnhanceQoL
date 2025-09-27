@@ -606,10 +606,13 @@ local function handleDragDrop(src, dst)
 	refreshTree(selectedCategory)
 end
 
-local function buildCategoryOptions(container, catId)
+local function buildCategoryOptions(scroll, catId)
 	local db = addon.db.castTrackerCategories[catId]
 	if not db then return end
 	db.spells = db.spells or {}
+
+	local container = addon.functions.createContainer("InlineGroup", "List")
+	scroll:AddChild(container)
 
 	local enableCB = addon.functions.createCheckboxAce(_G.ENABLE, addon.db.castTrackerEnabled[catId], function(self, _, val)
 		addon.db.castTrackerEnabled[catId] = val
@@ -627,8 +630,8 @@ local function buildCategoryOptions(container, catId)
 	local nameEdit = addon.functions.createEditboxAce(L["CategoryName"], db.name, function(self, _, text)
 		if text ~= "" then db.name = text end
 		refreshTree(catId)
-		container:ReleaseChildren()
-		buildCategoryOptions(container, catId)
+		scroll:ReleaseChildren()
+		buildCategoryOptions(scroll, catId)
 	end)
 	container:AddChild(nameEdit)
 
@@ -765,13 +768,17 @@ local function buildCategoryOptions(container, catId)
 			self:SetText("")
 			rebuildAltMapping()
 			refreshTree(catId)
-			container:ReleaseChildren()
-			buildCategoryOptions(container, catId)
+			scroll:ReleaseChildren()
+			buildCategoryOptions(scroll, catId)
 		end
 	end)
 	groupSpells:AddChild(addEdit)
 
 	container:AddChild(addon.functions.createSpacerAce())
+
+	-- Action buttons in a 2-column flow (50% width each)
+	local actionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	container:AddChild(actionsRow)
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
@@ -787,19 +794,21 @@ local function buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
-			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-			self:SetFrameStrata("FULLSCREEN_DIALOG")
-			editBox:SetText(data)
-			editBox:HighlightText()
-			editBox:SetFocus()
-		end
+    StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+        local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+        self:SetFrameStrata("TOOLTIP")
+        editBox:SetText(data)
+        editBox:HighlightText()
+        editBox:SetFocus()
+    end
 		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
 	end)
-	container:AddChild(exportBtn)
+	exportBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(exportBtn)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
-	container:AddChild(shareBtn)
+	shareBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(shareBtn)
 
 	local importBtn = addon.functions.createButtonAce(L["ImportCategory"], 150, function()
 		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"]
@@ -814,12 +823,13 @@ local function buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].OnShow = function(self)
-			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-			editBox:SetText("")
-			editBox:SetFocus()
-			self.text:SetText(L["ImportCategory"])
-		end
+    StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].OnShow = function(self)
+        local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+        self:SetFrameStrata("TOOLTIP")
+        editBox:SetText("")
+        editBox:SetFocus()
+        self.text:SetText(L["ImportCategory"])
+    end
 		StaticPopupDialogs["EQOL_IMPORT_CATEGORY_BTN"].EditBoxOnTextChanged = function(editBox)
 			local frame = editBox:GetParent()
 			local name, count = previewImportCategory(editBox:GetText())
@@ -842,7 +852,8 @@ local function buildCategoryOptions(container, catId)
 		end
 		StaticPopup_Show("EQOL_IMPORT_CATEGORY_BTN")
 	end)
-	container:AddChild(importBtn)
+	importBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(importBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db.castTrackerCategories[catId].name or ""
@@ -856,7 +867,7 @@ local function buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
+    StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"].OnShow = function(self) self:SetFrameStrata("TOOLTIP") end
 		StaticPopupDialogs["EQOL_DELETE_CAST_CATEGORY"].OnAccept = function()
 			if activeBars[catId] then
 				local toRelease = {}
@@ -884,12 +895,13 @@ local function buildCategoryOptions(container, catId)
 			updateEventRegistration()
 			selectedCategory = next(addon.db.castTrackerCategories) or 1
 			refreshTree(selectedCategory)
-			container:ReleaseChildren()
+			scroll:ReleaseChildren()
 		end
 		StaticPopup_Show("EQOL_DELETE_CAST_CATEGORY", catName)
 	end)
-	container:AddChild(delBtn)
-	container:DoLayout()
+	delBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(delBtn)
+	scroll:DoLayout()
 end
 
 local function buildSpellOptions(container, catId, spellId)
@@ -897,9 +909,11 @@ local function buildSpellOptions(container, catId, spellId)
 	local spell = cat and cat.spells[spellId]
 	if not cat or not spell then return end
 
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	wrapper:SetFullWidth(true)
-	container:AddChild(wrapper)
+	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	container:AddChild(groupCore)
+
+	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
+	groupCore:AddChild(wrapper)
 
 	local info = C_Spell.GetSpellInfo(spellId)
 	local name = info and info.name or tostring(spellId)
@@ -1032,16 +1046,17 @@ local function buildSpellOptions(container, catId, spellId)
 		local info = C_Spell.GetSpellInfo(spellId)
 		local spellName = info and info.name or tostring(spellId)
 		local nameForPopup = (spell.treeName and spell.treeName ~= "") and spell.treeName or spellName
-		StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"] = StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"]
-			or {
-				text = L["DeleteSpellConfirm"],
-				button1 = YES,
-				button2 = CANCEL,
-				timeout = 0,
-				whileDead = true,
-				hideOnEscape = true,
-				preferredIndex = 3,
-			}
+    StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"] = StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"]
+        or {
+            text = L["DeleteSpellConfirm"],
+            button1 = YES,
+            button2 = CANCEL,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"].OnShow = function(self) self:SetFrameStrata("TOOLTIP") end
 		StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"].OnAccept = function()
 			cat.spells[spellId] = nil
 
@@ -1431,6 +1446,7 @@ function CastTracker.functions.addCastTrackerOptions(container)
 	treeGroup = AceGUI:Create("EQOL_DragTreeGroup")
 	treeGroup:SetFullHeight(true)
 	treeGroup:SetFullWidth(true)
+	treeGroup:SetLayout("Fill")
 	treeGroup:SetTreeWidth(200, true)
 	treeGroup:SetTree(getCategoryTree())
 	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
@@ -1468,12 +1484,13 @@ function CastTracker.functions.addCastTrackerOptions(container)
 					hideOnEscape = true,
 					preferredIndex = 3,
 				}
-			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
-				local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-				editBox:SetText("")
-				editBox:SetFocus()
-				self.Text:SetText(L["ImportCategory"])
-			end
+            StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+                local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+                self:SetFrameStrata("TOOLTIP")
+                editBox:SetText("")
+                editBox:SetFocus()
+                self.Text:SetText(L["ImportCategory"])
+            end
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].EditBoxOnTextChanged = function(editBox)
 				local frame = editBox:GetParent()
 				local name, count = previewImportCategory(editBox:GetText())
@@ -1503,9 +1520,8 @@ function CastTracker.functions.addCastTrackerOptions(container)
 		selectedCategory = catId
 		addon.db.castTrackerSelectedCategory = catId
 		widget:ReleaseChildren()
-		widget:SetFullHeight(true)
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)
@@ -1628,15 +1644,16 @@ local function HandleEQOLLink(link, text, button, frame)
 			end,
 		}
 
-	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
-		local encoded = incoming[data]
-		local name, count = previewImportCategory(encoded or "")
-		if name then
-			self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
-		else
-			self.text:SetText(L["ImportCategory"])
-		end
-	end
+    StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+        self:SetFrameStrata("TOOLTIP")
+        local encoded = incoming[data]
+        local name, count = previewImportCategory(encoded or "")
+        if name then
+            self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+        else
+            self.text:SetText(L["ImportCategory"])
+        end
+    end
 
 	StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
 end

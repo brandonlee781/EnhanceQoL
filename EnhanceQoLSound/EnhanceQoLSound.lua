@@ -93,11 +93,9 @@ table.insert(dynamicChildren, { value = "debug", text = "Debug" })
 --@end-debug@
 
 -- Übergib die dynamische Baumstruktur an addToTree
-addon.functions.addToTree(nil, {
-	value = "sound",
-	text = SOUND,
-	children = dynamicChildren,
-}, true)
+-- Place Sound categories under Media & Sound
+-- Flatten Sound topics directly under Media & Sound (no extra "Sound" node)
+for _, child in ipairs(dynamicChildren) do addon.functions.addToTree("media", child, true) end
 
 local AceGUI = addon.AceGUI
 
@@ -179,18 +177,30 @@ end)
 local function addTWWFrame(container, group) addClassFrame() end
 
 function addon.Sounds.functions.treeCallback(container, group)
-	container:ReleaseChildren()
-	if group == "sound\001debug" then
-		addDebugFrame(container)
-		return
-	end
-	local partialGroup = string.gsub(group, "^sound\001", "")
+    container:ReleaseChildren()
+    -- Normalize to support both legacy "sound\001..." and flattened "media\001..." paths
+    if group == "sound\001debug" or group == "media\001debug" then
+        addDebugFrame(container)
+        return
+    end
+    local partialGroup
+    local posSound = group:find("sound\001", 1, true)
+    if posSound then
+        partialGroup = group:sub(posSound + #("sound\001"))
+    else
+        local posMedia = group:find("media\001", 1, true)
+        if posMedia then
+            partialGroup = group:sub(posMedia + #("media\001"))
+        else
+            partialGroup = group
+        end
+    end
 	local segments = {}
 	for segment in string.gmatch(partialGroup, "([^\001]+)") do
 		table.insert(segments, segment)
 	end
 
-	local soundFileTable = addon.Sounds.soundFiles
+    local soundFileTable = addon.Sounds.soundFiles
 	for _, seg in ipairs(segments) do
 		if type(soundFileTable[seg]) == "table" then
 			soundFileTable = soundFileTable[seg]

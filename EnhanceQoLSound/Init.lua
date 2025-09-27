@@ -15,48 +15,43 @@ addon.functions.InitDBValue("soundMutedSounds", {})
 
 addon.Sounds.soundFiles = {
 	["class"] = {
-		["class_general"] = {
-			["T33_Jackpot_Sound"] = { -- SoundID 283499
-				6421997,
-				6421999,
-				6422001,
-				6422003,
-				6422005,
-			},
+		["T33_Jackpot_Sound"] = { -- SoundID 283499
+			6421997,
+			6421999,
+			6422001,
+			6422003,
+			6422005,
 		},
-		["class_warlock"] = {
-			["class_warlock_summon_imp"] = {
-				-- 1255429,
-				-- 1255430,
-				-- 1255431,
-				-- 1255432,
-				-- 1255433,
-				551168,
-			},
-			["class_warlock_succubus_butt_slap"] = {
-				561144,
-				1466150,
-			},
-			["class_warlock_summon_felguard"] = {
-				547320,
-				547328,
-				547335,
-				547332,
-			},
-			["class_warlock_summon_succubus"] = {
-				561163,
-				561168,
-				561157,
-				561154,
-			},
-			["class_warlock_summon"] = {
-				2068351,
-				2068352,
-			},
+		["class_warlock_summon_imp"] = {
+			-- 1255429,
+			-- 1255430,
+			-- 1255431,
+			-- 1255432,
+			-- 1255433,
+			551168,
+		},
+		["class_warlock_succubus_butt_slap"] = {
+			561144,
+			1466150,
+		},
+		["class_warlock_summon_felguard"] = {
+			547320,
+			547328,
+			547335,
+			547332,
+		},
+		["class_warlock_summon_succubus"] = {
+			561163,
+			561168,
+			561157,
+			561154,
+		},
+		["class_warlock_summon"] = {
+			2068351,
+			2068352,
 		},
 	},
 	["dungeon"] = {
-		["affix"] = {
 			["xalatath"] = {
 				2530794, -- Open your mind to the whispers
 				2530811, -- Do you see it?
@@ -85,8 +80,6 @@ addon.Sounds.soundFiles = {
 				6178506, -- My power is transcendent
 				6178508, -- A gift of power
 			},
-		},
-		["tww"] = {
 			["rookery_npc"] = {
 				-- Stormrider Vokmar
 				5858404,
@@ -184,7 +177,6 @@ addon.Sounds.soundFiles = {
 				5835283, -- He's fled from the Hall of Awakening into the Stonevault
 				5835268, -- He's probably running like a frightened mouse. Wee, sleekit, cowering, timorous beastie!
 			},
-		},
 	},
 	["mounts"] = {
 		["banlu"] = {
@@ -529,8 +521,8 @@ addon.Sounds.soundFiles = {
 			-- Soundkit 1105
 			569793,
 			569802,
-			569812
-		}
+			569812,
+		},
 	},
 	["interface"] = {
 		["general"] = {

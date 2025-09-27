@@ -1981,7 +1981,7 @@ end
 function addon.Aura.functions.buildCategoryOptions(container, catId)
 	local cat = getCategory(catId)
 	if not cat then return end
-	local core = addon.functions.createContainer("InlineGroup", "Flow")
+	local core = addon.functions.createContainer("InlineGroup", "List")
 	container:AddChild(core)
 
 	local enableCB = addon.functions.createCheckboxAce(L["EnableBuffTracker"]:format(cat.name), addon.db["buffTrackerEnabled"][catId], function(self, _, val)
@@ -2056,13 +2056,18 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 	spellEdit:SetRelativeWidth(0.6)
 	core:AddChild(spellEdit)
 
+	-- Action buttons in a 2-column flow (50% width each)
+	local actionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	core:AddChild(actionsRow)
+
 	local trinket1Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(1), 150, function()
 		addon.Aura.functions.addTrinketBuff(catId, 13)
 		refreshTree(catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(trinket1Btn)
+	trinket1Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket1Btn)
 
 	local trinket2Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(2), 150, function()
 		addon.Aura.functions.addTrinketBuff(catId, 14)
@@ -2070,7 +2075,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(trinket2Btn)
+	trinket2Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket2Btn)
 
 	local mhEnchantBtn = addon.functions.createButtonAce(L["TrackMainhandEnchant"], 150, function()
 		addon.Aura.functions.addWeaponEnchantBuff(catId, 16)
@@ -2078,7 +2084,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(mhEnchantBtn)
+	mhEnchantBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(mhEnchantBtn)
 
 	local ohEnchantBtn = addon.functions.createButtonAce(L["TrackOffhandEnchant"], 150, function()
 		addon.Aura.functions.addWeaponEnchantBuff(catId, 17)
@@ -2086,7 +2093,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(ohEnchantBtn)
+	ohEnchantBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(ohEnchantBtn)
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
@@ -2102,19 +2110,21 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
-			self:SetFrameStrata("FULLSCREEN_DIALOG")
-			local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-			editBox:SetText(data)
-			editBox:HighlightText()
-			editBox:SetFocus()
-		end
+        StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+            self:SetFrameStrata("TOOLTIP")
+            local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+            editBox:SetText(data)
+            editBox:HighlightText()
+            editBox:SetFocus()
+        end
 		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
 	end)
-	core:AddChild(exportBtn)
+	exportBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(exportBtn)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
-	core:AddChild(shareBtn)
+	shareBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(shareBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db["buffTrackerCategories"][catId].name or ""
@@ -2128,7 +2138,7 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
-		StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
+        StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnShow = function(self) self:SetFrameStrata("TOOLTIP") end
 		StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnAccept = function()
 			-- clean up all buff data for this category
 			for buffId, buff in pairs(addon.db["buffTrackerCategories"][catId].buffs or {}) do
@@ -2159,6 +2169,7 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
 	end)
+	-- Delete stays on its own row below
 	core:AddChild(delBtn)
 
 	return core
@@ -2174,8 +2185,8 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 
 	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
 	groupCore:AddChild(wrapper)
-	wrapper:SetFullWidth(true)
-	wrapper:SetFullHeight(true)
+	-- wrapper:SetFullWidth(true)
+	-- wrapper:SetFullHeight(true)
 
 	local label = AceGUI:Create("Label")
 	local buffText = buff.name or ""
@@ -2619,6 +2630,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	treeGroup:SetFullWidth(true)
 	treeGroup:SetTreeWidth(200, true)
 	treeGroup:SetTree(getCategoryTree())
+	treeGroup:SetLayout("Fill")
 	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
 		-- Handle click on pseudo‑node for adding new categories
 		if value == "ADD_CATEGORY" then
@@ -2634,11 +2646,12 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 				direction = "RIGHT",
 				buffs = {},
 			}
-			addon.db["buffTrackerEnabled"][newId] = true
+			addon.db["buffTrackerEnabled"][newId] = false
 			addon.db["buffTrackerLocked"][newId] = false
 			addon.db["buffTrackerSounds"][newId] = {}
 			addon.db["buffTrackerSoundsEnabled"][newId] = {}
 			ensureAnchor(newId)
+			applyLockState()
 			refreshTree(newId)
 			return -- don’t build options for pseudo‑node
 		elseif value == "IMPORT_CATEGORY" then
@@ -2654,12 +2667,13 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 					hideOnEscape = true,
 					preferredIndex = 3,
 				}
-			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
-				local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
-				editBox:SetText("")
-				editBox:SetFocus()
-				self.Text:SetText(L["ImportCategory"])
-			end
+            StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+                local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
+                self:SetFrameStrata("TOOLTIP")
+                editBox:SetText("")
+                editBox:SetFocus()
+                self.Text:SetText(L["ImportCategory"])
+            end
 			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].EditBoxOnTextChanged = function(editBox)
 				local frame = editBox:GetParent()
 				local name, count = previewImportCategory(editBox:GetText())
@@ -2689,7 +2703,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.db["buffTrackerSelectedCategory"] = catId
 		widget:ReleaseChildren()
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)
@@ -2809,15 +2823,16 @@ local function HandleEQOLLink(link, text, button, frame)
 			end,
 		}
 
-	StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
-		local encoded = incoming[data]
-		local name, count = previewImportCategory(encoded or "")
-		if name then
-			self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
-		else
-			self.text:SetText(L["ImportCategory"])
-		end
-	end
+    StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+        self:SetFrameStrata("TOOLTIP")
+        local encoded = incoming[data]
+        local name, count = previewImportCategory(encoded or "")
+        if name then
+            self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+        else
+            self.text:SetText(L["ImportCategory"])
+        end
+    end
 
 	StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
 end

@@ -12,6 +12,8 @@ L["Move"] = "Layout Tools"
 L["uiScalerPlayerSpellsFrameMove"] = "Enable to move " .. PLAYERSPELLS_BUTTON
 L["uiScalerPlayerSpellsFrameEnabled"] = "Enable to Scale the " .. PLAYERSPELLS_BUTTON
 
+-- Slider label for scaling the Player Spells (Talents) frame
+L["talentFrameUIScale"] = "Talent/Spells frame scale"
 
-L["uiScalerCharacterFrameMove"] = "Enable to move " .. CHARACTER_BUTTON
-L["uiScalerCharacterFrameEnabled"] = "Enable to Scale the " .. CHARACTER_BUTTON
+
+-- Deprecated/unused (kept only if reintroduced)

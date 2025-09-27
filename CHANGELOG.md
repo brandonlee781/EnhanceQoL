@@ -1,6 +1,6 @@
 # Changelog
 
-## [5.0.0] – 2025-09-30
+## [5.0.0] – 2025-09-28
 
 ### 🧭 Major change — Teleport Compendium (redesign)
 
@@ -30,14 +30,17 @@
 - **Health Macro:**  
   ▸ Option to use **combat potions/custom spells** in combat.  
   ▸ Customizable priority: **custom spells**, **potions**, **healthstones**, **combat potions**.
-- **Boss Frame Health Text:** Always show **percent**, **value**, or **both** on boss frames **independent** of the global CVar.  
-  ▸ Especially useful if you keep `statusText = 0`. If you set `statusText = 1` (Blizzard “always show”), this is usually redundant.
+- **Player, Target and Boss Frame Health Text:** Always show **percent**, **value**, or **both** on frames **independent** of the global CVar.
 
 ### 🐛 Fixed
 
 - **Health Macro:** _Invigorating Healing Potion_ used the wrong healing amount — corrected.
 - **Localization:** Fixed several dialogs with missing localized strings.
 - **Bag filter:** Sometimes the bag filter was empty
+- **Instance difficulty:** Disabling this setting while not in Dungeon showed the default icon
+- **Aura Tracker:** After deleting all auras, switching menus could auto‑select “+ Add Category” and spawn a new frame. New categories now start disabled so nothing pops up unexpectedly.
+- **Option UI:** Resizing sometimes overlapped outside of the option menu
+- **Strata Issue:** CastTracker, AuraTracker, CooldownNotify had some trouble with frame strata of popups
 
 ---
 

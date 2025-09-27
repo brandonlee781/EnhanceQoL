@@ -2,32 +2,21 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_MythicPlus", "enUS", tr
 
 L["enableKeystoneHelper"] = "Enable Keystone Helper"
 L["enableKeystoneHelperDesc"] = "Adds ready check and pull timer buttons to the Keystone frame. Requires party leader privileges"
-L["enableKeystoneHelperNewUI"] = "Enable the improved Keystone Helper UI"
 L["Keystone"] = "Keystone"
 L["NoKeystone"] = "No Info"
 L["Automatically insert keystone"] = "Automatically insert keystone"
-L["Mythic Plus"] = "Mythic+"
 L["Close all bags on keystone insert"] = "Close all bags on keystone insert"
 L["ReadyCheck"] = "Ready Check"
-L["ReadyCheckWaiting"] = "Checking Readiness..."
 L["PullTimer"] = "Pull Timer"
-L["Pull"] = "Pull"
-L["Cancel"] = "Cancel"
-L["Cancel Pull Timer on click"] = "Cancel Pull Timer on click"
 L["noChatOnPullTimer"] = "No chatmessage on Pull Timer"
 L["sliderShortTime"] = "Pull Timer rightclick"
 L["sliderLongTime"] = "Pull Timer"
-L["Stating"] = "Starting..."
 L["autoKeyStart"] = "Start key automatically after Pull Timer"
-L["mythicPlusTruePercent"] = "Show decimal value of Enemy Forces"
-L["mythicPlusChestTimer"] = "Show chest timers"
-L["interruptWithShift"] = "Hold shift to interrupt that feature"
 
 L["None"] = "No Pull Timer"
 L["Blizzard Pull Timer"] = "Blizzard Pull Timer"
 L["DBM / BigWigs Pull Timer"] = "DBM / BigWigs Pull Timer"
 L["Both"] = "Blizzard and DBM / BigWigs"
-L["Pull Timer Type"] = "Pull Timer Type"
 
 L["groupfinderShowDungeonScoreFrame"] = "Show %s frame next to the Dungeon Finder"
 -- Keystone
@@ -55,18 +44,13 @@ L["Bar Texture"] = "Bar Texture"
 
 -- Automark Frame
 L["AutoMark"] = "Auto marker"
+L["Exclude"] = "Exclude"
 L["autoMarkTankInDungeon"] = "Automatically mark the %s in dungeons"
 L["autoMarkTankInDungeonMarker"] = "Tank marker"
 L["autoMarkHealerInDungeon"] = "Automatically mark the %s in dungeons"
 L["autoMarkHealerInDungeonMarker"] = "Healer marker"
-L["Disabled"] = "Disabled"
 L["autoMarkTankExplanation"] = "It will mark the %s when he has no mark and only changes the mark, when you are either %s or %s"
 
-L["mythicPlusIgnoreMythic"] = "Do not apply a raid marker in %s dungeons"
-L["mythicPlusIgnoreHeroic"] = "Do not apply a raid marker in %s dungeons"
-L["mythicPlusIgnoreEvent"] = "Do not apply a raid marker in %s dungeons"
-L["mythicPlusIgnoreNormal"] = "Do not apply a raid marker in %s dungeons"
-L["mythicPlusIgnoreTimewalking"] = "Do not apply a raid marker in %s dungeons"
 
 -- Teleports
 L["Teleports"] = "Teleports"
@@ -117,7 +101,6 @@ L["RequiredTalents"] = "Required Talents"
 L["DeletedLoadout"] = "Deleted Talent Loadout"
 L["MissingTalentLoadout"] = "Some Talent Loadouts used by Talent Reminder\nhave been removed and can no longer be used:"
 
-L["groupFilter"] = "Group Filter"
 L["mythicPlusEnableDungeonFilter"] = "Add advanced filters to the Dungeon Finder"
 L["mythicPlusEnableDungeonFilterDesc"] =
 	"Adds advanced filters to the Dungeon Finder (party fit, Bloodlust/Battle Res, same-spec etc.). While this is enabled, the \"%s\" control is adjusted to prevent Blizzard UI 'taint' errors."

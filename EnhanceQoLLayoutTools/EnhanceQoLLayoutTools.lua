@@ -14,13 +14,14 @@ local db = addon.db["eqolLayoutTools"]
 
 addon.variables.statusTable.groups["move"] = true
 
-addon.functions.addToTree(nil, {
-	value = "move",
-	text = L["Move"],
-	children = {
-		{ value = "character", text = CHARACTER_BUTTON },
-		{ value = "talentsspells", text = PLAYERSPELLS_BUTTON },
-	},
+-- Place layout tools under UI & Input
+addon.functions.addToTree("ui", {
+    value = "move",
+    text = L["Move"],
+    children = {
+        { value = "character", text = CHARACTER_BUTTON },
+        { value = "talentsspells", text = PLAYERSPELLS_BUTTON },
+    },
 })
 
 function addon.LayoutTools.functions.treeCallback(container, group)

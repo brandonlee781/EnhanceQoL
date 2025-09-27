@@ -260,8 +260,13 @@ local function addVendorFrame(container, type)
 	local uText = {} -- Text for upgrade track
 	local value = addon.Vendor.variables.tabNames[type]
 	local labelHeadlineExplain
+
+	local scroll = addon.functions.createContainer("ScrollFrame", "List")
+	scroll:SetFullWidth(true)
+	scroll:SetFullHeight(true)
+	container:AddChild(scroll)
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
+	scroll:AddChild(wrapper)
 
 	local iqColor = ITEM_QUALITY_COLORS[type].hex .. _G["ITEM_QUALITY" .. type .. "_DESC"] .. "|r"
 
@@ -389,6 +394,7 @@ local function addVendorFrame(container, type)
 		labelHeadlineExplain:SetFullWidth(true)
 	end
 	updateSellMarks(nil, true)
+	scroll:DoLayout()
 end
 
 local function addInExcludeFrame(container, type)
@@ -554,39 +560,13 @@ local function addGeneralFrame(container)
 		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], func, desc)
 		groupMark:AddChild(cbElement)
 	end
-	scroll:DoLayout()
-end
 
--- Integrate Vendor into General -> Vendors & Economy -> Selling (Auto‑Sell)
--- addon.variables.statusTable.groups["general\001economy"] = true
--- addon.variables.statusTable.groups["general\001economy\001selling"] = true
+	-- Integrate Craft Shopper directly into Selling root
+	local groupCS = addon.functions.createContainer("InlineGroup", "List")
+	groupCS:SetTitle(L["vendorCraftShopperTitle"])
+	wrapper:AddChild(groupCS)
 
--- Add a dedicated Craft Shopper node under Vendors & Economy
-addon.functions.addToTree("general\001economy", { value = "craftshopper", text = L["vendorCraftShopperTitle"] })
-
--- Create the Selling node under Vendors & Economy
-addon.functions.addToTree("general\001economy", {
-	value = "selling",
-	text = L["SellingAutoSell"] or "Selling (Auto-Sell)",
-}, true)
-
--- Add Vendor pages under Selling
-local sellingPath = "general\001economy\001selling"
-addon.functions.addToTree(sellingPath, { value = "common", text = ITEM_QUALITY_COLORS[1].hex .. _G["ITEM_QUALITY1_DESC"] .. "|r" }, true)
-addon.functions.addToTree(sellingPath, { value = "uncommon", text = ITEM_QUALITY_COLORS[2].hex .. _G["ITEM_QUALITY2_DESC"] .. "|r" }, true)
-addon.functions.addToTree(sellingPath, { value = "rare", text = ITEM_QUALITY_COLORS[3].hex .. _G["ITEM_QUALITY3_DESC"] .. "|r" }, true)
-addon.functions.addToTree(sellingPath, { value = "epic", text = ITEM_QUALITY_COLORS[4].hex .. _G["ITEM_QUALITY4_DESC"] .. "|r" }, true)
-addon.functions.addToTree(sellingPath, { value = "include", text = L["Include"] }, true)
-addon.functions.addToTree(sellingPath, { value = "exclude", text = L["Exclude"] }, true)
-
-local function addCraftShopperConfig(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
-
-	local group = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(group)
-
-	local cb = addon.functions.createCheckboxAce(L["vendorCraftShopperEnable"], addon.db["vendorCraftShopperEnable"], function(_, _, checked)
+	local cbCS = addon.functions.createCheckboxAce(L["vendorCraftShopperEnable"], addon.db["vendorCraftShopperEnable"], function(_, _, checked)
 		addon.db["vendorCraftShopperEnable"] = checked
 		if checked then
 			addon.Vendor.CraftShopper.EnableCraftShopper()
@@ -594,8 +574,31 @@ local function addCraftShopperConfig(container)
 			addon.Vendor.CraftShopper.DisableCraftShopper()
 		end
 	end, L["vendorCraftShopperEnableDesc"])
-	group:AddChild(cb)
+	groupCS:AddChild(cbCS)
+
+	scroll:DoLayout()
 end
+
+-- Integrate Vendor into Items -> Vendors & Economy -> Selling (Auto‑Sell)
+-- addon.variables.statusTable.groups["items\001economy"] = true
+-- addon.variables.statusTable.groups["items\001economy\001selling"] = true
+
+-- Create the Selling node under Vendors & Economy (includes Craft Shopper)
+addon.functions.addToTree("items\001economy", {
+	value = "selling",
+	text = L["SellingAndShopping"] or "Selling & Shopping",
+}, true)
+
+-- Add Vendor pages under Selling
+local sellingPath = "items\001economy\001selling"
+addon.functions.addToTree(sellingPath, { value = "common", text = ITEM_QUALITY_COLORS[1].hex .. _G["ITEM_QUALITY1_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "uncommon", text = ITEM_QUALITY_COLORS[2].hex .. _G["ITEM_QUALITY2_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "rare", text = ITEM_QUALITY_COLORS[3].hex .. _G["ITEM_QUALITY3_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "epic", text = ITEM_QUALITY_COLORS[4].hex .. _G["ITEM_QUALITY4_DESC"] .. "|r" }, true)
+addon.functions.addToTree(sellingPath, { value = "include", text = L["Include"] }, true)
+addon.functions.addToTree(sellingPath, { value = "exclude", text = L["Exclude"] }, true)
+
+-- Craft Shopper is integrated into the Selling root; no standalone panel needed
 
 function addon.Vendor.functions.treeCallback(container, group)
 	lastEbox = nil
@@ -603,15 +606,13 @@ function addon.Vendor.functions.treeCallback(container, group)
 	local _, avgItemLevelEquipped = GetAverageItemLevel()
 	addon.Vendor.variables.avgItemLevelEquipped = avgItemLevelEquipped
 	-- Normalize to old paths so existing logic can be reused
-	local prefix = "general\001economy\001selling"
+	local prefix = "items\001economy\001selling"
 	if group == prefix then group = "vendor" end
 	if group:sub(1, #prefix + 1) == prefix .. "\001" then group = "vendor" .. group:sub(#prefix + 1) end
 
 	-- Prüfen, welche Gruppe ausgewählt wurde
 	if group == "vendor" then
 		addGeneralFrame(container)
-	elseif group == "general\001economy\001craftshopper" or group == "vendor\001craftshopper" then
-		addCraftShopperConfig(container)
 	elseif group == "vendor\001common" then
 		addVendorFrame(container, 1)
 	elseif group == "vendor\001uncommon" then

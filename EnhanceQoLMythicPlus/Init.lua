@@ -6,23 +6,19 @@ else
 	error(parentAddonName .. " is not loaded")
 end
 
--- TODO remove the option for "NewUI" and make it default, when people enable Keystone helper, remove all old code referencing the "non new"
+-- Always use the improved Keystone Helper UI (legacy removed)
 -- PullTimer
 addon.functions.InitDBValue("enableKeystoneHelper", true)
-addon.functions.InitDBValue("enableKeystoneHelperNewUI", true)
 addon.functions.InitDBValue("autoInsertKeystone", false)
 addon.functions.InitDBValue("closeBagsOnKeyInsert", false)
 addon.functions.InitDBValue("noChatOnPullTimer", false)
 addon.functions.InitDBValue("autoKeyStart", false)
-addon.functions.InitDBValue("mythicPlusTruePercent", false)
-addon.functions.InitDBValue("mythicPlusChestTimer", false)
 addon.functions.InitDBValue("mythicPlusCurrentPull", false)
 addon.functions.InitDBValue("mythicPlusCurrentPullLocked", false)
 addon.functions.InitDBValue("mythicPlusCurrentPullFontSize", 14)
 addon.functions.InitDBValue("mythicPlusCurrentPullPoint", "CENTER")
 addon.functions.InitDBValue("mythicPlusCurrentPullX", 0)
 addon.functions.InitDBValue("mythicPlusCurrentPullY", 0)
-addon.functions.InitDBValue("cancelPullTimerOnClick", true)
 addon.functions.InitDBValue("pullTimerShortTime", 5)
 addon.functions.InitDBValue("pullTimerLongTime", 10)
 addon.functions.InitDBValue("PullTimerType", 4)
@@ -357,7 +353,7 @@ function addon.MythicPlus.functions.addPullButton()
 	rcButton:RegisterForClicks("RightButtonDown", "LeftButtonDown")
 	rcButton:SetScript("OnClick", function(self, button)
 		if self.running then
-			if addon.db["cancelPullTimerOnClick"] then cancelPull(self) end
+			cancelPull(self)
 			return
 		end
 
