@@ -857,24 +857,42 @@ local function addAutoMarkFrame(container)
 	end
 
 	if addon.db["autoMarkHealerInDungeon"] or addon.db["autoMarkTankInDungeon"] then
-		local groupOptions = addon.functions.createContainer("InlineGroup", "List")
-		wrapper:AddChild(groupOptions)
-		local data = {
-			{ text = L["mythicPlusIgnoreNormal"]:format(PLAYER_DIFFICULTY1), var = "mythicPlusIgnoreNormal" },
-			{ text = L["mythicPlusIgnoreHeroic"]:format(PLAYER_DIFFICULTY2), var = "mythicPlusIgnoreHeroic" },
-			{ text = L["mythicPlusIgnoreEvent"]:format(BATTLE_PET_SOURCE_7), var = "mythicPlusIgnoreEvent" },
-			{ text = L["mythicPlusIgnoreMythic"]:format(PLAYER_DIFFICULTY6), var = "mythicPlusIgnoreMythic" },
-			{ text = L["mythicPlusIgnoreTimewalking"]:format(PLAYER_DIFFICULTY_TIMEWALKER), var = "mythicPlusIgnoreTimewalking" },
+		-- Sub-inline group for exclusions (kept near main options)
+		local sub = addon.functions.createContainer("InlineGroup", "List")
+		sub:SetTitle(L["Exclude"] or "Excludes")
+		groupCore:AddChild(sub)
+
+		-- Multi-select dropdown to replace individual checkboxes
+		local list = {
+			normal = PLAYER_DIFFICULTY1,
+			heroic = PLAYER_DIFFICULTY2,
+			mythic = PLAYER_DIFFICULTY6,
+			timewalking = PLAYER_DIFFICULTY_TIMEWALKER,
+			event = BATTLE_PET_SOURCE_7,
+		}
+		local order = { "normal", "heroic", "mythic", "timewalking", "event" }
+		local keyMap = {
+			normal = "mythicPlusIgnoreNormal",
+			heroic = "mythicPlusIgnoreHeroic",
+			mythic = "mythicPlusIgnoreMythic",
+			timewalking = "mythicPlusIgnoreTimewalking",
+			event = "mythicPlusIgnoreEvent",
 		}
 
-		-- table.sort(data, function(a, b) return a.text < b.text end)
-
-		for _, cbData in ipairs(data) do
-			local uFunc = function(self, _, value) addon.db[cbData.var] = value end
-			if cbData.func then uFunc = cbData.func end
-			local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc)
-			groupOptions:AddChild(cbElement)
-		end
+		local dd = addon.functions.createDropdownAce("Ignore in", list, order, function(widget, _, key, checked)
+			local dbKey = keyMap[key]
+			if dbKey then addon.db[dbKey] = checked and true or false end
+		end)
+		dd:SetMultiselect(true)
+		-- Initialize selected items from legacy booleans
+		dd:SetCallback("OnOpened", function(widget)
+			for _, code in ipairs(order) do
+				local dbKey = keyMap[code]
+				if dbKey then widget:SetItemValue(code, addon.db[dbKey] and true or false) end
+			end
+		end)
+		dd:SetFullWidth(true)
+		sub:AddChild(dd)
 	end
 	scroll:DoLayout()
 end

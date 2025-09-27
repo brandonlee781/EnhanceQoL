@@ -52,6 +52,7 @@ L["Bar Texture"] = "Bar Texture"
 
 -- Automark Frame
 L["AutoMark"] = "Auto marker"
+L["Exclude"] = "Exclude"
 L["autoMarkTankInDungeon"] = "Automatically mark the %s in dungeons"
 L["autoMarkTankInDungeonMarker"] = "Tank marker"
 L["autoMarkHealerInDungeon"] = "Automatically mark the %s in dungeons"
