@@ -1257,8 +1257,6 @@ for _, child in ipairs(mpChildren) do
 	addon.functions.addToTree("combat", child, true)
 end
 
--- Place Group Filter under Combat
-addon.functions.addToTree("combat", { value = "groupfilter", text = L["groupFilter"] }, true)
 
 -- Place Potion Tracker under Combat (works everywhere)
 addon.functions.addToTree("combat", { value = "potiontracker", text = L["Potion Tracker"] }, true)
@@ -1421,8 +1419,39 @@ addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] },
             if known then g:ResumeLayout(); doLayout() end
         end
 
+        local function buildGroupFilter()
+            local g, known = ensureGroup("groupfilter", LFG_TITLE)
+            local cb = addon.functions.createCheckboxAce(
+                L["mythicPlusEnableDungeonFilter"],
+                addon.db["mythicPlusEnableDungeonFilter"],
+                function(_, _, v)
+                    addon.db["mythicPlusEnableDungeonFilter"] = v
+                    if v then
+                        addon.MythicPlus.functions.addDungeonFilter()
+                    else
+                        addon.MythicPlus.functions.removeDungeonFilter()
+                    end
+                    buildGroupFilter()
+                end,
+                L["mythicPlusEnableDungeonFilterDesc"]:format(REPORT_GROUP_FINDER_ADVERTISEMENT)
+            )
+            g:AddChild(cb)
+
+            if addon.db["mythicPlusEnableDungeonFilter"] then
+                local cb2 = addon.functions.createCheckboxAce(
+                    L["mythicPlusEnableDungeonFilterClearReset"],
+                    addon.db["mythicPlusEnableDungeonFilterClearReset"],
+                    function(_, _, v) addon.db["mythicPlusEnableDungeonFilterClearReset"] = v end
+                )
+                g:AddChild(cb2)
+            end
+
+            if known then g:ResumeLayout(); doLayout() end
+        end
+
         -- Build sections
         buildBR()
+        buildGroupFilter()
         buildKeystone()
         buildRating()
         buildObjective()
@@ -1476,9 +1505,8 @@ function addon.MythicPlus.functions.treeCallback(container, group)
         addTeleportFrame(container)
     elseif group == "mythicplus\001talents" then
         addTalentFrame(container)
-        -- TODO pack groupfilter also to the new "Dungeon" container to have less clutter
     elseif group == "mythicplus\001groupfilter" then
-        addGroupFilterFrame(container)
+        addMythicPlusRootFrame(container)
     end
 end
 
