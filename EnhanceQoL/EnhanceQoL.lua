@@ -2576,10 +2576,13 @@ local function addUIFrame(container)
 			callback = function(self, _, value)
 				addon.db["gameMenuScaleEnabled"] = value
 				if value then
-					addon.functions.ensureGameMenuHooks()
 					addon.functions.applyGameMenuScale()
 				else
-					if GameMenuFrame then GameMenuFrame:SetScale(1.0) end
+					-- Only restore default if we were the last to apply a scale
+					if GameMenuFrame and addon.variables and addon.variables.gameMenuScaleLastApplied then
+						local current = GameMenuFrame:GetScale() or 1.0
+						if math.abs(current - addon.variables.gameMenuScaleLastApplied) < 0.0001 then GameMenuFrame:SetScale(1.0) end
+					end
 				end
 				container:ReleaseChildren()
 				addUIFrame(container)
@@ -5162,25 +5165,18 @@ local function initUI()
 	addon.functions.InitDBValue("enableMailboxAddressBook", false)
 	addon.functions.InitDBValue("mailboxContacts", {})
 
-	local gmHooked = false
+	-- Remember the last scale we applied so we can avoid overwriting other addons
+	addon.variables = addon.variables or {}
 	function addon.functions.applyGameMenuScale()
 		if not GameMenuFrame then return end
-		local scale = 1.0
-		if addon.db and addon.db["gameMenuScaleEnabled"] and addon.db["gameMenuScale"] then scale = addon.db["gameMenuScale"] end
-		GameMenuFrame:SetScale(scale)
+		if not addon.db or not addon.db["gameMenuScaleEnabled"] then return end
+		local desired = addon.db["gameMenuScale"] or 1.0
+		local current = GameMenuFrame:GetScale() or 1.0
+		if math.abs(current - desired) > 0.0001 then GameMenuFrame:SetScale(desired) end
+		addon.variables.gameMenuScaleLastApplied = desired
 	end
 
-	function addon.functions.ensureGameMenuHooks()
-		if gmHooked then return end
-		if not GameMenuFrame then return end
-		GameMenuFrame:HookScript("OnShow", function() addon.functions.applyGameMenuScale() end)
-		-- Re-apply on size changes to keep proportions consistent
-		GameMenuFrame:HookScript("OnSizeChanged", function() addon.functions.applyGameMenuScale() end)
-		gmHooked = true
-	end
-
-	-- Prepare hooks early (frame is part of base UI)
-	addon.functions.ensureGameMenuHooks()
+	-- Apply once on load if enabled; do not keep overriding thereafter
 	addon.functions.applyGameMenuScale()
 
 	table.insert(addon.variables.unitFrameNames, {

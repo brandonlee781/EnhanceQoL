@@ -5,6 +5,7 @@
 ### 🐛 Fixed
 
 - Currency Datapanel sometimes marked the number red when still not at maximum
+- Game Menu scaling overwrote other addons changes too
 
 ---
 
