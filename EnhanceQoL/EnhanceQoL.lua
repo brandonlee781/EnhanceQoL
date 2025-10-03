@@ -2770,6 +2770,13 @@ local function addBagFrame(container)
 		groupCore:AddChild(cbautoChooseQuest)
 	end
 
+	local cbCloseAh = addon.functions.createCheckboxAce(
+		L["closeBagsOnAuctionHouse"] or "Close bags on Auction House",
+		addon.db["closeBagsOnAuctionHouse"],
+		function(self, _, value) addon.db["closeBagsOnAuctionHouse"] = value end
+	)
+	groupCore:AddChild(cbCloseAh)
+
 	local list = {
 		TOPLEFT = L["topLeft"],
 		TOPRIGHT = L["topRight"],
@@ -5977,6 +5984,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showCatalystChargesOnCharframe", false)
 	addon.functions.InitDBValue("showCloakUpgradeButton", false)
 	addon.functions.InitDBValue("bagFilterFrameData", {})
+	addon.functions.InitDBValue("closeBagsOnAuctionHouse", false)
 
 	hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", addon.functions.updateBags)
 	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
@@ -7183,6 +7191,7 @@ local eventHandlers = {
 	end,
 
 	["AUCTION_HOUSE_SHOW"] = function()
+		if addon.db["closeBagsOnAuctionHouse"] then CloseAllBags() end
 		if addon.db["persistAuctionHouseFilter"] then
 			if not AuctionHouseFrame.SearchBar.FilterButton.eqolHooked then
 				hooksecurefunc(AuctionHouseFrame.SearchBar.FilterButton, "Reset", function(self)

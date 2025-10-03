@@ -258,6 +258,7 @@ L["rangeOverlayAlpha"] = "Overlay opacity"
 
 L["enableMinimapButtonBin"] = "Enable Minimap Button Sink"
 L["enableMinimapButtonBinDesc"] = "Collect all minimap buttons in a single button"
+L["closeBagsOnAuctionHouse"] = "Close bags when opening Auction House"
 L["ignoreMinimapSinkHole"] = "Ignore the following minimap button from the sinkhole..."
 L["useMinimapButtonBinIcon"] = "Use a Minimap button for the sink"
 L["useMinimapButtonBinMouseover"] = "Show a movable frame for the button sink with mouseover"

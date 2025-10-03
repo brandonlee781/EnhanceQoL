@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.2.0] – 2025-10-01
+
+### ✨ Added
+
+- Items & Inventory → Bags: Option “Close bags when opening Auction House”.
+  - Disabled by default. Enable to automatically close all bags when the Auction House opens.
+
 ## [5.1.1] – 2025-10-01
 
 ### 🐛 Fixed
