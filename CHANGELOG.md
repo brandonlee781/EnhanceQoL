@@ -9,6 +9,7 @@
 - Some options and elements are disabled in remix/timerunner content
 
 ### 🐛 Fixed
+
 - Worldmap teleports had some bugs during combat
 
 ---
