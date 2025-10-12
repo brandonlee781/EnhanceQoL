@@ -47,6 +47,7 @@ Core\DataHub.lua
 Core\DataPanel.lua
 Core\Streams\Streams.xml
 Submodules\GemHelper.lua
+Submodules\ContainerActions.lua
 Submodules\ChatIM\UI.lua
 Submodules\ChatIM\Core.lua
 Submodules\LootToast.lua

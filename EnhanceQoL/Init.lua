@@ -14,6 +14,15 @@ addon.functions = {}
 addon.general = {}
 addon.general.variables = {}
 -- addon.L = {} -- Language
+addon.general.variables.autoOpen = {
+	[245925] = true, -- Artifactium Sand (Remix)
+	[249891] = true, -- Mound of Artifactium Sand (Remix)
+	[249783] = true, -- Nightfallen insignia (2k rep)
+	[249787] = true, -- Court of Farondis Champion's Insignia (2k Rep)
+	[249782] = true, -- Valarjar Champion's Insignia (2k Rep)
+	[249785] = true, -- Highmountain Tribe Champion's Insignia (2k Rep)
+}
+
 local AceLocale = LibStub("AceLocale-3.0")
 addon.L = AceLocale:GetLocale(addonName)
 addon.elements = {}
