@@ -3328,6 +3328,47 @@ local function addContainerActionsFrame(container)
 		group:AddChild(helpLabel)
 	end
 
+	local areaGroup = addon.functions.createContainer("InlineGroup", "List")
+	areaGroup:SetFullWidth(true)
+	areaGroup:SetTitle(L["containerActionsAreaHeader"])
+	group:AddChild(areaGroup)
+
+	local areaDesc = L["containerActionsAreaDesc"]
+	if areaDesc and areaDesc ~= "" then
+		local areaLabel = addon.functions.createLabelAce(areaDesc, { r = 0.8, g = 0.8, b = 0.8 })
+		areaLabel:SetFullWidth(true)
+		areaGroup:AddChild(areaLabel)
+	end
+
+	if addon.ContainerActions and addon.ContainerActions.GetAreaBlockOptions then
+		local dropdown = AceGUI:Create("Dropdown")
+		dropdown:SetMultiselect(true)
+		dropdown:SetFullWidth(true)
+
+		local list, order = {}, {}
+		for _, option in ipairs(addon.ContainerActions:GetAreaBlockOptions()) do
+			local key = option.key
+			local text = option.label or key
+			list[key] = text
+			order[#order + 1] = key
+		end
+		dropdown:SetList(list, order)
+		dropdown:SetCallback("OnValueChanged", function(_, _, key, checked)
+			addon.db.containerActionAreaBlocks = addon.db.containerActionAreaBlocks or {}
+			addon.db.containerActionAreaBlocks[key] = checked and true or nil
+			if addon.ContainerActions and addon.ContainerActions.OnAreaBlockSettingChanged then addon.ContainerActions:OnAreaBlockSettingChanged(key, checked) end
+		end)
+
+		local config = addon.db.containerActionAreaBlocks
+		if type(config) == "table" then
+			for key, value in pairs(config) do
+				if value and list[key] then dropdown:SetItemValue(key, true) end
+			end
+		end
+
+		areaGroup:AddChild(dropdown)
+	end
+
 	local managedGroup = addon.functions.createContainer("InlineGroup", "List")
 	managedGroup:SetFullWidth(true)
 	managedGroup:SetTitle(L["containerActionsManagedItems"])
@@ -4959,6 +5000,7 @@ local function initMisc()
 	addon.functions.InitDBValue("automaticallyOpenContainer", false)
 	addon.functions.InitDBValue("containerActionAnchor", { point = "CENTER", relativePoint = "CENTER", x = 0, y = -200 })
 	addon.functions.InitDBValue("containerAutoOpenDisabled", {})
+	addon.functions.InitDBValue("containerActionAreaBlocks", {})
 
 	-- Hook all static popups, because not the first one has to be the one for sell all junk if another popup is already shown
 	for i = 1, 4 do

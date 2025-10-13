@@ -72,6 +72,8 @@ L["containerActionsToggleDesc"] = "Disable individual entries below if you never
 L["containerActionsChunkSuffix"] = " (per %d)"
 L["containerActionsChunkNote"] = "Consumes %d at a time."
 L["containerActionsNoManagedItems"] = "No managed items registered."
+L["containerActionsAreaHeader"] = "Area Restrictions"
+L["containerActionsAreaDesc"] = "Automatically disable the container action button in the selected content types."
 
 L["bagFilterDockFrameUnlock"] = "Click to undock the filter window from your bags"
 L["bagFilterDockFrameLock"] = "Click to dock the filter window to your bags"
