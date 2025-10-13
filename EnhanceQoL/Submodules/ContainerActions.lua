@@ -202,6 +202,8 @@ function ContainerActions:Init()
 	self.itemCache = self.itemCache or {}
 	self.secureItems = {}
 	self.openableCache = self.openableCache or {}
+	self.mountCache = self.mountCache or {}
+	self.visibilityBlocks = self.visibilityBlocks or {}
 	self._safe = self._safe or {}
 	self._secure = self._secure or {}
 	self.pendingItem = nil
@@ -216,14 +218,38 @@ function ContainerActions:Init()
 	local frame = CreateFrame("Frame")
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-	frame:SetScript("OnEvent", function(_, event)
+	frame:RegisterEvent("UNIT_ENTERED_VEHICLE")
+	frame:RegisterEvent("UNIT_EXITED_VEHICLE")
+	frame:RegisterEvent("CHALLENGE_MODE_START")
+	frame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+	frame:RegisterEvent("ZONE_CHANGED")
+	frame:RegisterEvent("ZONE_CHANGED_INDOORS")
+	frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	frame:SetScript("OnEvent", function(_, event, ...)
 		if event == "PLAYER_REGEN_DISABLED" then
 			ContainerActions:OnCombatStart()
-		else
+		elseif event == "PLAYER_REGEN_ENABLED" then
 			ContainerActions:OnCombatEnd()
+		elseif event == "UNIT_ENTERED_VEHICLE" then
+			ContainerActions:OnUnitEnteredVehicle(...)
+		elseif event == "UNIT_EXITED_VEHICLE" then
+			ContainerActions:OnUnitExitedVehicle(...)
+		elseif event == "CHALLENGE_MODE_START" then
+			ContainerActions:OnChallengeModeStart()
+		elseif event == "CHALLENGE_MODE_COMPLETED" then
+			ContainerActions:OnChallengeModeCompleted()
+		elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
+			ContainerActions:UpdateVehicleState()
+			ContainerActions:UpdateChallengeModeState()
+		elseif event == "PLAYER_ENTERING_WORLD" then
+			ContainerActions:UpdateVehicleState()
+			ContainerActions:UpdateChallengeModeState()
 		end
 	end)
 	self.eventFrame = frame
+	self:UpdateVehicleState()
+	self:UpdateChallengeModeState()
 end
 
 function ContainerActions:OnCombatStart()
@@ -237,7 +263,7 @@ function ContainerActions:OnCombatEnd()
 	if self.pendingVisibility ~= nil then
 		local desired = self.pendingVisibility
 		self.pendingVisibility = nil
-		self:RequestVisibility(desired)
+		self:RequestVisibility(desired, true)
 	end
 	if self.pendingItem ~= nil then
 		local entry = self.pendingItem
@@ -431,16 +457,52 @@ function ContainerActions:ApplyButtonEntry(entry)
 	self:UpdateCount()
 end
 
-function ContainerActions:RequestVisibility(show)
-	self.desiredVisibility = show and true or false
+function ContainerActions:HasVisibilityBlock()
+	return self.visibilityBlocks and next(self.visibilityBlocks) ~= nil
+end
+
+function ContainerActions:SetVisibilityBlock(reason, blocked)
+	if not reason then return end
+	self.visibilityBlocks = self.visibilityBlocks or {}
+	local shouldBlock = blocked and true or false
+	if shouldBlock then
+		if self.visibilityBlocks[reason] then return end
+		self.visibilityBlocks[reason] = true
+		if self.previewActive then self:HideAnchorPreview(true) end
+		self:RequestVisibility(false, true)
+	else
+		if not self.visibilityBlocks[reason] then return end
+		self.visibilityBlocks[reason] = nil
+		if self:HasVisibilityBlock() then
+			self:RequestVisibility(false, true)
+		else
+			local shouldShow = self.desiredVisibility
+			if shouldShow == nil then
+				local hasItems = type(self.secureItems) == "table" and #self.secureItems > 0
+				shouldShow = self:IsEnabled() and hasItems
+			end
+			shouldShow = shouldShow and true or false
+			self:RequestVisibility(shouldShow, true)
+		end
+	end
+end
+
+function ContainerActions:RequestVisibility(show, skipDesiredUpdate)
+	self.visibilityBlocks = self.visibilityBlocks or {}
+	if not skipDesiredUpdate then self.desiredVisibility = show and true or false end
 	local button = self:EnsureButton()
-	if self.previewActive then show = true end
+	local desired = show and true or false
+	if self:HasVisibilityBlock() and not self.previewActive then
+		desired = false
+	elseif self.previewActive then
+		desired = true
+	end
 	if InCombat() then
-		self.pendingVisibility = show and true or false
-		if not show and not self.previewActive then button:SetAlpha(0) end
+		self.pendingVisibility = desired
+		if not desired and not self.previewActive then button:SetAlpha(0) end
 		return
 	end
-	if show then
+	if desired then
 		if not self.previewActive then button:SetAlpha(1) end
 		if not button:IsShown() then button:Show() end
 	else
@@ -465,6 +527,46 @@ function ContainerActions:UpdateItems(list)
 		self:ApplyButtonEntry(self.secureItems[1])
 		self:RequestVisibility(true)
 	end
+end
+
+function ContainerActions:OnUnitEnteredVehicle(unit)
+	if unit ~= "player" then return end
+	self:SetVisibilityBlock("vehicle", true)
+end
+
+function ContainerActions:OnUnitExitedVehicle(unit)
+	if unit ~= "player" then return end
+	self:SetVisibilityBlock("vehicle", false)
+end
+
+function ContainerActions:UpdateVehicleState()
+	local inVehicle = false
+	if UnitHasVehicleUI then
+		inVehicle = UnitHasVehicleUI("player") == true
+	elseif UnitInVehicle then
+		inVehicle = UnitInVehicle("player") == true
+	end
+	self:SetVisibilityBlock("vehicle", inVehicle)
+end
+
+function ContainerActions:OnChallengeModeStart()
+	self:SetVisibilityBlock("challengeMode", true)
+end
+
+function ContainerActions:OnChallengeModeCompleted()
+	-- falls der Abschluss noch als aktiv markiert ist, korrigiert UpdateChallengeModeState dies
+	self:SetVisibilityBlock("challengeMode", false)
+	self:UpdateChallengeModeState()
+end
+
+function ContainerActions:IsChallengeModeActive()
+	if not C_ChallengeMode or not C_ChallengeMode.IsChallengeModeActive then return false end
+	local active = C_ChallengeMode.IsChallengeModeActive()
+	return active == true
+end
+
+function ContainerActions:UpdateChallengeModeState()
+	self:SetVisibilityBlock("challengeMode", self:IsChallengeModeActive())
 end
 
 function ContainerActions:ShouldInspectTooltip(itemID)
@@ -514,6 +616,35 @@ function ContainerActions:IsTooltipOpenable(bag, slot, info)
 	return false
 end
 
+function ContainerActions:IsCollectibleMount(info)
+	if not info or not info.itemID then return false end
+	if not C_MountJournal or not C_MountJournal.GetMountFromItem then return false end
+
+	local itemID = info.itemID
+	local cache = self.mountCache and self.mountCache[itemID]
+	local mountID = cache ~= nil and cache or nil
+	if cache == false then return false end
+	if not mountID then
+		mountID = C_MountJournal.GetMountFromItem(itemID)
+		if not mountID then
+			if self.mountCache then self.mountCache[itemID] = false end
+			return false
+		end
+		if self.mountCache then self.mountCache[itemID] = mountID end
+	end
+
+	local hasMount = false
+	if C_MountJournal.PlayerHasMount then
+		hasMount = C_MountJournal.PlayerHasMount(mountID) == true
+	elseif C_MountJournal.GetMountInfoByID then
+		local _, _, _, _, _, _, _, _, _, _, isCollected = C_MountJournal.GetMountInfoByID(mountID)
+		hasMount = isCollected == true
+	end
+
+	if hasMount then return false end
+	return true, mountID
+end
+
 function ContainerActions:BuildEntry(bag, slot, info, overrides)
 	overrides = overrides or {}
 	self:RememberItemInfo(info.itemID, overrides.meta, info, overrides)
@@ -558,7 +689,13 @@ function ContainerActions:ScanBags()
 							end
 						end
 					else
-						if self:IsTooltipOpenable(bag, slot, info) then safeItems[#safeItems + 1] = { bag = bag, slot = slot } end
+						local isCollectibleMount, mountID = self:IsCollectibleMount(info)
+						if isCollectibleMount then
+							local overrides = { meta = { type = "mount", mountID = mountID } }
+							table.insert(secureItems, self:BuildEntry(bag, slot, info, overrides))
+						elseif self:IsTooltipOpenable(bag, slot, info) then
+							safeItems[#safeItems + 1] = { bag = bag, slot = slot }
+						end
 					end
 				end
 			end
