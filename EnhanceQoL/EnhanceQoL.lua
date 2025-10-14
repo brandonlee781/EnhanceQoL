@@ -7179,7 +7179,6 @@ local frameLoad = CreateFrame("Frame")
 
 local gossipClicked = {}
 
---@debug@
 local wOpen = false -- Variable to ignore multiple checks for openItems
 local function openItems(items)
 	local function openNextItem()
@@ -7221,7 +7220,6 @@ function addon.functions.checkForContainer()
 		wOpen = false
 	end
 end
---@end-debug@
 
 local function loadSubAddon(name)
 	local subAddonName = name
