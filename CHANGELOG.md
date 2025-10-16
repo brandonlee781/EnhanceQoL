@@ -5,6 +5,7 @@
 ### ✨ Added
 
 - Option to mark collected battle pets at merchants
+- Missing chests for quick opening
 
 ### 🔄 Changed
 
