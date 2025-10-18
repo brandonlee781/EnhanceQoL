@@ -34,6 +34,7 @@ end
 -- no compact score formatting needed anymore
 
 local pendingGUID, pendingUnit
+local EnsureUnitData -- forward declaration
 local fInspect = CreateFrame("Frame")
 
 -- Decide whether we need INSPECT_READY at all (opt-in)
@@ -44,11 +45,24 @@ local function IsConfiguredModifierDown()
 	return (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "ALT" and IsAltKeyDown()) or (mod == "CTRL" and IsControlKeyDown())
 end
 
+local function DoesKeyMatchConfiguredModifier(key)
+	if not key or not addon.db then return false end
+	local mod = addon.db["TooltipMythicScoreModifier"] or "SHIFT"
+	if mod == "SHIFT" then return key == "LSHIFT" or key == "RSHIFT" end
+	if mod == "ALT" then return key == "LALT" or key == "RALT" end
+	if mod == "CTRL" then return key == "LCTRL" or key == "RCTRL" end
+	return false
+end
+
 local function UpdateInspectEventRegistration()
 	if not fInspect then return end
 	fInspect:UnregisterEvent("INSPECT_READY")
+	fInspect:UnregisterEvent("MODIFIER_STATE_CHANGED")
 	if ShouldUseInspectFeature() then
 		fInspect:RegisterEvent("INSPECT_READY")
+		if addon.db["TooltipUnitInspectRequireModifier"] then
+			fInspect:RegisterEvent("MODIFIER_STATE_CHANGED")
+		end
 	else
 		pendingGUID, pendingUnit = nil, nil
 	end
@@ -112,41 +126,57 @@ local function RefreshTooltipForGUID(guid)
 	if addedAny then tt:Show() end
 end
 
-fInspect:SetScript("OnEvent", function(_, ev, guid)
-	if ev ~= "INSPECT_READY" or not guid or guid ~= pendingGUID then return end
-	local unit = (pendingUnit and UnitGUID(pendingUnit) == guid) and pendingUnit or nil
-	pendingGUID, pendingUnit = nil, nil
-	if not unit or not UnitExists(unit) then return end
+fInspect:SetScript("OnEvent", function(_, ev, arg1, arg2)
+	if ev == "INSPECT_READY" then
+		local guid = arg1
+		if not guid or guid ~= pendingGUID then return end
+		local unit = (pendingUnit and UnitGUID(pendingUnit) == guid) and pendingUnit or nil
+		pendingGUID, pendingUnit = nil, nil
+		if not unit or not UnitExists(unit) then return end
 
-	local ilvl
-	if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
-		ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
-		if ilvl then ilvl = tonumber(string.format("%.1f", ilvl)) end
-	end
-	local specID = GetInspectSpecialization and GetInspectSpecialization(unit)
-	local specName
-	if specID and specID > 0 then
-		local _, name = GetSpecializationInfoByID(specID)
-		specName = name
-	end
-	local score = 0
-	if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
-		local s = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
-		score = s and s.currentSeasonScore or score
-	end
+		local ilvl
+		if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+			ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
+			if ilvl then ilvl = tonumber(string.format("%.1f", ilvl)) end
+		end
+		local specID = GetInspectSpecialization and GetInspectSpecialization(unit)
+		local specName
+		if specID and specID > 0 then
+			local _, name = GetSpecializationInfoByID(specID)
+			specName = name
+		end
+		local score = 0
+		if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
+			local s = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
+			score = s and s.currentSeasonScore or score
+		end
 
-	local c = InspectCache[guid] or {}
-	c.ilvl = ilvl
-	c.specName = specName
-	c.score = score
-	c.last = now()
-	InspectCache[guid] = c
+		local c = InspectCache[guid] or {}
+		c.ilvl = ilvl
+		c.specName = specName
+		c.score = score
+		c.last = now()
+		InspectCache[guid] = c
 
-	-- If the currently shown tooltip is for this unit, update it immediately
-	RefreshTooltipForGUID(guid)
+		-- If the currently shown tooltip is for this unit, update it immediately
+		RefreshTooltipForGUID(guid)
+	elseif ev == "MODIFIER_STATE_CHANGED" then
+		if not addon.db or not addon.db["TooltipUnitInspectRequireModifier"] then return end
+		if not ShouldUseInspectFeature() then return end
+		local key, state = arg1, arg2
+		if state ~= 1 then return end
+		if not DoesKeyMatchConfiguredModifier(key) then return end
+		if not IsConfiguredModifierDown() then return end
+		if not GameTooltip or not GameTooltip:IsShown() then return end
+		local unit = GetUnitTokenFromTooltip(GameTooltip)
+		if not unit or not UnitIsPlayer(unit) then return end
+		EnsureUnitData(unit)
+		local guid = UnitGUID(unit)
+		if guid then RefreshTooltipForGUID(guid) end
+	end
 end)
 
-local function EnsureUnitData(unit)
+EnsureUnitData = function(unit)
 	if not unit or not UnitIsPlayer(unit) then return end
 	-- Only fetch if at least one feature is enabled (opt-in)
 	if not (addon.db["TooltipUnitShowSpec"] or addon.db["TooltipUnitShowItemLevel"]) then return end
@@ -170,8 +200,11 @@ local function EnsureUnitData(unit)
 		return
 	end
 
+	if addon.db["TooltipUnitInspectRequireModifier"] and not IsConfiguredModifierDown() then return end
+
 	-- Others: request inspect if possible
 	if CanInspect and CanInspect(unit) and not InCombatLockdown() then
+		if pendingGUID and pendingUnit and UnitGUID(pendingUnit) == pendingGUID and pendingGUID == guid then return end
 		pendingGUID = guid
 		pendingUnit = unit
 		if NotifyInspect then NotifyInspect(unit) end
@@ -880,7 +913,13 @@ local function addTooltipFrame2(container, which)
 				then
 					buildUnit()
 				end
-				if it.var == "TooltipUnitShowSpec" or it.var == "TooltipUnitShowItemLevel" then UpdateInspectEventRegistration() end
+				if
+					it.var == "TooltipUnitShowSpec"
+					or it.var == "TooltipUnitShowItemLevel"
+					or it.var == "TooltipUnitInspectRequireModifier"
+				then
+					UpdateInspectEventRegistration()
+				end
 				if it.var == "TooltipUnitHideHealthBar" and GameTooltip then UpdateTooltipHealthBarVisibility(GameTooltip) end
 			end, it.desc)
 			g:AddChild(cb)
