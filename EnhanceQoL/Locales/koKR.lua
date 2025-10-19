@@ -3,6 +3,9 @@ if not L then return end
 
 --@localization(locale="koKR", format="lua_additive_table")@
 
+L["autoRepairGuildBank"] = "길드 은행으로 수리 비용 지불"
+L["autoRepairGuildBankDesc"] = "자동 수리가 활성화된 경우 길드 수리가 가능하면 길드 은행을 사용합니다"
+
 -- Legion Remix
 L["Current Available"] = "현재 사용 가능"
 L["Rare Appearance"] = "희귀 외형"

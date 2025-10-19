@@ -3,6 +3,9 @@ if not L then return end
 
 --@localization(locale="zhCN", format="lua_additive_table")@
 
+L["autoRepairGuildBank"] = "使用公会银行支付修理费用"
+L["autoRepairGuildBankDesc"] = "启用自动修理时，如果允许，将尝试使用公会银行进行修理"
+
 -- Legion Remix
 L["Current Available"] = "当前可用"
 L["Rare Appearance"] = "稀有外观"

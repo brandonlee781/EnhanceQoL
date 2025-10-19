@@ -3,6 +3,9 @@ if not L then return end
 
 --@localization(locale="ruRU", format="lua_additive_table")@
 
+L["autoRepairGuildBank"] = "Использовать банк гильдии для ремонта"
+L["autoRepairGuildBankDesc"] = "При включённой автоматической починке пытается использовать банк гильдии, если доступны ремонты гильдии"
+
 -- Legion Remix
 L["Current Available"] = "Доступно сейчас"
 L["Rare Appearance"] = "Редкий облик"

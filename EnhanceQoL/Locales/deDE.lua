@@ -3,6 +3,9 @@ if not L then return end
 
 --@localization(locale="deDE", format="lua_additive_table")@
 
+L["autoRepairGuildBank"] = "Gildenbank für Reparaturen verwenden"
+L["autoRepairGuildBankDesc"] = "Versucht bei aktiver automatischer Reparatur die Gildenbank zu nutzen, wenn Gildenreparaturen erlaubt sind"
+
 -- Legion Remix
 L["Current Available"] = "Aktuell verfügbar"
 L["Rare Appearance"] = "Seltene Erscheinungen"

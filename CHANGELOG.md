@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.9.0] – 2025-10-19
+
+### ✨ Added
+
+- Use **Guild Bank funds** for repairs when permitted.
+- **Remix Collection Tracker** (Options → Events):
+  - Customizable list of owned/purchased items.
+  - Displays remaining **Bronze** required.
+  - **Available** filter that matches your current _Legion Remix_ phase.
+
+---
+
 ## [5.8.0] – 2025-10-17
 
 ### ✨ Added

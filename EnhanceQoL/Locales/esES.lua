@@ -3,6 +3,9 @@ if not L then return end
 
 --@localization(locale="esES", format="lua_additive_table")@
 
+L["autoRepairGuildBank"] = "Usar fondos del banco de hermandad para reparar"
+L["autoRepairGuildBankDesc"] = "Si la reparación automática está activada, intentará reparar con la hermandad siempre que haya reparaciones de hermandad disponibles"
+
 -- Legion Remix
 L["Current Available"] = "Disponible ahora"
 L["Rare Appearance"] = "Apariencia rara"
