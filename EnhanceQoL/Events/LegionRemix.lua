@@ -354,6 +354,7 @@ local CATEGORY_DATA = {
 				items = {
 					{ id = 825, achievementId = 42301, name = "Timerunner" },
 					{ id = 971, achievementId = 61079, name = "of the Infinite Chaos" },
+					{ id = 926, achievementId = 60935, name = "Chronoscholar" },
 				},
 			},
 		},
@@ -365,7 +366,7 @@ local CATEGORY_DATA = {
 			{
 				type = "set_achievement",
 				cost = 0,
-				items = { 177, 185, 181, 173, 5278, 5280, 5279 },
+				items = { 177, 185, 181, 173, 5278, 5280, 5279, 5286, 5281 },
 				requirements = {
 					[177] = 61026,
 					[185] = 61024,
@@ -374,14 +375,33 @@ local CATEGORY_DATA = {
 					[5278] = 61337,
 					[5279] = 61078,
 					[5280] = 42690,
+					[5281] = 61070,
+					[5286] = 42605,
 				},
 			},
 			{
 				type = "set_achievement_item",
 				cost = 0,
-				items = { 253285 },
+				items = {
+					253285,
+					--293195,
+					253229,
+					253220,
+				},
 				requirements = {
 					[253285] = 42583,
+					[253229] = 42666,
+					[253220] = 42549,
+					-- [293195] = 42582 -- actually not implemented?
+				},
+			},
+			{
+				type = "set_achievement_pet",
+				cost = 0,
+				items = { 4901, 4854 },
+				requirements = {
+					[4901] = 42319,
+					[4854] = 42541,
 				},
 			},
 		},
@@ -479,53 +499,6 @@ local CATEGORY_DATA = {
 		},
 	},
 }
-
-for i, v in pairs({
-	1004,
-	1338,
-	1474,
-	1000,
-	1334,
-	1478,
-	996,
-	1330,
-	1482,
-	992,
-	1326,
-	1486,
-	998,
-	1322,
-	1490,
-	984,
-	1318,
-	1494,
-	980,
-	1314,
-	1498,
-	311,
-	1310,
-	1502,
-	944,
-	1308,
-	1506,
-	935,
-	1304,
-	1510,
-	321,
-	1299,
-	1514,
-	939,
-	1295,
-	1518,
-	5276,
-}) do
-	local inf = C_TransmogSets.GetSetInfo(v)
-	if inf then
-		print(v, inf.name)
-	else
-		print(v, "not found")
-	end
-end
 
 local function normalizePhaseKind(kind)
 	if kind == "mount" then return "mount" end
@@ -1173,6 +1146,24 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 				end
 			end
 			local owned = self:PlayerHasTransmog(itemId)
+			addItemResult(categoryResult, owned, cost, entry)
+		end
+		return
+	end
+
+	if group.type == "set_achievement_pet" then
+		local cost = group.cost or 0
+		local requirements = group.requirements
+		for _, speciesId in ipairs(group.items) do
+			local entry = { kind = "pet", id = speciesId }
+			local owned = self:PlayerHasPet(speciesId)
+			if requirements then
+				local requiredAchievement = requirements[speciesId]
+				if requiredAchievement then
+					entry.requiredAchievement = requiredAchievement
+					entry.requirementComplete = self:PlayerHasAchievement(requiredAchievement)
+				end
+			end
 			addItemResult(categoryResult, owned, cost, entry)
 		end
 		return

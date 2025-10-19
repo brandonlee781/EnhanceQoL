@@ -96,6 +96,7 @@ EnhanceQoLLegionRemixPhaseData = {
 		[143662] = 2,
 		[147843] = 3,
 		[147867] = 3,
+		[253229] = 3,
 		[151524] = 3,
 		[152982] = 4,
 		[153004] = 4,
@@ -272,7 +273,7 @@ EnhanceQoLLegionRemixPhaseData = {
 		[246997] = 1,
 		[251271] = 1,
 		[253219] = 4,
-		[253220] = 4,
+		[253220] = 3,
 		[253231] = 3,
 		[253273] = 4,
 		[253285] = 4,
@@ -304,6 +305,7 @@ EnhanceQoLLegionRemixPhaseData = {
 		[257104] = 1,
 		[257105] = 1,
 		[257106] = 4,
+		[293195] = 1,
 	},
 	toy = {
 		-- 1) Skies of Fire
@@ -355,6 +357,7 @@ EnhanceQoLLegionRemixPhaseData = {
 	title = {
 		[825] = 1, -- Phase 1
 		[971] = 4, -- Phase 1
+		[926] = 1, -- Phase 1
 	},
 	set = {
 		-- Raid ensembles: Nighthold=1, Tomb of Sargeras=3, Antorus=4
@@ -564,6 +567,7 @@ EnhanceQoLLegionRemixPhaseData = {
 		[4501] = 1,
 		[4499] = 1,
 		[4497] = 1,
+		[5286] = 1,
 
 		-- 3) Legionfall
 		[4506] = 3,
@@ -588,6 +592,8 @@ EnhanceQoLLegionRemixPhaseData = {
 		[1803] = 1,
 		[1937] = 1,
 		[1887] = 1,
+		[4901] = 1,
+		[4854] = 1,
 
 		[2022] = 2,
 		[2072] = 3,
@@ -599,6 +605,7 @@ EnhanceQoLLegionRemixPhaseData = {
 		[2119] = 4,
 		[2120] = 4,
 		[2136] = 4,
+
 	},
 	achievement = {
 		[42301] = 1,
