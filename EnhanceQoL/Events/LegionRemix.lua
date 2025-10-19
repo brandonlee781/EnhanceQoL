@@ -383,6 +383,23 @@ local CATEGORY_DATA = {
 		},
 	},
 	{
+		key = "chosen_dead",
+		label = T(TRANSMOG_SOURCE_5, TRANSMOG_SOURCE_5),
+		groups = {
+			{
+				type = "set_achievement",
+				cost = 0,
+				items = { 177, 185, 181, 173 },
+				requirements = {
+					[177] = 61026,
+					[185] = 61024,
+					[181] = 61025,
+					[173] = 61027,
+				},
+			},
+		},
+	},
+	{
 		key = "dungeon",
 		label = T("Dungeons", DUNGEONS or "Dungeons"),
 		groups = {
@@ -439,19 +456,43 @@ local CATEGORY_DATA = {
 }
 
 for i, v in pairs({
-	  1004, 1338, 1474,
-	  1000, 1334, 1478,
-	  996, 1330, 1482,
-	  992, 1326, 1486,
-	  998, 1322, 1490,
-	  984, 1318, 1494,
-	  980, 1314, 1498,
-	  311, 1310, 1502,
-	  944, 1308, 1506,
-	  935, 1304, 1510,
-	  321, 1299, 1514,
-	  939, 1295, 1518,
-	  5276
+	1004,
+	1338,
+	1474,
+	1000,
+	1334,
+	1478,
+	996,
+	1330,
+	1482,
+	992,
+	1326,
+	1486,
+	998,
+	1322,
+	1490,
+	984,
+	1318,
+	1494,
+	980,
+	1314,
+	1498,
+	311,
+	1310,
+	1502,
+	944,
+	1308,
+	1506,
+	935,
+	1304,
+	1510,
+	321,
+	1299,
+	1514,
+	939,
+	1295,
+	1518,
+	5276,
 }) do
 	local inf = C_TransmogSets.GetSetInfo(v)
 	if inf then
@@ -535,6 +576,8 @@ end
 
 LegionRemix.cache = LegionRemix.cache or {}
 LegionRemix.cache.names = LegionRemix.cache.names or {}
+LegionRemix.cache.achievements = LegionRemix.cache.achievements or {}
+LegionRemix.cache.achievementInfo = LegionRemix.cache.achievementInfo or {}
 LegionRemix.rows = LegionRemix.rows or {}
 
 local function clearTable(tbl)
@@ -552,6 +595,8 @@ function LegionRemix:InvalidateAllCaches()
 	self.cache.transmog = {}
 	self.cache.names = {}
 	self.cache.slotGrid = {}
+	self.cache.achievements = {}
+	self.cache.achievementInfo = {}
 end
 
 function LegionRemix:GetPersistentNameCache()
@@ -892,6 +937,33 @@ function LegionRemix:PlayerHasPet(speciesId)
 	return cache[speciesId]
 end
 
+function LegionRemix:PlayerHasAchievement(achievementId)
+	if not achievementId then return false end
+	local cache = ensureTable(self.cache.achievements)
+	self.cache.achievements = cache
+	if cache[achievementId] ~= nil then return cache[achievementId] end
+	local _, _, _, completed = GetAchievementInfo(achievementId)
+	cache[achievementId] = completed and true or false
+	return cache[achievementId]
+end
+
+function LegionRemix:GetAchievementDetails(achievementId)
+	if not achievementId then return nil end
+	self.cache.achievementInfo = self.cache.achievementInfo or {}
+	local info = self.cache.achievementInfo[achievementId]
+	if info then
+		if info.completed == nil then info.completed = self:PlayerHasAchievement(achievementId) end
+		return info.name, info.completed
+	end
+	local _, name, _, completed = GetAchievementInfo(achievementId)
+	if not name or name == "" then name = string.format(T("Achievement #%d", "Achievement #%d"), achievementId) end
+	info = { name = name, completed = completed and true or false }
+	self.cache.achievementInfo[achievementId] = info
+	self.cache.achievements = ensureTable(self.cache.achievements)
+	self.cache.achievements[achievementId] = info.completed
+	return info.name, info.completed
+end
+
 function LegionRemix:CollectSlotGrid(setId)
 	local cache = ensureTable(self.cache.slotGrid)
 	self.cache.slotGrid = cache
@@ -1015,15 +1087,39 @@ local function addItemResult(result, owned, cost, entry)
 	end
 end
 
-function LegionRemix:ProcessSetList(result, list, cost)
+function LegionRemix:ProcessSetList(result, list, cost, requirements)
 	if not list or #list == 0 then return end
 	for _, setId in ipairs(list) do
 		local owned = self:PlayerHasSet(setId)
-		addItemResult(result, owned, cost, { kind = "set", id = setId })
+		local entry = { kind = "set", id = setId }
+		if requirements then
+			local requiredAchievement = requirements[setId]
+			if requiredAchievement then
+				entry.requiredAchievement = requiredAchievement
+				entry.requirementComplete = self:PlayerHasAchievement(requiredAchievement)
+			end
+		end
+		addItemResult(result, owned, cost, entry)
 	end
 end
 
 function LegionRemix:ProcessGroup(categoryResult, group)
+	if group.type == "set_achievement" then
+		local cost = group.cost or 0
+		local db = self:GetDB()
+		local requirements = group.requirements
+		if db and db.classOnly then
+			local filtered = {}
+			for _, setId in ipairs(group.items or {}) do
+				if self:IsSetUsable(setId) then table.insert(filtered, setId) end
+			end
+			self:ProcessSetList(categoryResult, filtered, cost, requirements)
+		else
+			self:ProcessSetList(categoryResult, group.items or {}, cost, requirements)
+		end
+		return
+	end
+
 	local cost = group.cost or 0
 	if cost <= 0 then return end
 
@@ -1052,10 +1148,10 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 		local itemsByClass = group.itemsByClass or group.items
 		if db and db.classOnly then
 			local className = self:GetPlayerClass()
-			self:ProcessSetList(categoryResult, itemsByClass and itemsByClass[className], cost)
+			self:ProcessSetList(categoryResult, itemsByClass and itemsByClass[className], cost, group.requirements)
 		else
 			for _, list in pairs(itemsByClass) do
-				self:ProcessSetList(categoryResult, list, cost)
+				self:ProcessSetList(categoryResult, list, cost, group.requirements)
 			end
 		end
 	elseif group.type == "set_mixed" then
@@ -1065,9 +1161,9 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 			for _, setId in ipairs(group.items) do
 				if self:IsSetUsable(setId) then table.insert(filtered, setId) end
 			end
-			self:ProcessSetList(categoryResult, filtered, cost)
+			self:ProcessSetList(categoryResult, filtered, cost, group.requirements)
 		else
-			self:ProcessSetList(categoryResult, group.items, cost)
+			self:ProcessSetList(categoryResult, group.items, cost, group.requirements)
 		end
 	end
 end
@@ -1309,10 +1405,19 @@ function LegionRemix:UpdateRow(row, data)
 	row.label:SetText(data.label or "")
 	row.count:SetText(string.format("%s / %s", data.collectedCount or 0, data.totalCount or 0))
 
-	local total = data.totalCost > 0 and data.totalCost or 1
-	row.status:SetMinMaxValues(0, total)
-	row.status:SetValue(data.collectedCost or 0)
-	row.metric:SetText(string.format("%s / %s", formatBronze(data.collectedCost), formatBronze(data.totalCost)))
+	local useCounts = (data.totalCost or 0) <= 0
+	if useCounts then
+		local totalCount = (data.totalCount or 0)
+		if totalCount <= 0 then totalCount = 1 end
+		row.status:SetMinMaxValues(0, totalCount)
+		row.status:SetValue(data.collectedCount or 0)
+		row.metric:SetText(string.format("%d / %d", data.collectedCount or 0, data.totalCount or 0))
+	else
+		local totalCost = data.totalCost > 0 and data.totalCost or 1
+		row.status:SetMinMaxValues(0, totalCost)
+		row.status:SetValue(data.collectedCost or 0)
+		row.metric:SetText(string.format("%s / %s", formatBronze(data.collectedCost), formatBronze(data.totalCost)))
+	end
 	local metricWidth = row.status:GetWidth() - 4
 	if metricWidth < 60 then metricWidth = 60 end
 	row.metric:SetWidth(metricWidth)
@@ -1407,7 +1512,21 @@ function LegionRemix:ShowCategoryTooltip(row)
 			local entry = missing[i]
 			local label = self:GetItemName(entry)
 			if entry.phase then label = string.format("%s (%s)", label, string.format(T("Phase %d", "Phase %d"), entry.phase)) end
-			GameTooltip:AddDoubleLine(label, formatBronze(entry.cost), 0.9, 0.9, 0.9, 0.7, 0.9, 0.7)
+			local costDisplay = (entry.cost and entry.cost > 0) and formatBronze(entry.cost) or T("No Cost", "No Cost")
+			GameTooltip:AddDoubleLine(label, costDisplay, 0.9, 0.9, 0.9, 0.7, 0.9, 0.7)
+			if entry.requiredAchievement then
+				local achievementName, completed = self:GetAchievementDetails(entry.requiredAchievement)
+				if not achievementName or achievementName == "" then achievementName = string.format(T("Achievement #%d", "Achievement #%d"), entry.requiredAchievement) end
+				local requirementLabel = string.format(T("Requires: %s", "Requires: %s"), achievementName)
+				local statusText = completed and T("Completed", "Completed") or T("Not Completed", "Not Completed")
+				local statusR, statusG, statusB
+				if completed then
+					statusR, statusG, statusB = 0.4, 1, 0.4
+				else
+					statusR, statusG, statusB = 1, 0.45, 0.45
+				end
+				GameTooltip:AddDoubleLine("  " .. requirementLabel, statusText, 0.7, 0.85, 1, statusR, statusG, statusB)
+			end
 		end
 		if #missing > maxEntries then GameTooltip:AddLine(string.format(T("+ %d more...", "+ %d more..."), #missing - maxEntries), 0.5, 0.5, 0.5) end
 	end
