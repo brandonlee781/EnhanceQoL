@@ -119,6 +119,11 @@ local function sanitizeKey(name)
 	return formatted
 end
 
+local function trim(str)
+	if not str then return "" end
+	return (str:match("^%s*(.-)%s*$")) or ""
+end
+
 -- Pretty text for item quality
 local function qualityText(q)
 	local n = tonumber(q) or 0
@@ -270,6 +275,37 @@ end
 
 -- No AH result aggregator (manual input only)
 
+local function runTransmogSetSearch(rawQuery)
+	local query = trim(rawQuery)
+	local outputLines = {}
+	if not C_TransmogSets or not C_TransmogSets.GetAllSets then
+		outputLines = { "Transmog set API is not available in this client build." }
+	elseif query == "" then
+		outputLines = { "Bitte einen Suchbegriff eingeben." }
+	else
+		local lowerQuery = query:lower()
+		local allSets = C_TransmogSets.GetAllSets()
+		if type(allSets) ~= "table" then
+			outputLines = { "Keine Sets verfügbar." }
+		else
+			for _, setInfo in ipairs(allSets) do
+				local name = setInfo.name
+				if not name then
+					local extra = C_TransmogSets.GetSetInfo(setInfo.setID)
+					name = extra and extra.name
+				end
+				if name and name:lower():find(lowerQuery, 1, true) then
+					table.insert(outputLines, string.format("[%d] %s", setInfo.setID, name))
+				end
+			end
+			if #outputLines == 0 then outputLines = { string.format('Keine Ergebnisse für "%s".', query) } end
+		end
+	end
+
+	local finalText = table.concat(outputLines, "\n")
+	if addon.Query.ui and addon.Query.ui.setSearchOutput then addon.Query.ui.setSearchOutput:SetText(finalText) end
+end
+
 local function handleItemLink(text)
 	local _, link = C_Item.GetItemInfo(text)
 	local itemID = text and text:match("item:(%d+)") and tonumber(text:match("item:(%d+)")) or nil
@@ -310,7 +346,11 @@ local function BuildAceWindow()
 
 	local tree = AceGUI:Create("TreeGroup")
 	addon.Query.ui.tree = tree
-	tree:SetTree({ { value = "generator", text = "Generator" }, { value = "inspector", text = "GetItemInfo" } })
+	tree:SetTree({
+		{ value = "generator", text = "Generator" },
+		{ value = "inspector", text = "GetItemInfo" },
+		{ value = "transmog", text = "Transmog Sets" },
+	})
 	tree:SetLayout("Fill")
 	win:AddChild(tree)
 
@@ -429,11 +469,56 @@ local function BuildAceWindow()
 		outer:AddChild(follow)
 	end
 
+	local function buildTransmog(container)
+		addon.Query.ui.activeGroup = "transmog"
+		container:ReleaseChildren()
+
+		local outer = AceGUI:Create("SimpleGroup")
+		outer:SetFullWidth(true)
+		outer:SetFullHeight(true)
+		outer:SetLayout("List")
+		container:AddChild(outer)
+
+		local tip = AceGUI:Create("Label")
+		tip:SetText("Suche nach Transmog-Sets. Enter oder der Button starten die Suche.")
+		tip:SetFullWidth(true)
+		outer:AddChild(tip)
+
+		local input = AceGUI:Create("EditBox")
+		input:SetLabel("Suchbegriff")
+		input:SetFullWidth(true)
+		input:DisableButton(true)
+		input:SetCallback("OnEnterPressed", function(widget, _, text)
+			runTransmogSetSearch(text)
+			widget:ClearFocus()
+		end)
+		outer:AddChild(input)
+		addon.Query.ui.setSearchInput = input
+
+		local searchBtn = AceGUI:Create("Button")
+		searchBtn:SetText("Suchen")
+		searchBtn:SetWidth(120)
+		searchBtn:SetCallback("OnClick", function()
+			runTransmogSetSearch(input:GetText())
+		end)
+		outer:AddChild(searchBtn)
+
+		local output = AceGUI:Create("MultiLineEditBox")
+		output:SetLabel("Ergebnisse")
+		output:SetFullWidth(true)
+		output:SetNumLines(14)
+		output:DisableButton(true)
+		outer:AddChild(output)
+		addon.Query.ui.setSearchOutput = output
+	end
+
 	tree:SetCallback("OnGroupSelected", function(_, _, group)
 		if group == "generator" then
 			buildGenerator(tree)
-		else
+		elseif group == "inspector" then
 			buildInspector(tree)
+		else
+			buildTransmog(tree)
 		end
 	end)
 	tree:SelectByValue("generator")
