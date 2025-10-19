@@ -261,6 +261,7 @@ local DEFAULTS = {
 	overlayScale = 1,
 	itemNameCache = {},
 	categoryFilters = {},
+	hideCompleteCategories = false,
 	zoneFilters = {},
 	phaseFilters = { mode = "all" },
 	anchor = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 0, y = -120 },
@@ -1409,6 +1410,24 @@ function LegionRemix:BuildCategoryDisplay(categoryData)
 	return display
 end
 
+function LegionRemix:IsCategoryCompleteForDisplay(display)
+	if not display then return false end
+	local missing = display.filteredMissing
+	if missing then
+		if next(missing) ~= nil then return false end
+	else
+		missing = display.missing
+		if missing and next(missing) ~= nil then return false end
+	end
+	local totalCount = display.totalCount or 0
+	local collectedCount = display.collectedCount or 0
+	if totalCount > 0 and collectedCount < totalCount then return false end
+	local totalCost = display.totalCost or 0
+	local collectedCost = display.collectedCost or 0
+	if totalCost > 0 and collectedCost < totalCost then return false end
+	return true
+end
+
 function LegionRemix:GetFilteredOverallTotals()
 	local filters, allActive = self:GetActivePhaseFilterSet()
 	if allActive or not self.phaseTotals then return self.totalCollected or 0, self.totalCost or 0 end
@@ -1896,6 +1915,7 @@ function LegionRemix:CreateOverlay()
 	local scale = tonumber(self:GetOverlayScale()) or DEFAULTS.overlayScale or 1
 	if scale <= 0 then scale = DEFAULTS.overlayScale or 1 end
 	frame:SetScale(scale)
+	frame:SetFrameStrata("HIGH")
 
 	local header = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 	header:SetPoint("TOPLEFT", 10, -10)
@@ -2089,13 +2109,14 @@ function LegionRemix:UpdateOverlay()
 	self:UpdateContentWidth()
 
 	local categories = self.latestCategories or {}
+	local hideComplete = db and db.hideCompleteCategories
 	local visibleIndex = 0
 	local dynHeight = 0
 	for _, data in ipairs(categories) do
 		local display = self:BuildCategoryDisplay(data)
 		local hasCost = (display.totalCost or 0) > 0
 		local hasEntries = (display.totalCount or 0) > 0
-		if hasCost or hasEntries then
+		if (hasCost or hasEntries) and (not hideComplete or not self:IsCategoryCompleteForDisplay(display)) then
 			visibleIndex = visibleIndex + 1
 			local row = self:GetRow(visibleIndex, frame.content)
 			dynHeight = dynHeight + row:GetHeight()
@@ -2160,6 +2181,21 @@ function LegionRemix:SetEnhancedTracking(value)
 	db.enhancedTracking = value and true or false
 	self:InvalidateAllCaches()
 	self:RefreshData()
+end
+
+function LegionRemix:IsHidingCompleteCategories()
+	local db = self:GetDB()
+	if not db then return false end
+	return db.hideCompleteCategories and true or false
+end
+
+function LegionRemix:SetHideCompleteCategories(value)
+	local db = self:GetDB()
+	if not db then return end
+	local enabled = value and true or false
+	if db.hideCompleteCategories == enabled then return end
+	db.hideCompleteCategories = enabled
+	self:UpdateOverlay()
 end
 
 function LegionRemix:ResetPosition()
@@ -2375,6 +2411,10 @@ function LegionRemix:BuildOptionsUI(container)
 		local db = LegionRemix:GetDB()
 		return db and db.enhancedTracking
 	end, function(value) LegionRemix:SetEnhancedTracking(value) end)
+
+	addCheckbox(scroll, T("Hide complete categories", "Hide complete categories"), function()
+		return LegionRemix:IsHidingCompleteCategories()
+	end, function(value) LegionRemix:SetHideCompleteCategories(value) end)
 
 	addSpacer(scroll)
 
