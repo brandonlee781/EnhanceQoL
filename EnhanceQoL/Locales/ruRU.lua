@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "ruRU")
 if not L then return end
 
 --@localization(locale="ruRU", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "Использовать банк гильдии для ремонта"
+L["autoRepairGuildBankDesc"] = "При включённой автоматической починке пытается использовать банк гильдии, если доступны ремонты гильдии"
+
+-- Legion Remix
+L["Current Available"] = "Доступно сейчас"
+L["Rare Appearance"] = "Редкий облик"
+L["Remix Exclusives"] = "Эксклюзивы Remix"
+L["Starter Zone"] = "Начальная зона"
+L["Achievement #%d"] = "Достижение №%d"
+L["Bronze"] = "Бронза"
+L["All items collected."] = "Все предметы собраны."
+L["Missing items:"] = "Отсутствующие предметы:"
+L["Phase %d"] = "Фаза %d"
+L["Requires: %s"] = "Требуется: %s"
+L["+ %d more..."] = "+ ещё %d..."
+L["Legion Remix Collection"] = "Коллекция Legion Remix"
+L["Total Remaining"] = "Всего осталось"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "Включить оверлей"
+L["Collapse progress list by default"] = "Сворачивать список прогресса по умолчанию"
+L["Lock overlay position"] = "Зафиксировать позицию оверлея"
+L["Overlay Scale"] = "Масштаб оверлея"
+L["Show overlay in"] = "Показывать оверлей только в"
+L["Remix Zones"] = "Зоны Remix"
+L["Show Everywhere"] = "Показывать везде"
+L["Only consider sets wearable by the current character"] = "Учитывать только наборы, которые может носить текущий персонаж"
+L["Enhanced transmog tracking (slower on login)"] = "Улучшенное отслеживание трансмога (вход медленнее)"
+L["Hide complete categories"] = "Скрывать завершённые категории"
+L["Visible categories"] = "Видимые категории"
+L["Show all categories"] = "Показать все категории"
+L["Show overlay"] = "Показать оверлей"
+L["Hide overlay"] = "Скрыть оверлей"
+L["Remaining Bronze: %s"] = "Осталось бронзы: %s"

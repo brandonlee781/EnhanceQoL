@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "zhCN")
 if not L then return end
 
 --@localization(locale="zhCN", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "使用公会银行支付修理费用"
+L["autoRepairGuildBankDesc"] = "启用自动修理时，如果允许，将尝试使用公会银行进行修理"
+
+-- Legion Remix
+L["Current Available"] = "当前可用"
+L["Rare Appearance"] = "稀有外观"
+L["Remix Exclusives"] = "混搭专属"
+L["Starter Zone"] = "新手区"
+L["Achievement #%d"] = "成就 #%d"
+L["Bronze"] = "青铜"
+L["All items collected."] = "已收集所有物品。"
+L["Missing items:"] = "缺少的物品："
+L["Phase %d"] = "阶段 %d"
+L["Requires: %s"] = "需要：%s"
+L["+ %d more..."] = "还有 %d 项..."
+L["Legion Remix Collection"] = "军团混搭收藏"
+L["Total Remaining"] = "剩余总额"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "启用悬浮窗"
+L["Collapse progress list by default"] = "默认折叠进度列表"
+L["Lock overlay position"] = "锁定悬浮窗位置"
+L["Overlay Scale"] = "悬浮窗缩放"
+L["Show overlay in"] = "仅在以下位置显示悬浮窗"
+L["Remix Zones"] = "混搭区域"
+L["Show Everywhere"] = "全部显示"
+L["Only consider sets wearable by the current character"] = "仅考虑当前角色可装备的套装"
+L["Enhanced transmog tracking (slower on login)"] = "增强幻化追踪（登录时较慢）"
+L["Hide complete categories"] = "隐藏已完成的类别"
+L["Visible categories"] = "可见类别"
+L["Show all categories"] = "显示所有类别"
+L["Show overlay"] = "显示悬浮窗"
+L["Hide overlay"] = "隐藏悬浮窗"
+L["Remaining Bronze: %s"] = "剩余青铜：%s"

@@ -119,6 +119,41 @@ local function sanitizeKey(name)
 	return formatted
 end
 
+local function trim(str)
+	if not str then return "" end
+	return (str:match("^%s*(.-)%s*$")) or ""
+end
+
+local function getCollectionType(enumKey, legacyKey)
+	if Enum and Enum.TransmogCollectionType and Enum.TransmogCollectionType[enumKey] then
+		return Enum.TransmogCollectionType[enumKey]
+	end
+	if legacyKey then
+		local const = _G["LE_TRANSMOG_COLLECTION_TYPE_" .. legacyKey]
+		if const then return const end
+	end
+	return nil
+end
+
+local transmogWeaponCategories = {
+	{ id = getCollectionType("OneHAxe", "AXE_1H"), label = "Axt (1H)" },
+	{ id = getCollectionType("TwoHAxe", "AXE_2H"), label = "Axt (2H)" },
+	{ id = getCollectionType("OneHMace", "MACE_1H"), label = "Streitkolben (1H)" },
+	{ id = getCollectionType("TwoHMace", "MACE_2H"), label = "Streitkolben (2H)" },
+	{ id = getCollectionType("OneHSword", "SWORD_1H"), label = "Schwert (1H)" },
+	{ id = getCollectionType("TwoHSword", "SWORD_2H"), label = "Schwert (2H)" },
+	{ id = getCollectionType("Dagger", "DAGGER"), label = "Dolch" },
+	{ id = getCollectionType("Fist", "FIST_WEAPON"), label = "Faustwaffe" },
+	{ id = getCollectionType("Polearm", "POLEARM"), label = "Stangenwaffe" },
+	{ id = getCollectionType("Staff", "STAFF"), label = "Stab" },
+	{ id = getCollectionType("Bow", "BOW"), label = "Bogen" },
+	{ id = getCollectionType("Crossbow", "CROSSBOW"), label = "Armbrust" },
+	{ id = getCollectionType("Gun", "GUN"), label = "Schusswaffe" },
+	{ id = getCollectionType("Wand", "WAND"), label = "Zauberstab" },
+	{ id = getCollectionType("Warglaive", "WARGLAIVE"), label = "Kriegsgleve" },
+	{ id = getCollectionType("FishingRod", "FISHING_ROD"), label = "Angel" },
+}
+
 -- Pretty text for item quality
 local function qualityText(q)
 	local n = tonumber(q) or 0
@@ -270,6 +305,101 @@ end
 
 -- No AH result aggregator (manual input only)
 
+local function runTransmogSetSearch(rawQuery)
+	local query = trim(rawQuery)
+	local outputLines = {}
+	if not C_TransmogSets or not C_TransmogSets.GetAllSets then
+		outputLines = { "Transmog set API is not available in this client build." }
+	elseif query == "" then
+		outputLines = { "Bitte einen Suchbegriff eingeben." }
+	else
+		local lowerQuery = query:lower()
+		local allSets = C_TransmogSets.GetAllSets()
+		if type(allSets) ~= "table" then
+			outputLines = { "Keine Sets verfügbar." }
+		else
+			for _, setInfo in ipairs(allSets) do
+				local name = setInfo.name
+				if not name then
+					local extra = C_TransmogSets.GetSetInfo(setInfo.setID)
+					name = extra and extra.name
+				end
+				if name and name:lower():find(lowerQuery, 1, true) then
+					table.insert(outputLines, string.format("[%d] %s", setInfo.setID, name))
+				end
+			end
+			if #outputLines == 0 then outputLines = { string.format('Keine Ergebnisse für "%s".', query) } end
+		end
+	end
+
+	local finalText = table.concat(outputLines, "\n")
+	if addon.Query.ui and addon.Query.ui.setSearchOutput then addon.Query.ui.setSearchOutput:SetText(finalText) end
+end
+
+local function runTransmogSetLookup(rawIds)
+	local text = trim(rawIds)
+	local outputLines = {}
+	if not C_TransmogSets or not C_TransmogSets.GetSetInfo then
+		outputLines = { "Transmog set API is not available in this client build." }
+	elseif text == "" then
+		outputLines = { "Bitte eine oder mehrere IDs angeben." }
+	else
+		local seen = {}
+		for entry in text:gmatch("[^,%s]+") do
+			local id = tonumber(entry)
+			if id and not seen[id] then
+				seen[id] = true
+				local info = C_TransmogSets.GetSetInfo(id)
+				if info and info.name then
+					table.insert(outputLines, string.format("[%d] %s", id, info.name))
+				else
+					table.insert(outputLines, string.format("[%d] Keine Daten gefunden.", id))
+				end
+			elseif not id then
+				table.insert(outputLines, string.format('"%s" ist keine gültige Zahl.', entry))
+			end
+		end
+		if #outputLines == 0 then outputLines = { "Keine gültigen IDs gefunden." } end
+	end
+	local finalText = table.concat(outputLines, "\n")
+	if addon.Query.ui and addon.Query.ui.setIdOutput then addon.Query.ui.setIdOutput:SetText(finalText) end
+end
+
+local function runTransmogWeaponSearch(rawQuery, rawCategoryID)
+	local query = trim(rawQuery)
+	local outputLines = {}
+	if not C_TransmogCollection or not C_TransmogCollection.GetCategoryAppearances then
+		outputLines = { "Transmog Collections API nicht verfügbar." }
+	elseif query == "" then
+		outputLines = { "Bitte einen Suchbegriff eingeben." }
+	else
+		local categoryID = tonumber(rawCategoryID)
+		if not categoryID then
+			outputLines = { "Bitte eine gültige Kategorie auswählen." }
+		else
+			local appearances = C_TransmogCollection.GetCategoryAppearances(categoryID) or {}
+			local lowerQuery = query:lower()
+			for _, appearance in ipairs(appearances) do
+				local appearanceID = appearance and (appearance.appearanceID or appearance.visualID)
+				if appearanceID then
+					local sources = C_TransmogCollection.GetAppearanceSources(appearanceID, categoryID) or {}
+					for _, source in ipairs(sources) do
+						local name = source.name or ""
+						if name ~= "" and name:lower():find(lowerQuery, 1, true) then
+							local appID = appearanceID or 0
+							local srcID = source.sourceID or 0
+							table.insert(outputLines, string.format("app:%d src:%d %s", appID, srcID, name))
+						end
+					end
+				end
+			end
+			if #outputLines == 0 then outputLines = { string.format('Keine Treffer für "%s".', query) } end
+		end
+	end
+	local finalText = table.concat(outputLines, "\n")
+	if addon.Query.ui and addon.Query.ui.weaponSearchOutput then addon.Query.ui.weaponSearchOutput:SetText(finalText) end
+end
+
 local function handleItemLink(text)
 	local _, link = C_Item.GetItemInfo(text)
 	local itemID = text and text:match("item:(%d+)") and tonumber(text:match("item:(%d+)")) or nil
@@ -310,7 +440,13 @@ local function BuildAceWindow()
 
 	local tree = AceGUI:Create("TreeGroup")
 	addon.Query.ui.tree = tree
-	tree:SetTree({ { value = "generator", text = "Generator" }, { value = "inspector", text = "GetItemInfo" } })
+	tree:SetTree({
+		{ value = "generator", text = "Generator" },
+		{ value = "inspector", text = "GetItemInfo" },
+		{ value = "transmog", text = "Transmog Sets" },
+		{ value = "transmogId", text = "Transmog IDs" },
+		{ value = "transmogWeapon", text = "Transmog Waffen" },
+	})
 	tree:SetLayout("Fill")
 	win:AddChild(tree)
 
@@ -429,11 +565,178 @@ local function BuildAceWindow()
 		outer:AddChild(follow)
 	end
 
+	local function buildTransmog(container)
+		addon.Query.ui.activeGroup = "transmog"
+		container:ReleaseChildren()
+
+		local outer = AceGUI:Create("SimpleGroup")
+		outer:SetFullWidth(true)
+		outer:SetFullHeight(true)
+		outer:SetLayout("List")
+		container:AddChild(outer)
+
+		local tip = AceGUI:Create("Label")
+		tip:SetText("Suche nach Transmog-Sets. Enter oder der Button starten die Suche.")
+		tip:SetFullWidth(true)
+		outer:AddChild(tip)
+
+		local input = AceGUI:Create("EditBox")
+		input:SetLabel("Suchbegriff")
+		input:SetFullWidth(true)
+		input:DisableButton(true)
+		input:SetCallback("OnEnterPressed", function(widget, _, text)
+			runTransmogSetSearch(text)
+			widget:ClearFocus()
+		end)
+		outer:AddChild(input)
+		addon.Query.ui.setSearchInput = input
+
+		local searchBtn = AceGUI:Create("Button")
+		searchBtn:SetText("Suchen")
+		searchBtn:SetWidth(120)
+		searchBtn:SetCallback("OnClick", function()
+			runTransmogSetSearch(input:GetText())
+		end)
+		outer:AddChild(searchBtn)
+
+		local output = AceGUI:Create("MultiLineEditBox")
+		output:SetLabel("Ergebnisse")
+		output:SetFullWidth(true)
+		output:SetNumLines(14)
+		output:DisableButton(true)
+		outer:AddChild(output)
+		addon.Query.ui.setSearchOutput = output
+	end
+
+	local function buildTransmogId(container)
+		addon.Query.ui.activeGroup = "transmogId"
+		container:ReleaseChildren()
+
+		local outer = AceGUI:Create("SimpleGroup")
+		outer:SetFullWidth(true)
+		outer:SetFullHeight(true)
+		outer:SetLayout("List")
+		container:AddChild(outer)
+
+		local tip = AceGUI:Create("Label")
+		tip:SetText("Gib eine oder mehrere Set-IDs ein (getrennt durch Leerzeichen oder Komma).")
+		tip:SetFullWidth(true)
+		outer:AddChild(tip)
+
+		local input = AceGUI:Create("EditBox")
+		input:SetLabel("Set-ID(s)")
+		input:SetFullWidth(true)
+		input:DisableButton(true)
+		input:SetCallback("OnEnterPressed", function(widget, _, text)
+			runTransmogSetLookup(text)
+			widget:ClearFocus()
+		end)
+		outer:AddChild(input)
+		addon.Query.ui.setIdInput = input
+
+		local searchBtn = AceGUI:Create("Button")
+		searchBtn:SetText("Infos abrufen")
+		searchBtn:SetWidth(140)
+		searchBtn:SetCallback("OnClick", function()
+			runTransmogSetLookup(input:GetText())
+		end)
+		outer:AddChild(searchBtn)
+
+		local output = AceGUI:Create("MultiLineEditBox")
+		output:SetLabel("Ergebnisse")
+		output:SetFullWidth(true)
+		output:SetNumLines(14)
+		output:DisableButton(true)
+		outer:AddChild(output)
+		addon.Query.ui.setIdOutput = output
+	end
+
+	local function buildTransmogWeapon(container)
+		addon.Query.ui.activeGroup = "transmogWeapon"
+		container:ReleaseChildren()
+
+		local outer = AceGUI:Create("SimpleGroup")
+		outer:SetFullWidth(true)
+		outer:SetFullHeight(true)
+		outer:SetLayout("List")
+		container:AddChild(outer)
+
+		local tip = AceGUI:Create("Label")
+		tip:SetText("Suche nach Waffen-Vorlagen. Kategorie wählen, Suchtext eingeben, Enter oder Button startet die Suche.")
+		tip:SetFullWidth(true)
+		outer:AddChild(tip)
+
+		local availableOptions = {}
+		local optionOrder = {}
+		for _, info in ipairs(transmogWeaponCategories) do
+			if info.id then
+				local valueKey = tostring(info.id)
+				availableOptions[valueKey] = info.label
+				table.insert(optionOrder, valueKey)
+			end
+		end
+
+		local dropdown = AceGUI:Create("Dropdown")
+		dropdown:SetLabel("Kategorie")
+		dropdown:SetFullWidth(true)
+		if next(availableOptions) then
+			dropdown:SetList(availableOptions, optionOrder)
+			dropdown:SetValue(optionOrder[1])
+			addon.Query.ui.weaponCategoryValue = optionOrder[1]
+		else
+			dropdown:SetDisabled(true)
+		end
+		outer:AddChild(dropdown)
+		addon.Query.ui.weaponCategoryDropdown = dropdown
+
+		local input = AceGUI:Create("EditBox")
+		input:SetLabel("Suchbegriff")
+		input:SetFullWidth(true)
+		input:DisableButton(true)
+		input:SetDisabled(not next(availableOptions))
+		input:SetCallback("OnEnterPressed", function(widget, _, text)
+			runTransmogWeaponSearch(text, dropdown:GetValue())
+			widget:ClearFocus()
+		end)
+		outer:AddChild(input)
+		addon.Query.ui.weaponSearchInput = input
+
+		dropdown:SetCallback("OnValueChanged", function(_, _, key)
+			addon.Query.ui.weaponCategoryValue = key
+			if input and trim(input:GetText()) ~= "" then runTransmogWeaponSearch(input:GetText(), key) end
+		end)
+
+		local searchBtn = AceGUI:Create("Button")
+		searchBtn:SetText("Suchen")
+		searchBtn:SetWidth(120)
+		searchBtn:SetDisabled(not next(availableOptions))
+		searchBtn:SetCallback("OnClick", function()
+			runTransmogWeaponSearch(input:GetText(), dropdown:GetValue())
+		end)
+		outer:AddChild(searchBtn)
+
+		local output = AceGUI:Create("MultiLineEditBox")
+		output:SetLabel("Ergebnisse")
+		output:SetFullWidth(true)
+		output:SetNumLines(14)
+		output:DisableButton(true)
+		outer:AddChild(output)
+		addon.Query.ui.weaponSearchOutput = output
+
+		if not next(availableOptions) then output:SetText("Keine Waffen-Kategorien verfügbar.") end
+	end
+
 	tree:SetCallback("OnGroupSelected", function(_, _, group)
 		if group == "generator" then
 			buildGenerator(tree)
-		else
+		elseif group == "inspector" then
 			buildInspector(tree)
+		elseif group == "transmog" then
+			buildTransmog(tree)
+		elseif group == "transmogId" then
+			buildTransmogId(tree)
+		else
+			buildTransmogWeapon(tree)
 		end
 	end)
 	tree:SelectByValue("generator")

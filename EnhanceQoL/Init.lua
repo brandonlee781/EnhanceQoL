@@ -600,6 +600,11 @@ addon.variables.shouldEnchanted = { [15] = true, [5] = true, [9] = true, [7] = t
 addon.variables.patchInformations = {
 	horrificVisions = addon.functions.PatchTS(2025, 5, 20, 21, 6),
 	whispersOfKaresh = addon.functions.PatchTS(2025, 8, 5, 6, 6),
+	legionRemixPhase1 = addon.functions.PatchTS(2025, 10, 7, 8, 6),
+	legionRemixPhase2 = addon.functions.PatchTS(2025, 10, 21, 22, 6),
+	legionRemixPhase3 = addon.functions.PatchTS(2025, 11, 4, 5, 6),
+	legionRemixPhase4 = addon.functions.PatchTS(2025, 11, 18, 19, 6),
+	legionRemixPhase5 = addon.functions.PatchTS(2025, 12, 9, 10, 6),
 }
 
 addon.variables.shouldEnchantedChecks = {

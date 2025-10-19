@@ -20,6 +20,7 @@ local defaults = {
 		cvarOverrides = {},
 		cvarPersistenceEnabled = false,
 		optionsFrameScale = 1,
+		legionRemix = {},
 	},
 }
 
@@ -2355,12 +2356,28 @@ local function addVendorMainFrame2(container)
 
 	local function buildConvenience()
 		local g, known = ensureGroup("conv", L["Convenience"])
+		local checkboxes = {}
 		local items = {
 			{
 				var = "autoRepair",
 				text = L["autoRepair"],
-				func = function(_, _, v) addon.db["autoRepair"] = v end,
+				func = function(_, _, v)
+					addon.db["autoRepair"] = v
+					if checkboxes["autoRepairGuildBank"] then
+						checkboxes["autoRepairGuildBank"]:SetDisabled(not v)
+						if not v and addon.db["autoRepairGuildBank"] then
+							addon.db["autoRepairGuildBank"] = false
+							checkboxes["autoRepairGuildBank"]:SetValue(false)
+						end
+					end
+				end,
 				desc = L["autoRepairDesc"],
+			},
+			{
+				var = "autoRepairGuildBank",
+				text = L["autoRepairGuildBank"],
+				func = function(_, _, v) addon.db["autoRepairGuildBank"] = v end,
+				desc = L["autoRepairGuildBankDesc"],
 			},
 			{
 				var = "sellAllJunk",
@@ -2372,10 +2389,11 @@ local function addVendorMainFrame2(container)
 				desc = L["sellAllJunkDesc"],
 			},
 		}
-		table.sort(items, function(a, b) return a.text < b.text end)
 		for _, it in ipairs(items) do
 			local w = addon.functions.createCheckboxAce(it.text, addon.db[it.var], it.func, it.desc)
+			if it.var == "autoRepairGuildBank" then w:SetDisabled(not addon.db["autoRepair"]) end
 			g:AddChild(w)
+			checkboxes[it.var] = w
 		end
 
 		if known then
@@ -5632,6 +5650,7 @@ local function initMisc()
 	addon.functions.InitDBValue("confirmSocketReplace", false)
 	addon.functions.InitDBValue("hideRaidTools", false)
 	addon.functions.InitDBValue("autoRepair", false)
+	addon.functions.InitDBValue("autoRepairGuildBank", false)
 	addon.functions.InitDBValue("sellAllJunk", false)
 	addon.functions.InitDBValue("autoCancelCinematic", false)
 	addon.functions.InitDBValue("ignoreTalkingHead", false)
@@ -5680,14 +5699,16 @@ local function initMisc()
 	end
 
 	hooksecurefunc(MerchantFrame, "Show", function(self, button)
-		if addon.db["autoRepair"] then
-			if CanMerchantRepair() then
-				local repairAllCost = GetRepairAllCost()
-				if repairAllCost and repairAllCost > 0 then
+		if addon.db["autoRepair"] and CanMerchantRepair() then
+			local repairAllCost = GetRepairAllCost()
+			if repairAllCost and repairAllCost > 0 then
+				if addon.db["autoRepairGuildBank"] and CanGuildBankRepair() then
+					RepairAllItems(true)
+				else
 					RepairAllItems()
-					PlaySound(SOUNDKIT.ITEM_REPAIR)
-					print(L["repairCost"] .. addon.functions.formatMoney(repairAllCost))
 				end
+				PlaySound(SOUNDKIT.ITEM_REPAIR)
+				print(L["repairCost"] .. addon.functions.formatMoney(repairAllCost))
 			end
 		end
 		if addon.db["sellAllJunk"] and C_MerchantFrame.IsSellAllJunkEnabled() then C_MerchantFrame.SellAllJunkItems() end
@@ -7267,6 +7288,12 @@ local function CreateUI()
 		addon.treeGroup:SetTree(addon.treeGroupData)
 	end
 
+	-- Top: Events
+	-- if addon.functions.IsTimerunner() then addon.functions.addToTree(nil, {
+	-- 	value = "events",
+	-- 	text = EVENTS_LABEL or L["Events"] or "Events",
+	-- }) end
+
 	-- Top: Profiles
 	table.insert(addon.treeGroupData, {
 		value = "profiles",
@@ -7349,6 +7376,11 @@ local function CreateUI()
 		-- System
 		elseif group == "ui\001system" then
 			addCVarFrame(container, true)
+		-- Events
+		elseif group == "events" or group == "events\001legionremix" then
+			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.functions and addon.Events.LegionRemix.functions.treeCallback then
+				addon.Events.LegionRemix.functions.treeCallback(container, group)
+			end
 		elseif group == "profiles" then
 			local scroll = addon.functions.createContainer("ScrollFrame", "List")
 			scroll:SetFullWidth(true)
@@ -7869,6 +7901,8 @@ local eventHandlers = {
 				if addon.ContainerActions.OnSettingChanged then addon.ContainerActions:OnSettingChanged(addon.db["automaticallyOpenContainer"]) end
 			end
 
+			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.Init then addon.Events.LegionRemix:Init() end
+
 			checkBagIgnoreJunk()
 		end
 		if arg1 == "Blizzard_ItemInteractionUI" then addon.functions.toggleInstantCatalystButton(addon.db["instantCatalystEnabled"]) end
@@ -8145,6 +8179,10 @@ local eventHandlers = {
 				end
 			end
 		end
+		if addon.functions.IsTimerunner() then addon.functions.addToTree(nil, {
+			value = "events",
+			text = EVENTS_LABEL or L["Events"] or "Events",
+		}) end
 	end,
 	["PLAYER_MONEY"] = function()
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end

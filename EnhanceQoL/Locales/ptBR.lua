@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "ptBR")
 if not L then return end
 
 --@localization(locale="ptBR", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "Usar o banco da guilda para reparos"
+L["autoRepairGuildBankDesc"] = "Quando a reparação automática estiver ativada, tenta usar o banco da guilda sempre que as reparações da guilda estiverem disponíveis"
+
+-- Legion Remix
+L["Current Available"] = "Disponível agora"
+L["Rare Appearance"] = "Aparência Rara"
+L["Remix Exclusives"] = "Exclusivos do Remix"
+L["Starter Zone"] = "Zona inicial"
+L["Achievement #%d"] = "Conquista nº %d"
+L["Bronze"] = "Bronze"
+L["All items collected."] = "Todos os itens coletados."
+L["Missing items:"] = "Itens faltando:"
+L["Phase %d"] = "Fase %d"
+L["Requires: %s"] = "Requer: %s"
+L["+ %d more..."] = "+ %d a mais..."
+L["Legion Remix Collection"] = "Coleção do Legion Remix"
+L["Total Remaining"] = "Total restante"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "Ativar sobreposição"
+L["Collapse progress list by default"] = "Recolher a lista de progresso por padrão"
+L["Lock overlay position"] = "Bloquear a posição da sobreposição"
+L["Overlay Scale"] = "Escala da sobreposição"
+L["Show overlay in"] = "Mostrar sobreposição somente em"
+L["Remix Zones"] = "Zonas do Remix"
+L["Show Everywhere"] = "Mostrar em todos os lugares"
+L["Only consider sets wearable by the current character"] = "Considerar apenas conjuntos utilizáveis pelo personagem atual"
+L["Enhanced transmog tracking (slower on login)"] = "Rastreamento de transmogrificação aprimorado (login mais lento)"
+L["Hide complete categories"] = "Ocultar categorias concluídas"
+L["Visible categories"] = "Categorias visíveis"
+L["Show all categories"] = "Mostrar todas as categorias"
+L["Show overlay"] = "Mostrar sobreposição"
+L["Hide overlay"] = "Ocultar sobreposição"
+L["Remaining Bronze: %s"] = "Bronze restante: %s"

@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "frFR")
 if not L then return end
 
 --@localization(locale="frFR", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "Utiliser la banque de guilde pour les réparations"
+L["autoRepairGuildBankDesc"] = "Si la réparation automatique est activée, essaie d'utiliser la banque de guilde lorsque des réparations de guilde sont disponibles"
+
+-- Legion Remix
+L["Current Available"] = "Disponible actuellement"
+L["Rare Appearance"] = "Apparence rare"
+L["Remix Exclusives"] = "Exclusivités Remix"
+L["Starter Zone"] = "Zone de départ"
+L["Achievement #%d"] = "Haut fait n° %d"
+L["Bronze"] = "Bronze"
+L["All items collected."] = "Tous les objets ont été récupérés."
+L["Missing items:"] = "Objets manquants :"
+L["Phase %d"] = "Phase %d"
+L["Requires: %s"] = "Requiert : %s"
+L["+ %d more..."] = "+ %d de plus..."
+L["Legion Remix Collection"] = "Collection de Legion Remix"
+L["Total Remaining"] = "Total restant"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "Activer la superposition"
+L["Collapse progress list by default"] = "Réduire la liste de progression par défaut"
+L["Lock overlay position"] = "Verrouiller la position de la superposition"
+L["Overlay Scale"] = "Échelle de la superposition"
+L["Show overlay in"] = "Afficher la superposition uniquement dans"
+L["Remix Zones"] = "Zones Remix"
+L["Show Everywhere"] = "Afficher partout"
+L["Only consider sets wearable by the current character"] = "Ne considérer que les ensembles portables par le personnage actuel"
+L["Enhanced transmog tracking (slower on login)"] = "Suivi de transmogrification amélioré (connexion plus lente)"
+L["Hide complete categories"] = "Masquer les catégories complètes"
+L["Visible categories"] = "Catégories visibles"
+L["Show all categories"] = "Afficher toutes les catégories"
+L["Show overlay"] = "Afficher la superposition"
+L["Hide overlay"] = "Masquer la superposition"
+L["Remaining Bronze: %s"] = "Bronze restant : %s"

@@ -42,6 +42,8 @@ libs\AceComm-3.0\AceComm-3.0.xml
 Bindings\Slider.xml
 Sounds\sounds.lua
 General\functions.lua
+Events\LegionRemixPhaseData.lua
+Events\LegionRemix.lua
 EnhanceQoL.lua
 Core\DataHub.lua
 Core\DataPanel.lua

@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "koKR")
 if not L then return end
 
 --@localization(locale="koKR", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "길드 은행으로 수리 비용 지불"
+L["autoRepairGuildBankDesc"] = "자동 수리가 활성화된 경우 길드 수리가 가능하면 길드 은행을 사용합니다"
+
+-- Legion Remix
+L["Current Available"] = "현재 사용 가능"
+L["Rare Appearance"] = "희귀 외형"
+L["Remix Exclusives"] = "리믹스 전용"
+L["Starter Zone"] = "시작 지역"
+L["Achievement #%d"] = "업적 #%d"
+L["Bronze"] = "브론즈"
+L["All items collected."] = "모든 아이템을 수집했습니다."
+L["Missing items:"] = "누락된 아이템:"
+L["Phase %d"] = "단계 %d"
+L["Requires: %s"] = "필요 조건: %s"
+L["+ %d more..."] = "+ %d개 더..."
+L["Legion Remix Collection"] = "군단 리믹스 수집품"
+L["Total Remaining"] = "남은 총합"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "오버레이 활성화"
+L["Collapse progress list by default"] = "기본적으로 진행 목록 접기"
+L["Lock overlay position"] = "오버레이 위치 고정"
+L["Overlay Scale"] = "오버레이 크기"
+L["Show overlay in"] = "선택한 위치에만 오버레이 표시"
+L["Remix Zones"] = "리믹스 지역"
+L["Show Everywhere"] = "모두 표시"
+L["Only consider sets wearable by the current character"] = "현재 캐릭터가 착용할 수 있는 세트만 고려"
+L["Enhanced transmog tracking (slower on login)"] = "향상된 형상 추적(로그인 시 느려짐)"
+L["Hide complete categories"] = "완료한 분류 숨기기"
+L["Visible categories"] = "표시할 분류"
+L["Show all categories"] = "모든 분류 표시"
+L["Show overlay"] = "오버레이 표시"
+L["Hide overlay"] = "오버레이 숨기기"
+L["Remaining Bronze: %s"] = "남은 브론즈: %s"

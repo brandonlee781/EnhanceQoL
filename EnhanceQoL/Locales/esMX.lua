@@ -2,3 +2,37 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "esMX")
 if not L then return end
 
 --@localization(locale="esMX", format="lua_additive_table")@
+
+L["autoRepairGuildBank"] = "Usar fondos del banco de hermandad para reparar"
+L["autoRepairGuildBankDesc"] = "Si la reparación automática está activada, intentará reparar con la hermandad siempre que haya reparaciones de hermandad disponibles"
+
+-- Legion Remix
+L["Current Available"] = "Disponible ahora"
+L["Rare Appearance"] = "Apariencia rara"
+L["Remix Exclusives"] = "Exclusivos de Remix"
+L["Starter Zone"] = "Zona inicial"
+L["Achievement #%d"] = "Logro n.º %d"
+L["Bronze"] = "Bronce"
+L["All items collected."] = "Todos los objetos obtenidos."
+L["Missing items:"] = "Objetos que faltan:"
+L["Phase %d"] = "Fase %d"
+L["Requires: %s"] = "Requiere: %s"
+L["+ %d more..."] = "+ %d más..."
+L["Legion Remix Collection"] = "Colección de Legión Remix"
+L["Total Remaining"] = "Total restante"
+L["Track your Legion Remix Bronze collection"] = "Track your Legion Remix Bronze collection, inspired by the community WeakAura."
+L["Enable overlay"] = "Activar superposición"
+L["Collapse progress list by default"] = "Contraer la lista de progreso por defecto"
+L["Lock overlay position"] = "Bloquear la posición de la superposición"
+L["Overlay Scale"] = "Escala de la superposición"
+L["Show overlay in"] = "Mostrar la superposición solo en"
+L["Remix Zones"] = "Zonas de Remix"
+L["Show Everywhere"] = "Mostrar en todos lados"
+L["Only consider sets wearable by the current character"] = "Solo considerar conjuntos que el personaje actual pueda usar"
+L["Enhanced transmog tracking (slower on login)"] = "Seguimiento mejorado de transfiguraciones (más lento al iniciar sesión)"
+L["Hide complete categories"] = "Ocultar categorías completas"
+L["Visible categories"] = "Categorías visibles"
+L["Show all categories"] = "Mostrar todas las categorías"
+L["Show overlay"] = "Mostrar superposición"
+L["Hide overlay"] = "Ocultar superposición"
+L["Remaining Bronze: %s"] = "Bronce restante: %s"
