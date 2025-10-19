@@ -263,7 +263,7 @@ local DEFAULTS = {
 	categoryFilters = {},
 	zoneFilters = {},
 	phaseFilters = { mode = "all" },
-	anchor = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -120 },
+	anchor = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 0, y = -120 },
 }
 
 local CLASS_MASKS = {
@@ -1467,22 +1467,147 @@ function LegionRemix:ShouldOverlayBeVisible()
 	return self:IsInLegionRemixZone()
 end
 
+local function resolveParentPointCoordinates(left, bottom, width, height, point)
+	if point == "TOPLEFT" then
+		return left, bottom + height
+	elseif point == "TOP" then
+		return left + (width * 0.5), bottom + height
+	elseif point == "TOPRIGHT" then
+		return left + width, bottom + height
+	elseif point == "LEFT" then
+		return left, bottom + (height * 0.5)
+	elseif point == "CENTER" then
+		return left + (width * 0.5), bottom + (height * 0.5)
+	elseif point == "RIGHT" then
+		return left + width, bottom + (height * 0.5)
+	elseif point == "BOTTOMLEFT" then
+		return left, bottom
+	elseif point == "BOTTOM" then
+		return left + (width * 0.5), bottom
+	elseif point == "BOTTOMRIGHT" then
+		return left + width, bottom
+	end
+	return left + (width * 0.5), bottom + (height * 0.5)
+end
+
+local function resolveFrameAnchorOffset(point, width, height)
+	if point == "TOPLEFT" then
+		return 0, 0
+	elseif point == "TOP" then
+		return width * 0.5, 0
+	elseif point == "TOPRIGHT" then
+		return width, 0
+	elseif point == "LEFT" then
+		return 0, height * 0.5
+	elseif point == "CENTER" then
+		return width * 0.5, height * 0.5
+	elseif point == "RIGHT" then
+		return width, height * 0.5
+	elseif point == "BOTTOMLEFT" then
+		return 0, height
+	elseif point == "BOTTOM" then
+		return width * 0.5, height
+	elseif point == "BOTTOMRIGHT" then
+		return width, height
+	end
+	return width * 0.5, height * 0.5
+end
+
+local function computeTopLeftOffset(frame, parent, point, relativePoint, offsetX, offsetY)
+	if not (frame and parent) then return nil, nil end
+
+	point = point or "TOPLEFT"
+	relativePoint = relativePoint or point
+
+	local parentScale = parent.GetEffectiveScale and parent:GetEffectiveScale() or 1
+	local frameScale = frame.GetEffectiveScale and frame:GetEffectiveScale() or 1
+	if not parentScale or parentScale == 0 then parentScale = 1 end
+	if not frameScale or frameScale == 0 then frameScale = 1 end
+
+	local parentLeft = (parent.GetLeft and parent:GetLeft() or 0) * parentScale
+	local parentBottom = (parent.GetBottom and parent:GetBottom() or 0) * parentScale
+	local parentWidth = (parent.GetWidth and parent:GetWidth() or 0) * parentScale
+	local parentHeight = (parent.GetHeight and parent:GetHeight() or 0) * parentScale
+	if parentWidth == 0 or parentHeight == 0 then return nil, nil end
+
+	local baseX, baseY = resolveParentPointCoordinates(parentLeft, parentBottom, parentWidth, parentHeight, relativePoint)
+
+	local anchorX = (baseX or 0) + (offsetX or 0) * parentScale
+	local anchorY = (baseY or 0) + (offsetY or 0) * parentScale
+
+	local frameWidth = (frame.GetWidth and frame:GetWidth() or 0) * frameScale
+	local frameHeight = (frame.GetHeight and frame:GetHeight() or 0) * frameScale
+	local anchorOffsetX, anchorOffsetY = resolveFrameAnchorOffset(point, frameWidth, frameHeight)
+
+	local topLeftX = anchorX - anchorOffsetX
+	local topLeftY = anchorY + anchorOffsetY
+
+	local parentTopLeftX = parentLeft
+	local parentTopLeftY = parentBottom + parentHeight
+
+	local finalX = (topLeftX - parentTopLeftX) / parentScale
+	local finalY = (topLeftY - parentTopLeftY) / parentScale
+
+	return finalX, finalY
+end
+
 function LegionRemix:ApplyAnchor(frame)
 	local db = self:GetDB()
-	if not (frame and db and db.anchor) then return end
+	if not (frame and db) then return end
+	db.anchor = db.anchor or CopyTable(DEFAULTS.anchor)
+
+	local parent = UIParent
+
+	if db.anchor.point ~= "TOPLEFT" or db.anchor.relativePoint ~= "TOPLEFT" then
+		local convertedX, convertedY = computeTopLeftOffset(
+			frame,
+			parent,
+			db.anchor.point,
+			db.anchor.relativePoint,
+			db.anchor.x or 0,
+			db.anchor.y or 0
+		)
+		if convertedX and convertedY then
+			db.anchor.point = "TOPLEFT"
+			db.anchor.relativePoint = "TOPLEFT"
+			db.anchor.x = convertedX
+			db.anchor.y = convertedY
+		end
+	end
+
 	frame:ClearAllPoints()
-	frame:SetPoint(db.anchor.point or "CENTER", UIParent, db.anchor.relativePoint or "CENTER", db.anchor.x or 0, db.anchor.y or 0)
+	if db.anchor.point == "TOPLEFT" and db.anchor.relativePoint == "TOPLEFT" then
+		frame:SetPoint("TOPLEFT", parent, "TOPLEFT", db.anchor.x or 0, db.anchor.y or 0)
+	else
+		local point = db.anchor.point or "CENTER"
+		local relativePoint = db.anchor.relativePoint or point
+		frame:SetPoint(point, parent, relativePoint, db.anchor.x or 0, db.anchor.y or 0)
+	end
 end
 
 function LegionRemix:SaveAnchor(frame)
 	if not frame then return end
 	local db = self:GetDB()
 	if not db then return end
-	local point, _, relativePoint, x, y = frame:GetPoint()
-	db.anchor.point = point
-	db.anchor.relativePoint = relativePoint
-	db.anchor.x = x
-	db.anchor.y = y
+
+	db.anchor = db.anchor or {}
+
+	local point, relativeTo, relativePoint, x, y = frame:GetPoint()
+	local parent = relativeTo or frame:GetParent() or UIParent
+	if parent ~= UIParent then parent = UIParent end
+
+	local convertedX, convertedY = computeTopLeftOffset(frame, parent, point, relativePoint, x or 0, y or 0)
+	if convertedX and convertedY then
+		db.anchor.point = "TOPLEFT"
+		db.anchor.relativePoint = "TOPLEFT"
+		db.anchor.x = convertedX
+		db.anchor.y = convertedY
+	else
+		db.anchor.point = point or "TOPLEFT"
+		db.anchor.relativePoint = relativePoint or db.anchor.point
+		db.anchor.x = x or 0
+		db.anchor.y = y or 0
+	end
 end
 
 local function setButtonTexture(button, collapsed)
