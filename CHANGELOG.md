@@ -4,7 +4,7 @@
 
 ### 🐛 Fixed
 
-- Some texts were not properly localized
+- Fixed missing and incorrect localizations across several languages.
 
 ---
 
