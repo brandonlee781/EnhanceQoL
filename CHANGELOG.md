@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.9.3] – 2025-10-20
+
+### 🐛 Fixed
+
+- Instance difficulty while in a guild group wasn't correctly hidden
+
+---
+
 ## [5.9.2] – 2025-10-20
 
 ### 🐛 Fixed

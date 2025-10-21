@@ -14,6 +14,7 @@ InstanceDifficulty.enabled = InstanceDifficulty.enabled or false
 InstanceDifficulty.frame = InstanceDifficulty.frame or CreateFrame("Frame")
 
 local indicator = MinimapCluster.InstanceDifficulty
+
 indicator:SetAlpha(1)
 if indicator.Default then
 	indicator.Default:Hide()
@@ -22,6 +23,10 @@ end
 if indicator.ChallengeMode then
 	indicator.ChallengeMode:Hide()
 	indicator.ChallengeMode:SetScript("OnShow", indicator.ChallengeMode.Hide)
+end
+if indicator.Guild then
+	indicator.Guild:Hide()
+	indicator.Guild:SetScript("OnShow", indicator.Guild.Hide)
 end
 
 indicator:HookScript("OnShow", function() InstanceDifficulty:Update() end)
