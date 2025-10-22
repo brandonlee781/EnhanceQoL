@@ -1023,6 +1023,7 @@ function addon.MythicPlus.functions.setRandomHearthstone()
 		homeSection = addon.MythicPlus.variables.portalCompendium[9999]
 	end
 	homeSection.spells = homeSection.spells or {}
+	homeSection.ignoreTimerunner = true
 	homeSection.spells[RANDOM_HS_ID] = {
 		text = addon.MythicPlus.variables.hearthstoneName or "HS",
 		isItem = hs.isItem or false,

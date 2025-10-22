@@ -19,6 +19,12 @@ local DEFAULT_ANCHOR = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 
 local ITEM_CLASS = Enum and Enum.ItemClass
 local MISC_SUBCLASS = Enum and Enum.ItemMiscellaneousSubclass
 local TOOLTIP_CLASS_FILTER = {}
+local CCont = C_Container
+local GetContainerNumSlots = CCont and CCont.GetContainerNumSlots
+local GetContainerItemInfo = CCont and CCont.GetContainerItemInfo
+local GetContainerItemLink = CCont and CCont.GetContainerItemLink
+local CTooltip = C_TooltipInfo
+local GetBagItemTooltip = CTooltip and CTooltip.GetBagItem
 
 if ITEM_CLASS then
 	if ITEM_CLASS.Consumable then TOOLTIP_CLASS_FILTER[ITEM_CLASS.Consumable] = true end
@@ -402,7 +408,7 @@ function ContainerActions:UpdateCount()
 	end
 end
 
-function ContainerActions:RememberItemInfo(itemID, config, info, overrides)
+function ContainerActions:RememberItemInfo(itemID, config, info, overrides, noLookup)
 	self.itemCache = self.itemCache or {}
 	local entry = self.itemCache[itemID]
 	if not entry then
@@ -415,29 +421,31 @@ function ContainerActions:RememberItemInfo(itemID, config, info, overrides)
 		local chunk = config.chunk or config.stackSize or config.minStack
 		if chunk and chunk > 0 then entry.chunk = chunk end
 	end
-	local name, _, _, _, _, icon = C_Item.GetItemInfo(itemID)
-	if not icon or icon == 0 then
-		local _, _, _, _, _, iconInstant = C_Item.GetItemInfoInstant(itemID)
-		icon = iconInstant or icon
-	end
-	if name and name ~= "" then entry.name = name end
-	if icon and icon ~= 0 then entry.icon = icon end
-	if not entry.name then entry.name = ("item:%d"):format(itemID) end
-	if (not name or name == "") and not entry.loading then
-		entry.loading = true
-		local itemObj = Item:CreateFromItemID(itemID)
-		if itemObj and itemObj.ContinueOnItemLoad then
-			itemObj:ContinueOnItemLoad(function()
-				local data = ContainerActions.itemCache and ContainerActions.itemCache[itemID]
-				if not data then return end
-				local loadedName = select(1, C_Item.GetItemInfo(itemID)) or select(1, C_Item.GetItemInfoInstant(itemID))
-				if loadedName and loadedName ~= "" then data.name = loadedName end
-				data.loading = nil
-			end)
-		else
-			entry.loading = nil
+	if not noLookup then
+		local name, _, _, _, _, icon = C_Item.GetItemInfo(itemID)
+		if not icon or icon == 0 then
+			local _, _, _, _, _, iconInstant = C_Item.GetItemInfoInstant(itemID)
+			icon = iconInstant or icon
+		end
+		if name and name ~= "" then entry.name = name end
+		if icon and icon ~= 0 then entry.icon = icon end
+		if (not name or name == "") and not entry.loading then
+			entry.loading = true
+			local itemObj = Item:CreateFromItemID(itemID)
+			if itemObj and itemObj.ContinueOnItemLoad then
+				itemObj:ContinueOnItemLoad(function()
+					local data = ContainerActions.itemCache and ContainerActions.itemCache[itemID]
+					if not data then return end
+					local loadedName = select(1, C_Item.GetItemInfo(itemID)) or select(1, C_Item.GetItemInfoInstant(itemID))
+					if loadedName and loadedName ~= "" then data.name = loadedName end
+					data.loading = nil
+				end)
+			else
+				entry.loading = nil
+			end
 		end
 	end
+	if not entry.name then entry.name = ("item:%d"):format(itemID) end
 	return entry
 end
 
@@ -649,9 +657,13 @@ function ContainerActions:ApplyButtonEntry(entry)
 
 		button.entry = entry
 		SetButtonIconTexture(button, entry.icon or PREVIEW_ICON)
-		button.itemLink = entry.link
 
 		if changed then
+			if GetContainerItemLink then
+				button.itemLink = GetContainerItemLink(entry.bag, entry.slot)
+			else
+				button.itemLink = nil
+			end
 			local macroText = ("/use %d %d"):format(entry.bag, entry.slot)
 			button:SetAttribute("*type*", "macro")
 			button:SetAttribute("macrotext", macroText)
@@ -723,7 +735,7 @@ end
 function ContainerActions:UpdateItems(list)
 	self:Init()
 	self.secureItems = list or {}
-	table.sort(self.secureItems, SecureSort)
+	if #self.secureItems > 1 then table.sort(self.secureItems, SecureSort) end
 	if not self:IsEnabled() then
 		self:ApplyButtonEntry(nil)
 		self:RequestVisibility(false)
@@ -820,14 +832,16 @@ function ContainerActions:ShouldInspectTooltip(itemID)
 end
 
 function ContainerActions:IsTooltipOpenable(bag, slot, info)
-	info = info or C_Container.GetContainerItemInfo(bag, slot)
+	info = info or (GetContainerItemInfo and GetContainerItemInfo(bag, slot))
 	if not info or not info.itemID then return false end
 
 	local itemID = info.itemID
 	if self.openableCache[itemID] ~= nil then return self.openableCache[itemID] end
 	if not self:ShouldInspectTooltip(itemID) then return false end
+	if self._tooltipScanBudget and self._tooltipScanBudget <= 0 then return false end
+	if self._tooltipScanBudget then self._tooltipScanBudget = self._tooltipScanBudget - 1 end
 
-	local tooltip = C_TooltipInfo.GetBagItem(bag, slot)
+	local tooltip = GetBagItemTooltip and GetBagItemTooltip(bag, slot)
 	if not tooltip or not tooltip.lines then return false end
 	for _, line in ipairs(tooltip.lines) do
 		if line and line.leftText then
@@ -846,6 +860,23 @@ function ContainerActions:IsCollectibleMount(info)
 	if not C_MountJournal or not C_MountJournal.GetMountFromItem then return false end
 
 	local itemID = info.itemID
+	local classID, subclassID
+	if C_Item and C_Item.GetItemInfoInstant then
+		local _, _, _, _, _, classValue, subclassValue = C_Item.GetItemInfoInstant(itemID)
+		classID, subclassID = classValue, subclassValue
+	elseif GetItemInfoInstant then
+		local _, _, _, _, _, _, _, _, _, _, _, classValue, subclassValue = GetItemInfoInstant(itemID)
+		classID, subclassID = classValue, subclassValue
+	end
+	local miscClassID = (ITEM_CLASS and ITEM_CLASS.Miscellaneous) or (type(LE_ITEM_CLASS_MISCELLANEOUS) == "number" and LE_ITEM_CLASS_MISCELLANEOUS) or nil
+	local mountSubclassID = (MISC_SUBCLASS and MISC_SUBCLASS.Mount) or (type(LE_ITEM_MISCELLANEOUS_MOUNT) == "number" and LE_ITEM_MISCELLANEOUS_MOUNT) or nil
+	if classID and subclassID and miscClassID and mountSubclassID then
+		if classID ~= miscClassID or subclassID ~= mountSubclassID then
+			if self.mountCache then self.mountCache[itemID] = false end
+			return false
+		end
+	end
+
 	local cache = self.mountCache and self.mountCache[itemID]
 	local mountID = cache ~= nil and cache or nil
 	if cache == false then return false end
@@ -872,7 +903,7 @@ end
 
 function ContainerActions:BuildEntry(bag, slot, info, overrides)
 	overrides = overrides or {}
-	self:RememberItemInfo(info.itemID, overrides.meta, info, overrides)
+	self:RememberItemInfo(info.itemID, overrides.meta, info, overrides, true)
 	return {
 		bag = bag,
 		slot = slot,
@@ -882,28 +913,29 @@ function ContainerActions:BuildEntry(bag, slot, info, overrides)
 		stackCount = info.stackCount or 1,
 		chunk = overrides.chunk,
 		meta = overrides.meta,
-		link = C_Container.GetContainerItemLink(bag, slot),
 	}
 end
 
-function ContainerActions:ScanBags()
+function ContainerActions:ScanBags(bags)
 	self:Init()
+	self._tooltipScanBudget = (addon.db and addon.db.containerActionTooltipBudget) or 4
+	local scanOpenables = (addon.db and addon.db.containerActionScanOpenables) ~= false
 	local safeItems, secureItems = self._safe, self._secure
 	if #safeItems > 0 then wipe(safeItems) end
 	if #secureItems > 0 then wipe(secureItems) end
 	if not self:IsEnabled() then return safeItems, secureItems end
-	for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
-		local slotCount = C_Container.GetContainerNumSlots(bag)
+	local function ScanBag(bag)
+		local slotCount = GetContainerNumSlots and GetContainerNumSlots(bag)
 		if slotCount and slotCount > 0 then
 			for slot = 1, slotCount do
-				local info = C_Container.GetContainerItemInfo(bag, slot)
+				local info = GetContainerItemInfo and GetContainerItemInfo(bag, slot)
 				if info and info.itemID and not info.isLocked then
 					local autoConfig = addon.general and addon.general.variables and addon.general.variables.autoOpen and addon.general.variables.autoOpen[info.itemID]
 					local isBlacklisted = self:IsItemBlacklisted(info.itemID)
 					if isBlacklisted then
-						self:RememberItemInfo(info.itemID, nil, info)
+						self:RememberItemInfo(info.itemID, nil, info, nil, true)
 					elseif autoConfig then
-						self:RememberItemInfo(info.itemID, autoConfig, info)
+						self:RememberItemInfo(info.itemID, autoConfig, info, nil, true)
 						if self:IsItemEnabled(info.itemID) then
 							if type(autoConfig) == "table" then
 								local chunk = autoConfig.chunk or autoConfig.stackSize or autoConfig.minStack or 1
@@ -921,12 +953,28 @@ function ContainerActions:ScanBags()
 						if isCollectibleMount then
 							local overrides = { meta = { type = "mount", mountID = mountID } }
 							table.insert(secureItems, self:BuildEntry(bag, slot, info, overrides))
-						elseif self:IsTooltipOpenable(bag, slot, info) then
+						elseif scanOpenables and self:IsTooltipOpenable(bag, slot, info) then
 							safeItems[#safeItems + 1] = { bag = bag, slot = slot }
 						end
 					end
 				end
 			end
+		end
+	end
+	local processedBags = {}
+	local usedSpecificBags = false
+	if type(bags) == "table" then
+		for _, bag in ipairs(bags) do
+			if type(bag) == "number" and not processedBags[bag] then
+				processedBags[bag] = true
+				ScanBag(bag)
+				usedSpecificBags = true
+			end
+		end
+	end
+	if not usedSpecificBags then
+		for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+			ScanBag(bag)
 		end
 	end
 	return safeItems, secureItems

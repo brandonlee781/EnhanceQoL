@@ -47,6 +47,7 @@ Events\LegionRemix.lua
 EnhanceQoL.lua
 Core\DataHub.lua
 Core\DataPanel.lua
+Core\MovementSpeedStat.lua
 Core\Streams\Streams.xml
 Submodules\GemHelper.lua
 Submodules\ContainerActions.lua

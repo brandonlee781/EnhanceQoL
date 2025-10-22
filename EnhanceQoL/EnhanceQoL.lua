@@ -3482,6 +3482,16 @@ local function addCharacterFrame(container)
 	end, L["instantCatalystEnabledDesc"])
 	groupInfo:AddChild(cbInstant)
 
+	local cbMovementSpeed = addon.functions.createCheckboxAce(STAT_MOVEMENT_SPEED or "Movement Speed", addon.db["movementSpeedStatEnabled"], function(_, _, value)
+		addon.db["movementSpeedStatEnabled"] = value
+		if value then
+			if addon.MovementSpeedStat and addon.MovementSpeedStat.Refresh then addon.MovementSpeedStat.Refresh() end
+		else
+			addon.MovementSpeedStat.Disable()
+		end
+	end)
+	groupInfo:AddChild(cbMovementSpeed)
+
 	local cbOpenChar = addon.functions.createCheckboxAce(L["openCharframeOnUpgrade"], addon.db["openCharframeOnUpgrade"], function(_, _, value) addon.db["openCharframeOnUpgrade"] = value end)
 	groupInfo:AddChild(cbOpenChar)
 
@@ -4625,8 +4635,7 @@ local function buildDatapanelFrame(container)
 			for i, sid in ipairs(streams) do
 				titles[i] = streamList[sid] or sid
 			end
-			currentLabel =
-				addon.functions.createLabelAce(("%s: %s"):format(L["Streams"] or "Streams", table.concat(titles, ", ")))
+			currentLabel = addon.functions.createLabelAce(("%s: %s"):format(L["Streams"] or "Streams", table.concat(titles, ", ")))
 		else
 			local noneText = L["Streams: none"] or ((L["Streams"] or "Streams") .. ": " .. NONE)
 			currentLabel = addon.functions.createLabelAce(noneText)
@@ -6257,9 +6266,9 @@ local function initUI()
 
 		-- Ensure holder frame exists (above minimap texture, below buttons)
 		if not addon.general.squareMinimapBorderFrame then
-			local f = CreateFrame("Frame", nil, Minimap)
+			local f = CreateFrame("Frame", "EQOLBORDER", Minimap)
 			f:SetFrameStrata("LOW") -- below MEDIUM buttons, above BACKGROUND
-			f:SetFrameLevel((Minimap:GetFrameLevel() or 1) + 2)
+			f:SetFrameLevel((Minimap:GetFrameLevel() or 2))
 			f:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, 0)
 			f:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 0, 0)
 
@@ -7002,6 +7011,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showGemsTooltipOnCharframe", false)
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
 	addon.functions.InitDBValue("showCatalystChargesOnCharframe", false)
+	addon.functions.InitDBValue("movementSpeedStatEnabled", false)
 	addon.functions.InitDBValue("showCloakUpgradeButton", false)
 	addon.functions.InitDBValue("bagFilterFrameData", {})
 	addon.functions.InitDBValue("closeBagsOnAuctionHouse", false)
@@ -7042,6 +7052,7 @@ local function initCharacter()
 
 	-- Add Cataclyst charges in char frame
 	addon.functions.createCatalystFrame()
+	if addon.MovementSpeedStat and addon.MovementSpeedStat.Refresh then addon.MovementSpeedStat.Refresh() end
 	-- add durability icon on charframe
 
 	addon.general.durabilityIconFrame = CreateFrame("Button", nil, PaperDollFrame, "BackdropTemplate")
@@ -7809,7 +7820,7 @@ local function openItems(items)
 	openNextItem()
 end
 
-function addon.functions.checkForContainer()
+function addon.functions.checkForContainer(bags)
 	if not addon.db["automaticallyOpenContainer"] then
 		if addon.ContainerActions and addon.ContainerActions.UpdateItems then addon.ContainerActions:UpdateItems({}) end
 		wOpen = false
@@ -7818,7 +7829,7 @@ function addon.functions.checkForContainer()
 
 	local safeItems, secureItems = {}, {}
 	if addon.ContainerActions and addon.ContainerActions.ScanBags then
-		safeItems, secureItems = addon.ContainerActions:ScanBags()
+		safeItems, secureItems = addon.ContainerActions:ScanBags(bags)
 	end
 
 	if addon.ContainerActions and addon.ContainerActions.UpdateItems then addon.ContainerActions:UpdateItems(secureItems) end
@@ -7913,13 +7924,40 @@ local eventHandlers = {
 		end
 		if arg1 == "Blizzard_ItemInteractionUI" then addon.functions.toggleInstantCatalystButton(addon.db["instantCatalystEnabled"]) end
 	end,
-	["BAG_UPDATE_DELAYED"] = function(arg1)
-		addon.functions.clearTooltipCache()
-		if addon.db["automaticallyOpenContainer"] then
-			if wOpen then return end
-			wOpen = true
-			addon.functions.checkForContainer()
+	["BAG_UPDATE"] = function(bag)
+		addon._bagsDirty = addon._bagsDirty or {}
+		if type(bag) == "number" then addon._bagsDirty[bag] = true end
+	end,
+	["BAG_UPDATE_DELAYED"] = function()
+		if addon.functions.clearTooltipCache then
+			local now = GetTime()
+			if not addon._ttCacheLastClear or (now - addon._ttCacheLastClear) > 0.25 then
+				addon._ttCacheLastClear = now
+				addon.functions.clearTooltipCache()
+			end
 		end
+
+		if not addon.db["automaticallyOpenContainer"] then return end
+		if wOpen or addon._bagScanScheduled then return end
+
+		addon._bagScanScheduled = true
+		C_Timer.After(0, function()
+			addon._bagScanScheduled = nil
+			if wOpen or not addon.db["automaticallyOpenContainer"] then return end
+
+			wOpen = true
+
+			local bags
+			if addon._bagsDirty and next(addon._bagsDirty) then
+				bags = {}
+				for b in pairs(addon._bagsDirty) do
+					if type(b) == "number" then table.insert(bags, b) end
+				end
+				addon._bagsDirty = nil
+			end
+
+			addon.functions.checkForContainer(bags)
+		end)
 	end,
 	["CURRENCY_DISPLAY_UPDATE"] = function(arg1)
 		if arg1 == addon.variables.catalystID and addon.variables.catalystID then

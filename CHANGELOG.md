@@ -1,10 +1,17 @@
 # Changelog
 
-## [5.9.3] – 2025-10-20
+## [5.10.0] – 2025-10-22
+
+### ✨ Added
+
+- Option to show movement speed in character panel
 
 ### 🐛 Fixed
 
 - Instance difficulty while in a guild group wasn't correctly hidden
+- Hearthstone in Teleport Compendium wasn't shown
+- Performance improvements because of multiple event calls
+- Frame level of minimap border sometimes overlapped Expansion Landing Page
 
 ---
 
