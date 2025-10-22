@@ -116,8 +116,10 @@ local function resolveFontFace(cfg)
 end
 
 local function resolveFontOutline(cfg)
-	if cfg and cfg.fontOutline and cfg.fontOutline ~= "" then return cfg.fontOutline end
-	return "OUTLINE"
+	local outline = cfg and cfg.fontOutline
+	if outline == nil then return "OUTLINE" end
+	if outline == "" or outline == "NONE" then return nil end
+	return outline
 end
 
 local function resolveFontColor(cfg)
@@ -125,10 +127,19 @@ local function resolveFontColor(cfg)
 	return fc and (fc[1] or 1) or 1, fc and (fc[2] or 1) or 1, fc and (fc[3] or 1) or 1, fc and (fc[4] or 1) or 1
 end
 
+local function setFontWithFallback(fs, face, size, outline)
+	if not fs or not face then return end
+	if outline == "" then outline = nil end
+	if not fs:SetFont(face, size, outline) then
+		local fallbackOutline = outline or "OUTLINE"
+		fs:SetFont(addon.variables.defaultFont, size, fallbackOutline)
+	end
+end
+
 local function applyFontToString(fs, cfg)
 	if not fs then return end
 	local size = (cfg and cfg.fontSize) or 16
-	fs:SetFont(resolveFontFace(cfg), size, resolveFontOutline(cfg))
+	setFontWithFallback(fs, resolveFontFace(cfg), size, resolveFontOutline(cfg))
 	local r, g, b, a = resolveFontColor(cfg)
 	fs:SetTextColor(r, g, b, a)
 end
@@ -1997,7 +2008,7 @@ function layoutRunes(bar)
 			sb.fs:SetPoint("CENTER", sb, "CENTER", 0, 0)
 		end
 		if sb._fsSize ~= size or sb._fsFont ~= fontPath or sb._fsOutline ~= fontOutline then
-			sb.fs:SetFont(fontPath, size, fontOutline)
+			setFontWithFallback(sb.fs, fontPath, size, fontOutline)
 			sb._fsSize = size
 			sb._fsFont = fontPath
 			sb._fsOutline = fontOutline
@@ -2671,6 +2682,11 @@ function ResourceBars.Refresh()
 					a.y = (h - ph) / 2
 				end
 			end
+			if a.autoSpacing or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0) then
+				a.x = 0
+				a.y = getStackSpacing()
+				a.autoSpacing = true
+			end
 			local rel, looped = resolveAnchor(a, pType)
 			if looped and (a.relativeFrame or "UIParent") ~= "UIParent" then
 				local pw = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
@@ -2708,6 +2724,7 @@ function ResourceBars.Refresh()
 	-- Apply styling updates without forcing a full rebuild
 	if healthBar then
 		local hCfg = getBarSettings("HEALTH") or {}
+		healthBar:SetStatusBarTexture(resolveTexture(hCfg))
 		applyBackdrop(healthBar, hCfg)
 		if healthBar.text then applyFontToString(healthBar.text, hCfg) end
 		configureBarBehavior(healthBar, hCfg, "HEALTH")
@@ -2725,6 +2742,13 @@ function ResourceBars.Refresh()
 	for pType, bar in pairs(powerbar) do
 		if bar then
 			local cfg = getBarSettings(pType) or {}
+			if pType == "RUNES" then
+				bar:SetStatusBarTexture(resolveTexture(cfg))
+				local tex = bar:GetStatusBarTexture()
+				if tex then tex:SetAlpha(0) end
+			else
+				bar:SetStatusBarTexture(resolveTexture(cfg))
+			end
 			applyBackdrop(bar, cfg)
 			configureBarBehavior(bar, cfg, pType)
 			if pType ~= "RUNES" and bar.text then applyFontToString(bar.text, cfg) end
