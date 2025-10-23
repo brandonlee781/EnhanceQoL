@@ -29,31 +29,19 @@ end
 function ResourceBars.RefreshTextureDropdown()
 	local dd = ResourceBars.ui and ResourceBars.ui.textureDropdown
 	if not dd then return end
-	-- Rebuild generic list: DEFAULT + built-ins + LSM statusbars
-	local map = {
-		["DEFAULT"] = DEFAULT,
-		[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
-		["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
-		["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
-	}
-	for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
-		if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-	end
-	local noDefault = {}
-	for k, v in pairs(map) do
-		if k ~= "DEFAULT" then noDefault[k] = v end
-	end
-	local sorted, order = addon.functions.prepareListForDropdown(noDefault)
-	sorted["DEFAULT"] = DEFAULT
-	table.insert(order, 1, "DEFAULT")
-	dd:SetList(sorted, order)
+	local list, order = getStatusbarDropdownLists(true)
+	dd:SetList(list, order)
 	local cfg = dd._rb_cfgRef
 	local cur = (cfg and cfg.barTexture) or "DEFAULT"
-	if not sorted[cur] then cur = "DEFAULT" end
+	if not list[cur] then cur = "DEFAULT" end
 	dd:SetValue(cur)
 end
 
 LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+if LSM and LSM.RegisterCallback then
+	LSM:RegisterCallback(ResourceBars, "LibSharedMedia_Registered", markTextureListDirty)
+	LSM:RegisterCallback(ResourceBars, "LibSharedMedia_SetGlobal", markTextureListDirty)
+end
 local AceGUI = addon.AceGUI
 local UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime = UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime
 local CreateFrame = CreateFrame
@@ -88,6 +76,171 @@ local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
 BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
+local SMOOTH_SPEED = 12
+local DEFAULT_SMOOTH_DEADZONE = 0.75
+local RUNE_UPDATE_INTERVAL = 0.1
+local REFRESH_DEBOUNCE = 0.05
+local REANCHOR_REFRESH = { reanchorOnly = true }
+local tryActivateSmooth
+local requestActiveRefresh
+local getStatusbarDropdownLists
+
+local function stopSmoothUpdater(bar)
+	if not bar then return end
+	if bar._smoothUpdater and bar:GetScript("OnUpdate") == bar._smoothUpdater then bar:SetScript("OnUpdate", nil) end
+	bar._smoothActive = false
+end
+
+local function ensureSmoothUpdater(bar)
+	if not bar then return end
+	if not bar._smoothUpdater then
+		bar._smoothUpdater = function(self, elapsed)
+			if not self:IsShown() then
+				stopSmoothUpdater(self)
+				return
+			end
+			local target = self._smoothTarget
+			if target == nil then
+				stopSmoothUpdater(self)
+				return
+			end
+			local current = self:GetValue() or 0
+			local dz = self._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			local diff = target - current
+			if abs(diff) <= dz then
+				self:SetValue(target)
+				stopSmoothUpdater(self)
+				return
+			end
+			local speed = self._smoothSpeed or SMOOTH_SPEED
+			local step = diff * min(1, (elapsed or 0) * speed)
+			self:SetValue(current + step)
+		end
+
+end
+
+local function ensureSmoothVisibilityHooks(bar)
+	if not bar or bar._smoothVisibilityHooks then return end
+	bar:HookScript("OnHide", function(self)
+		stopSmoothUpdater(self)
+	end)
+	bar:HookScript("OnShow", function(self)
+		tryActivateSmooth(self)
+	end)
+	bar._smoothVisibilityHooks = true
+end
+
+tryActivateSmooth = function(bar)
+	if not bar or not bar._smoothEnabled then
+		stopSmoothUpdater(bar)
+		return
+	end
+	ensureSmoothUpdater(bar)
+	ensureSmoothVisibilityHooks(bar)
+	bar._smoothSpeed = bar._smoothSpeed or SMOOTH_SPEED
+	bar._smoothDeadzone = bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+	if not bar._smoothTarget then
+		stopSmoothUpdater(bar)
+		return
+	end
+	if not bar:IsShown() then return end
+	local current = bar:GetValue() or 0
+	local diff = bar._smoothTarget - current
+	local dz = bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+	if abs(diff) > dz then
+		if bar:GetScript("OnUpdate") ~= bar._smoothUpdater then bar:SetScript("OnUpdate", bar._smoothUpdater) end
+		bar._smoothActive = true
+	else
+		if abs(diff) > 0 then bar:SetValue(bar._smoothTarget) end
+		stopSmoothUpdater(bar)
+	end
+end
+
+requestActiveRefresh = function(specIndex, opts)
+	if not addon or not addon.Aura or not addon.Aura.ResourceBars then return end
+	local rb = addon.Aura.ResourceBars
+	if rb.QueueRefresh then
+		rb.QueueRefresh(specIndex, opts)
+	elseif rb.MaybeRefreshActive then
+		rb.MaybeRefreshActive(specIndex)
+	end
+end
+
+local function deactivateRuneTicker(bar)
+	if not bar then return end
+	if bar:GetScript("OnUpdate") == bar._runeUpdater then bar:SetScript("OnUpdate", nil) end
+	bar._runesAnimating = false
+	bar._runeAccum = 0
+	bar._runeUpdateInterval = nil
+end
+
+local textureListCache = {
+	dirty = true,
+}
+
+local function markTextureListDirty()
+	textureListCache.dirty = true
+end
+
+local function cloneMap(src)
+	if not src then return {} end
+	local dest = {}
+	for k, v in pairs(src) do
+		dest[k] = v
+	end
+	return dest
+end
+
+local function cloneArray(src)
+	if not src then return {} end
+	local dest = {}
+	for i = 1, #src do
+		dest[i] = src[i]
+	end
+	return dest
+end
+
+local function rebuildTextureCache()
+	local map = {
+		["DEFAULT"] = DEFAULT,
+		[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
+		["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
+		["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
+		["Interface\\RaidFrame\\Raid-Bar-Hp-Fill"] = "Raid HP Fill",
+		["Interface\\RaidFrame\\Raid-Bar-Resource-Fill"] = "Raid Resource Fill",
+		["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard Unit Frame",
+		["Interface\\UnitPowerBarAlt\\Generic1Texture"] = "Alternate Power",
+		["Interface\\PetBattles\\PetBattle-HealthBar"] = "Pet Battle",
+	}
+	for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
+		if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
+	end
+	local noDefault = {}
+	for k, v in pairs(map) do
+		if k ~= "DEFAULT" then noDefault[k] = v end
+	end
+	local sortedNoDefault, orderNoDefault = addon.functions.prepareListForDropdown(noDefault)
+	local sortedWithDefault = {}
+	for k, v in pairs(sortedNoDefault) do
+		sortedWithDefault[k] = v
+	end
+	sortedWithDefault["DEFAULT"] = DEFAULT
+	local orderWithDefault = { "DEFAULT" }
+	for i = 1, #orderNoDefault do
+		orderWithDefault[#orderWithDefault + 1] = orderNoDefault[i]
+	end
+	textureListCache.noDefaultList = sortedNoDefault
+	textureListCache.noDefaultOrder = orderNoDefault
+	textureListCache.fullList = sortedWithDefault
+	textureListCache.fullOrder = orderWithDefault
+	textureListCache.dirty = false
+end
+
+getStatusbarDropdownLists = function(includeDefault)
+	if textureListCache.dirty or not textureListCache.fullList then rebuildTextureCache() end
+	if includeDefault then return cloneMap(textureListCache.fullList), cloneArray(textureListCache.fullOrder) end
+	return cloneMap(textureListCache.noDefaultList), cloneArray(textureListCache.noDefaultOrder)
+end
 
 -- Detect Atlas: /run local t=PlayerFrame_GetManaBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)
 -- Healthbar: /run local t=PlayerFrame_GetHealthBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)
@@ -113,7 +266,8 @@ local function configureSpecialTexture(bar, pType, cfg)
 	if cfg and cfg.barTexture and cfg.barTexture ~= "" and cfg.barTexture ~= "DEFAULT" then return end
 	local tex = bar:GetStatusBarTexture()
 	if tex and tex.SetAtlas then
-		tex:SetAtlas(atlas, true)
+		local currentAtlas = tex.GetAtlas and tex:GetAtlas()
+		if currentAtlas ~= atlas then tex:SetAtlas(atlas, true) end
 		if tex.SetHorizTile then tex:SetHorizTile(false) end
 		if tex.SetVertTile then tex:SetVertTile(false) end
 		local shouldNormalize = true
@@ -233,52 +387,82 @@ local function applyBackdrop(frame, cfg)
 	local bd = cfg.backdrop
 	local bgFrame, borderFrame = ensureBackdropFrames(frame)
 	if not bgFrame or not borderFrame then return end
+	frame._rbBackdropState = frame._rbBackdropState or {}
+	local state = frame._rbBackdropState
 
 	if bd.enabled == false then
-		bgFrame:Hide()
-		borderFrame:Hide()
+		if bgFrame:IsShown() then bgFrame:Hide() end
+		if borderFrame:IsShown() then borderFrame:Hide() end
+		state.enabled = false
 		return
 	end
+	state.enabled = true
 
 	local outset = bd.outset or 0
 
-	bgFrame:ClearAllPoints()
-	bgFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
-	bgFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
+	if state.outset ~= outset then
+		bgFrame:ClearAllPoints()
+		bgFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
+		bgFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
 
-	borderFrame:ClearAllPoints()
-	borderFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
-	borderFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
+		borderFrame:ClearAllPoints()
+		borderFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
+		borderFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
+		state.outset = outset
+	end
 
 	if bgFrame.SetBackdrop then
-		bgFrame:SetBackdrop({
-			bgFile = bd.backgroundTexture or "Interface\\DialogFrame\\UI-DialogBox-Background",
-			edgeFile = nil,
-			tile = false,
-			edgeSize = 0,
-			insets = { left = 0, right = 0, top = 0, bottom = 0 },
-		})
+		local bgTexture = bd.backgroundTexture or "Interface\\DialogFrame\\UI-DialogBox-Background"
+		if state.bgTexture ~= bgTexture then
+			bgFrame:SetBackdrop({
+				bgFile = bgTexture,
+				edgeFile = nil,
+				tile = false,
+				edgeSize = 0,
+				insets = { left = 0, right = 0, top = 0, bottom = 0 },
+			})
+			state.bgTexture = bgTexture
+		end
 		local bc = bd.backgroundColor or { 0, 0, 0, 0.8 }
-		if bgFrame.SetBackdropColor then bgFrame:SetBackdropColor(bc[1] or 0, bc[2] or 0, bc[3] or 0, bc[4] or 1) end
+		local br, bgc, bb, ba = bc[1] or 0, bc[2] or 0, bc[3] or 0, bc[4] or 1
+		if state.bgR ~= br or state.bgG ~= bgc or state.bgB ~= bb or state.bgA ~= ba then
+			if bgFrame.SetBackdropColor then bgFrame:SetBackdropColor(br, bgc, bb, ba) end
+			state.bgR, state.bgG, state.bgB, state.bgA = br, bgc, bb, ba
+		end
 		if bgFrame.SetBackdropBorderColor then bgFrame:SetBackdropBorderColor(0, 0, 0, 0) end
+		if not bgFrame:IsShown() then bgFrame:Show() end
 	end
-	bgFrame:Show()
 
 	if borderFrame.SetBackdrop then
 		if bd.borderTexture and bd.borderTexture ~= "" and (bd.edgeSize or 0) > 0 then
-			borderFrame:SetBackdrop({
-				bgFile = nil,
-				edgeFile = bd.borderTexture or "Interface\\Tooltips\\UI-Tooltip-Border",
-				tile = false,
-				edgeSize = bd.edgeSize or 3,
-				insets = { left = 0, right = 0, top = 0, bottom = 0 },
-			})
+			local borderTexture = bd.borderTexture or "Interface\\Tooltips\\UI-Tooltip-Border"
+			local edgeSize = bd.edgeSize or 3
+			if state.borderTexture ~= borderTexture or state.borderEdgeSize ~= edgeSize then
+				borderFrame:SetBackdrop({
+					bgFile = nil,
+					edgeFile = borderTexture,
+					tile = false,
+					edgeSize = edgeSize,
+					insets = { left = 0, right = 0, top = 0, bottom = 0 },
+				})
+				state.borderTexture = borderTexture
+				state.borderEdgeSize = edgeSize
+			end
 			local boc = bd.borderColor or { 0, 0, 0, 0 }
-			if borderFrame.SetBackdropBorderColor then borderFrame:SetBackdropBorderColor(boc[1] or 0, boc[2] or 0, boc[3] or 0, boc[4] or 1) end
-			borderFrame:Show()
+			local cr, cg, cb, ca = boc[1] or 0, boc[2] or 0, boc[3] or 0, boc[4] or 1
+			if state.borderR ~= cr or state.borderG ~= cg or state.borderB ~= cb or state.borderA ~= ca then
+				if borderFrame.SetBackdropBorderColor then borderFrame:SetBackdropBorderColor(cr, cg, cb, ca) end
+				state.borderR, state.borderG, state.borderB, state.borderA = cr, cg, cb, ca
+			end
+			if not borderFrame:IsShown() then borderFrame:Show() end
 		else
-			borderFrame:SetBackdrop(nil)
-			borderFrame:Hide()
+			if state.borderTexture or state.borderEdgeSize then
+				borderFrame:SetBackdrop(nil)
+				state.borderTexture = nil
+				state.borderEdgeSize = nil
+			end
+			state.borderR, state.borderG, state.borderB, state.borderA = nil, nil, nil, nil
+			if borderFrame:IsShown() then borderFrame:Hide() end
 		end
 	end
 end
@@ -326,41 +510,37 @@ local function configureBarBehavior(bar, cfg, pType)
 	if pType ~= "RUNES" and bar.SetOrientation then bar:SetOrientation((cfg.verticalFill == true) and "VERTICAL" or "HORIZONTAL") end
 	if pType == "HEALTH" and bar.absorbBar then
 		local absorb = bar.absorbBar
-		if absorb.SetOrientation then absorb:SetOrientation((cfg.verticalFill == true) and "VERTICAL" or "HORIZONTAL") end
+		local wantVertical = cfg.verticalFill == true
+		if absorb.SetOrientation and absorb._isVertical ~= wantVertical then
+			absorb:SetOrientation(wantVertical and "VERTICAL" or "HORIZONTAL")
+			absorb._isVertical = wantVertical
+		end
 		local tex = absorb:GetStatusBarTexture()
 		if tex then
-			if cfg and cfg.verticalFill == true then
-				tex:SetRotation(math.pi / 2)
-			else
-				tex:SetRotation(0)
+			local desiredRotation = wantVertical and (math.pi / 2) or 0
+			if absorb._texRotation ~= desiredRotation then
+				tex:SetRotation(desiredRotation)
+				absorb._texRotation = desiredRotation
 			end
 		end
 	end
 
 	if pType ~= "RUNES" then
+		ensureSmoothVisibilityHooks(bar)
 		if cfg.smoothFill then
-			if not bar._smoothUpdater then
-				bar._smoothUpdater = function(self, elapsed)
-					local target = self._smoothTarget or self:GetValue()
-					if target == nil then return end
-					local current = self:GetValue()
-					local diff = target - current
-					if abs(diff) <= 0.5 then
-						self:SetValue(target)
-						return
-					end
-					local speed = self._smoothSpeed or 12
-					local step = diff * min(1, (elapsed or 0) * speed)
-					self:SetValue(current + step)
-				end
-			end
-			bar._smoothSpeed = 12
-			if bar:GetScript("OnUpdate") ~= bar._smoothUpdater then bar:SetScript("OnUpdate", bar._smoothUpdater) end
+			bar._smoothEnabled = true
+			bar._smoothDeadzone = cfg.smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			bar._smoothSpeed = SMOOTH_SPEED
+			ensureSmoothUpdater(bar)
 		else
-			if bar._smoothUpdater and bar:GetScript("OnUpdate") == bar._smoothUpdater then bar:SetScript("OnUpdate", nil) end
+			bar._smoothEnabled = false
+			bar._smoothDeadzone = cfg.smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			bar._smoothSpeed = SMOOTH_SPEED
+			bar._smoothTarget = nil
+			stopSmoothUpdater(bar)
 		end
 	else
-		if bar._smoothUpdater and bar:GetScript("OnUpdate") == bar._smoothUpdater then bar:SetScript("OnUpdate", nil) end
+		stopSmoothUpdater(bar)
 	end
 end
 
@@ -585,7 +765,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local sliderX = addon.functions.createSliderAce(L["X"] or "X", info.x, -1000, 1000, 1, function(_, _, val)
 					info.autoSpacing = false
 					info.x = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
 				end)
 				sliderX:SetFullWidth(false)
 				sliderX:SetRelativeWidth(0.5)
@@ -595,7 +775,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local sliderY = addon.functions.createSliderAce(L["Y"] or "Y", info.y, -1000, 1000, 1, function(_, _, val)
 					info.autoSpacing = false
 					info.y = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
 				end)
 				sliderY:SetFullWidth(false)
 				sliderY:SetRelativeWidth(0.5)
@@ -634,7 +814,7 @@ function addon.Aura.functions.addResourceFrame(container)
 						info.autoSpacing = nil
 					end
 					buildAnchorSub()
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
 				end
 
 				dropFrame:SetCallback("OnValueChanged", onFrameChanged)
@@ -642,12 +822,12 @@ function addon.Aura.functions.addResourceFrame(container)
 					info.autoSpacing = false
 					info.point = val
 					info.relativePoint = info.relativePoint or val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
 				end)
 				dropRelPoint:SetCallback("OnValueChanged", function(self, _, val)
 					info.autoSpacing = false
 					info.relativePoint = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
 				end)
 			end
 
@@ -799,7 +979,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				fontRow:SetFullWidth(true)
 				local dropFont = addon.functions.createDropdownAce(L["Font"] or "Font", list, order, function(_, _, key)
 					cfg.fontFace = key
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				local curFont = cfg.fontFace or addon.variables.defaultFont
 				if not list[curFont] then curFont = addon.variables.defaultFont end
@@ -810,7 +990,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				local dropOutline = addon.functions.createDropdownAce(L["Font outline"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
 					cfg.fontOutline = key
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				dropOutline:SetValue(cfg.fontOutline or "OUTLINE")
 				dropOutline:SetFullWidth(false)
@@ -827,7 +1007,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				color:SetColor(fc[1] or 1, fc[2] or 1, fc[3] or 1, fc[4] or 1)
 				color:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
 					cfg.fontColor = { r, g, b, a }
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				color:SetFullWidth(false)
 				color:SetRelativeWidth(0.5)
@@ -860,7 +1040,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					if dropBorder then dropBorder:SetDisabled(disable) end
 					if borderColor then borderColor:SetDisabled(disable) end
 					if sliderEdge then sliderEdge:SetDisabled(disable) end
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				cb:SetFullWidth(true)
 				group:AddChild(cb)
@@ -868,7 +1048,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local bgList, bgOrder = backgroundDropdownData()
 				dropBg = addon.functions.createDropdownAce(L["Background texture"] or "Background texture", bgList, bgOrder, function(_, _, key)
 					cfg.backdrop.backgroundTexture = key
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				local curBg = cfg.backdrop.backgroundTexture
 				if not bgList[curBg] then curBg = "Interface\\DialogFrame\\UI-DialogBox-Background" end
@@ -884,7 +1064,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				bgColor:SetColor(bc[1] or 0, bc[2] or 0, bc[3] or 0, bc[4] or 0.8)
 				bgColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
 					cfg.backdrop.backgroundColor = { r, g, b, a }
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				bgColor:SetFullWidth(false)
 				bgColor:SetRelativeWidth(0.5)
@@ -893,7 +1073,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local borderList, borderOrder = borderDropdownData()
 				dropBorder = addon.functions.createDropdownAce(L["Border texture"] or "Border texture", borderList, borderOrder, function(_, _, key)
 					cfg.backdrop.borderTexture = key
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				local curBorder = cfg.backdrop.borderTexture
 				if not borderList[curBorder] then curBorder = "Interface\\Tooltips\\UI-Tooltip-Border" end
@@ -909,7 +1089,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				borderColor:SetColor(boc[1] or 0, boc[2] or 0, boc[3] or 0, boc[4] or 0)
 				borderColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
 					cfg.backdrop.borderColor = { r, g, b, a }
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				borderColor:SetFullWidth(false)
 				borderColor:SetRelativeWidth(0.5)
@@ -917,7 +1097,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				sliderEdge = addon.functions.createSliderAce(L["Border size"] or "Border size", cfg.backdrop.edgeSize or 3, 0, 32, 1, function(_, _, val)
 					cfg.backdrop.edgeSize = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				sliderEdge:SetFullWidth(false)
 				sliderEdge:SetRelativeWidth(0.5)
@@ -925,7 +1105,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				local sliderOutset = addon.functions.createSliderAce(L["Border offset"] or "Border offset", cfg.backdrop.outset or 0, 0, 32, 1, function(_, _, val)
 					cfg.backdrop.outset = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				sliderOutset:SetFullWidth(false)
 				sliderOutset:SetRelativeWidth(0.5)
@@ -946,7 +1126,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				row:SetFullWidth(true)
 				local sliderX = addon.functions.createSliderAce(L["Text X Offset"] or "Text X Offset", offsets.x or 0, -200, 200, 1, function(_, _, val)
 					offsets.x = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				sliderX:SetFullWidth(false)
 				sliderX:SetRelativeWidth(0.5)
@@ -954,7 +1134,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				local sliderY = addon.functions.createSliderAce(L["Text Y Offset"] or "Text Y Offset", offsets.y or 0, -200, 200, 1, function(_, _, val)
 					offsets.y = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				sliderY:SetFullWidth(false)
 				sliderY:SetRelativeWidth(0.5)
@@ -973,7 +1153,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				parent:AddChild(group)
 
 				local function notifyRefresh()
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 					if specIndex == addon.variables.unitSpec and forceColorUpdate then forceColorUpdate(pType) end
 				end
 
@@ -1038,7 +1218,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				local cbReverse = addon.functions.createCheckboxAce(L["Reverse fill"] or "Reverse fill", cfg.reverseFill == true, function(_, _, val)
 					cfg.reverseFill = val and true or false
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				cbReverse:SetFullWidth(false)
 				cbReverse:SetRelativeWidth(0.5)
@@ -1047,7 +1227,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				if pType ~= "RUNES" then
 					local cbVertical = addon.functions.createCheckboxAce(L["Vertical orientation"] or "Vertical orientation", cfg.verticalFill == true, function(_, _, val)
 						cfg.verticalFill = val and true or false
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 						buildSpec(container, specIndex)
 					end)
 					cbVertical:SetFullWidth(false)
@@ -1056,7 +1236,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 					local cbSmooth = addon.functions.createCheckboxAce(L["Smooth fill"] or "Smooth fill", cfg.smoothFill == true, function(_, _, val)
 						cfg.smoothFill = val and true or false
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 					end)
 					cbSmooth:SetFullWidth(false)
 					cbSmooth:SetRelativeWidth(0.5)
@@ -1074,7 +1254,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local cbH = addon.functions.createCheckboxAce(HEALTH, hcfg.enabled == true, function(self, _, val)
 					if (hcfg.enabled == true) and not val then addon.Aura.ResourceBars.DetachAnchorsFrom("HEALTH", specIndex) end
 					hcfg.enabled = val
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 					buildSpec(container, specIndex)
 				end)
 				cbH:SetFullWidth(false)
@@ -1088,7 +1268,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local cb = addon.functions.createCheckboxAce(label, cfg.enabled == true, function(self, _, val)
 						if (cfg.enabled == true) and not val then addon.Aura.ResourceBars.DetachAnchorsFrom(pType, specIndex) end
 						cfg.enabled = val
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 						buildSpec(container, specIndex)
 					end)
 					cb:SetFullWidth(false)
@@ -1190,7 +1370,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local tOrder = { "PERCENT", "CURMAX", "CURRENT", "NONE" }
 					local dropT = addon.functions.createDropdownAce(L["Text"], tList, tOrder, function(self, _, key)
 						hCfg.textStyle = key
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 						buildHealthTextRow()
 					end)
 					dropT:SetValue(hCfg.textStyle or "PERCENT")
@@ -1200,7 +1380,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					if (hCfg.textStyle or "PERCENT") ~= "NONE" then
 						local sFont = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE, hCfg.fontSize or 16, 6, 64, 1, function(self, _, val)
 							hCfg.fontSize = val
-							if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+							requestActiveRefresh(specIndex)
 						end)
 						sFont:SetFullWidth(false)
 						sFont:SetRelativeWidth(0.5)
@@ -1215,35 +1395,10 @@ function addon.Aura.functions.addResourceFrame(container)
 				addColorControls(groupConfig, hCfg, specIndex, "HEALTH")
 
 				-- Bar Texture (Health)
-				local function buildTextureOptions()
-					local map = {
-						["DEFAULT"] = DEFAULT,
-						[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
-						["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
-						["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
-						["Interface\\RaidFrame\\Raid-Bar-Hp-Fill"] = "Raid HP Fill",
-						["Interface\\RaidFrame\\Raid-Bar-Resource-Fill"] = "Raid Resource Fill",
-						["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard Unit Frame",
-						["Interface\\UnitPowerBarAlt\\Generic1Texture"] = "Alternate Power",
-						["Interface\\PetBattles\\PetBattle-HealthBar"] = "Pet Battle",
-					}
-					for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
-						if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-					end
-					local noDefault = {}
-					for k, v in pairs(map) do
-						if k ~= "DEFAULT" then noDefault[k] = v end
-					end
-					local sorted, order = addon.functions.prepareListForDropdown(noDefault)
-					sorted["DEFAULT"] = DEFAULT
-					table.insert(order, 1, "DEFAULT")
-					return sorted, order
-				end
-
-				local listTex, orderTex = buildTextureOptions()
+				local listTex, orderTex = getStatusbarDropdownLists(true)
 				local dropTex = addon.functions.createDropdownAce(L["Bar Texture"], listTex, orderTex, function(_, _, key)
 					hCfg.barTexture = key
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+					requestActiveRefresh(specIndex)
 				end)
 				local cur = hCfg.barTexture or "DEFAULT"
 				if not listTex[cur] then cur = "DEFAULT" end
@@ -1306,7 +1461,7 @@ function addon.Aura.functions.addResourceFrame(container)
 						local tOrder = { "PERCENT", "CURMAX", "CURRENT", "NONE" }
 						local drop = addon.functions.createDropdownAce(L["Text"], tList, tOrder, function(self, _, key)
 							cfg.textStyle = key
-							if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+							requestActiveRefresh(specIndex)
 							buildTextRow()
 						end)
 						drop:SetValue(cfg.textStyle or curStyle)
@@ -1316,7 +1471,7 @@ function addon.Aura.functions.addResourceFrame(container)
 						if (cfg.textStyle or curStyle) ~= "NONE" then
 							local sFont = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE, cfg.fontSize or curFont, 6, 64, 1, function(self, _, val)
 								cfg.fontSize = val
-								if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+								requestActiveRefresh(specIndex)
 							end)
 							sFont:SetFullWidth(false)
 							sFont:SetRelativeWidth(0.5)
@@ -1331,35 +1486,10 @@ function addon.Aura.functions.addResourceFrame(container)
 					addColorControls(groupConfig, cfg, specIndex, sel)
 
 					-- Bar Texture (Power types incl. RUNES)
-					local function buildTextureOptions2()
-						local map = {
-							["DEFAULT"] = DEFAULT,
-							[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
-							["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
-							["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
-							["Interface\\RaidFrame\\Raid-Bar-Hp-Fill"] = "Raid HP Fill",
-							["Interface\\RaidFrame\\Raid-Bar-Resource-Fill"] = "Raid Resource Fill",
-							["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard Unit Frame",
-							["Interface\\UnitPowerBarAlt\\Generic1Texture"] = "Alternate Power",
-							["Interface\\PetBattles\\PetBattle-HealthBar"] = "Pet Battle",
-						}
-						for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
-							if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-						end
-						local noDefault = {}
-						for k, v in pairs(map) do
-							if k ~= "DEFAULT" then noDefault[k] = v end
-						end
-						local sorted, order = addon.functions.prepareListForDropdown(noDefault)
-						sorted["DEFAULT"] = DEFAULT
-						table.insert(order, 1, "DEFAULT")
-						return sorted, order
-					end
-
-					local listTex2, orderTex2 = buildTextureOptions2()
+					local listTex2, orderTex2 = getStatusbarDropdownLists(true)
 					local dropTex2 = addon.functions.createDropdownAce(L["Bar Texture"], listTex2, orderTex2, function(_, _, key)
 						cfg.barTexture = key
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 					end)
 					local cur2 = cfg.barTexture or "DEFAULT"
 					if not listTex2[cur2] then cur2 = "DEFAULT" end
@@ -1401,7 +1531,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local sepThickness
 					local cbSep = addon.functions.createCheckboxAce(L["Show separator"], cfg.showSeparator == true, function(self, _, val)
 						cfg.showSeparator = val and true or false
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 						if sepColor then sepColor:SetDisabled(not cfg.showSeparator) end
 						if sepThickness then sepThickness:SetDisabled(not cfg.showSeparator) end
 					end)
@@ -1414,7 +1544,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					sepColor:SetColor(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
 					sepColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
 						cfg.separatorColor = { r, g, b, a }
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 					end)
 					sepColor:SetFullWidth(false)
 					sepColor:SetRelativeWidth(0.5)
@@ -1423,7 +1553,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 					sepThickness = addon.functions.createSliderAce(L["Separator thickness"] or "Separator thickness", cfg.separatorThickness or SEPARATOR_THICKNESS, 1, 10, 1, function(_, _, val)
 						cfg.separatorThickness = val
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						requestActiveRefresh(specIndex)
 					end)
 					sepThickness:SetFullWidth(false)
 					sepThickness:SetRelativeWidth(0.5)
@@ -1444,7 +1574,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local function mkCb(key, text)
 						local cb = addon.functions.createCheckboxAce(text, cfg.showForms[key] ~= false, function(self, _, val)
 							cfg.showForms[key] = val and true or false
-							if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+							requestActiveRefresh(specIndex)
 						end)
 						cb:SetFullWidth(false)
 						cb:SetRelativeWidth(0.25)
@@ -1494,29 +1624,43 @@ function addon.Aura.functions.addResourceFrame(container)
 end
 
 local function updateHealthBar(evt)
-	if healthBar and healthBar:IsVisible() then
-		local maxHealth = healthBar._lastMax
-		if not maxHealth then
-			maxHealth = UnitHealthMax("player")
-			healthBar._lastMax = maxHealth
-			healthBar:SetMinMaxValues(0, maxHealth)
+	if healthBar and healthBar:IsShown() then
+		local previousMax = healthBar._lastMax or 0
+		local newMax = UnitHealthMax("player") or previousMax or 1
+		if previousMax ~= newMax then
+			healthBar._lastMax = newMax
+			healthBar:SetMinMaxValues(0, newMax)
+			local currentValue = healthBar:GetValue() or 0
+			if currentValue > newMax then
+				healthBar:SetValue(newMax)
+			end
+			if healthBar._smoothTarget and healthBar._smoothTarget > newMax then
+				healthBar._smoothTarget = newMax
+				if healthBar._smoothEnabled then tryActivateSmooth(healthBar) end
+			end
 		end
+		local maxHealth = healthBar._lastMax or newMax or 1
 		local curHealth = UnitHealth("player")
-		-- Always compute absorbs fresh; caching combined/lastCombined is unnecessary now
-		local abs = UnitGetTotalAbsorbs("player") or 0
-		if abs > maxHealth then abs = maxHealth end
 		local settings = getBarSettings("HEALTH") or {}
 		local smooth = settings.smoothFill == true
 		if smooth then
 			healthBar._smoothTarget = curHealth
+			healthBar._smoothDeadzone = settings.smoothDeadzone or healthBar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			healthBar._smoothSpeed = SMOOTH_SPEED
 			if not healthBar._smoothInitialized then
 				healthBar:SetValue(curHealth)
 				healthBar._smoothInitialized = true
 			end
+			healthBar._smoothEnabled = true
+			tryActivateSmooth(healthBar)
 		else
 			healthBar._smoothTarget = nil
+			healthBar._smoothDeadzone = settings.smoothDeadzone or healthBar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			healthBar._smoothSpeed = SMOOTH_SPEED
 			if healthBar._lastVal ~= curHealth then healthBar:SetValue(curHealth) end
 			healthBar._smoothInitialized = nil
+			healthBar._smoothEnabled = false
+			stopSmoothUpdater(healthBar)
 		end
 		healthBar._lastVal = curHealth
 
@@ -1525,8 +1669,15 @@ local function updateHealthBar(evt)
 		if healthBar.text then
 			local style = settings and settings.textStyle or "PERCENT"
 			if style == "NONE" then
-				healthBar.text:SetText("")
-				healthBar.text:Hide()
+				if healthBar._textShown then
+					healthBar.text:SetText("")
+					healthBar._lastText = ""
+					healthBar.text:Hide()
+					healthBar._textShown = false
+				elseif healthBar._lastText ~= "" then
+					healthBar.text:SetText("")
+					healthBar._lastText = ""
+				end
 			else
 				local text
 				if style == "PERCENT" then
@@ -1540,7 +1691,10 @@ local function updateHealthBar(evt)
 					healthBar.text:SetText(text)
 					healthBar._lastText = text
 				end
-				healthBar.text:Show()
+				if not healthBar._textShown then
+					healthBar.text:Show()
+					healthBar._textShown = true
+				end
 			end
 		end
 		local baseR, baseG, baseB, baseA
@@ -1567,21 +1721,32 @@ local function updateHealthBar(evt)
 			finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
 		end
 
-		local last = healthBar._lastColor or {}
-		if last[1] ~= finalR or last[2] ~= finalG or last[3] ~= finalB or last[4] ~= finalA then
-			healthBar:SetStatusBarColor(finalR, finalG, finalB, finalA or 1)
-			healthBar._lastColor = { finalR, finalG, finalB, finalA or 1 }
+		local lc = healthBar._lastColor or {}
+		local fa = finalA or 1
+		if lc[1] ~= finalR or lc[2] ~= finalG or lc[3] ~= finalB or lc[4] ~= fa then
+			lc[1], lc[2], lc[3], lc[4] = finalR, finalG, finalB, fa
+			healthBar._lastColor = lc
+			healthBar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
 		end
 
 		local absorbBar = healthBar.absorbBar
 		if absorbBar then
-			if absorbBar._lastMax ~= maxHealth then
-				absorbBar:SetMinMaxValues(0, maxHealth)
-				absorbBar._lastMax = maxHealth
-			end
-			if absorbBar._lastVal ~= abs then
-				absorbBar:SetValue(abs)
-				absorbBar._lastVal = abs
+			if not absorbBar:IsShown() or maxHealth <= 0 then
+				if absorbBar._lastVal and absorbBar._lastVal ~= 0 then
+					absorbBar:SetValue(0)
+					absorbBar._lastVal = 0
+				end
+			else
+				local abs = UnitGetTotalAbsorbs("player") or 0
+				if abs > maxHealth then abs = maxHealth end
+				if absorbBar._lastMax ~= maxHealth then
+					absorbBar:SetMinMaxValues(0, maxHealth)
+					absorbBar._lastMax = maxHealth
+				end
+				if absorbBar._lastVal ~= abs then
+					absorbBar:SetValue(abs)
+					absorbBar._lastVal = abs
+				end
 			end
 		end
 	end
@@ -1735,18 +1900,18 @@ local function createHealthBar()
 		absorbBar:SetStatusBarTexture(resolveTexture(cfgTexH))
 	end
 	absorbBar:SetStatusBarColor(0.8, 0.8, 0.8, 0.8)
-	if settings and settings.verticalFill then
-		absorbBar:SetOrientation("VERTICAL")
-	else
-		absorbBar:SetOrientation("HORIZONTAL")
+	local wantVertical = settings and settings.verticalFill == true
+	if absorbBar.SetOrientation and absorbBar._isVertical ~= wantVertical then
+		absorbBar:SetOrientation(wantVertical and "VERTICAL" or "HORIZONTAL")
 	end
+	absorbBar._isVertical = wantVertical
 	if absorbBar.SetReverseFill then absorbBar:SetReverseFill(settings and settings.reverseFill == true) end
 	local absorbTex = absorbBar:GetStatusBarTexture()
 	if absorbTex then
-		if settings and settings.verticalFill then
-			absorbTex:SetRotation(math.pi / 2)
-		else
-			absorbTex:SetRotation(0)
+		local desiredRotation = wantVertical and (math.pi / 2) or 0
+		if absorbBar._texRotation ~= desiredRotation then
+			absorbTex:SetRotation(desiredRotation)
+			absorbBar._texRotation = desiredRotation
 		end
 	end
 	healthBar.absorbBar = absorbBar
@@ -1874,104 +2039,162 @@ function getBarSettings(pType)
 end
 
 function updatePowerBar(type, runeSlot)
-	if powerbar[type] and powerbar[type]:IsVisible() then
-		-- Special handling for DK Runes: six sub-bars that fill as cooldown progresses
-		if type == "RUNES" then
-			local bar = powerbar[type]
-			local col = bar._dkColor or DK_SPEC_COLOR[addon.variables.unitSpec] or DK_SPEC_COLOR[1]
-			local r, g, b = col[1], col[2], col[3]
-			local grey = 0.35
-			bar._rune = bar._rune or {}
-			bar._runeOrder = bar._runeOrder or {}
-			bar._charging = bar._charging or {}
-			local charging = bar._charging
-			-- Always rescan all 6 runes (cheap + keeps cache in sync)
-			local count = 0
-			for i = 1, 6 do
-				local start, duration, readyFlag = GetRuneCooldown(i)
-				bar._rune[i] = bar._rune[i] or {}
-				bar._rune[i].start = start or 0
-				bar._rune[i].duration = duration or 0
-				bar._rune[i].ready = readyFlag
-				if not readyFlag then
-					count = count + 1
-					charging[count] = i
+	local bar = powerbar[type]
+	if not bar or not bar:IsShown() then return end
+	-- Special handling for DK RUNES: six sub-bars that fill as cooldown progresses
+	if type == "RUNES" then
+		local col = bar._dkColor or DK_SPEC_COLOR[addon.variables.unitSpec] or DK_SPEC_COLOR[1]
+		local r, g, b = col[1], col[2], col[3]
+		local grey = 0.35
+		bar._rune = bar._rune or {}
+		bar._runeOrder = bar._runeOrder or {}
+		bar._charging = bar._charging or {}
+		local charging = bar._charging
+		-- Always rescan all 6 runes (cheap + keeps cache in sync)
+		local count = 0
+		for i = 1, 6 do
+			local start, duration, readyFlag = GetRuneCooldown(i)
+			bar._rune[i] = bar._rune[i] or {}
+			bar._rune[i].start = start or 0
+			bar._rune[i].duration = duration or 0
+			bar._rune[i].ready = readyFlag
+			if not readyFlag then
+				count = count + 1
+				charging[count] = i
+			end
+		end
+		for i = count + 1, #charging do
+			charging[i] = nil
+		end
+		if count > 1 then
+			local snapshot = bar._chargingSnapshot
+			if not snapshot then
+				snapshot = {}
+				bar._chargingSnapshot = snapshot
+			end
+			local needsSort = false
+			if (bar._lastChargingCount or 0) ~= count then
+				needsSort = true
+			else
+				for i = 1, count do
+					if snapshot[i] ~= charging[i] then
+						needsSort = true
+						break
+					end
 				end
 			end
-			for i = count + 1, #charging do
-				charging[i] = nil
-			end
-			tsort(charging, function(a, b)
-				local ra = (bar._rune[a].start + bar._rune[a].duration)
-				local rb = (bar._rune[b].start + bar._rune[b].duration)
-				return ra < rb
-			end)
-			local chargingMap = bar._chargingMap or {}
-			bar._chargingMap = chargingMap
-			for i = 1, 6 do
-				chargingMap[i] = nil
-			end
-			for _, idx in ipairs(charging) do
-				chargingMap[idx] = true
-			end
-			local pos = 1
-			for i = 1, 6 do
-				if not chargingMap[i] then
-					bar._runeOrder[pos] = i
-					pos = pos + 1
+			if needsSort then
+				tsort(charging, function(a, b)
+					local ra = (bar._rune[a].start + bar._rune[a].duration)
+					local rb = (bar._rune[b].start + bar._rune[b].duration)
+					return ra < rb
+				end)
+				for i = 1, count do
+					snapshot[i] = charging[i]
 				end
 			end
-			for _, idx in ipairs(charging) do
-				bar._runeOrder[pos] = idx
+			for i = count + 1, (bar._chargingSnapshot and #bar._chargingSnapshot or 0) do
+				snapshot[i] = nil
+			end
+			bar._lastChargingCount = count
+		else
+			bar._lastChargingCount = count
+			if bar._chargingSnapshot then
+				for i = 1, #bar._chargingSnapshot do
+					bar._chargingSnapshot[i] = nil
+				end
+			end
+		end
+		local chargingMap = bar._chargingMap or {}
+		bar._chargingMap = chargingMap
+		for i = 1, 6 do
+			chargingMap[i] = nil
+		end
+		for _, idx in ipairs(charging) do
+			chargingMap[idx] = true
+		end
+		local pos = 1
+		for i = 1, 6 do
+			if not chargingMap[i] then
+				bar._runeOrder[pos] = i
 				pos = pos + 1
 			end
-			for i = pos, #bar._runeOrder do
-				bar._runeOrder[i] = nil
-			end
+		end
+		for _, idx in ipairs(charging) do
+			bar._runeOrder[pos] = idx
+			pos = pos + 1
+		end
+		for i = pos, #bar._runeOrder do
+			bar._runeOrder[i] = nil
+		end
 
-			local cfg = getBarSettings("RUNES") or {}
-			local anyActive = #charging > 0
-			local now = GetTime()
-			for i = 1, 6 do
-				local runeIndex = bar._runeOrder[i]
-				local info = runeIndex and bar._rune[runeIndex]
-				local sb = bar.runes and bar.runes[i]
-				if sb and info then
-					local prog = info.ready and 1 or min(1, max(0, (now - info.start) / max(info.duration, 1)))
-					sb:SetValue(prog)
-					local wantReady = info.ready or prog >= 1
-					if sb._isReady ~= wantReady then
-						sb._isReady = wantReady
-						if wantReady then
-							sb:SetStatusBarColor(r, g, b)
-						else
-							sb:SetStatusBarColor(grey, grey, grey)
-						end
+		local cfg = getBarSettings("RUNES") or {}
+		local anyActive = #charging > 0
+		local now = GetTime()
+		local soonest
+		for i = 1, 6 do
+			local runeIndex = bar._runeOrder[i]
+			local info = runeIndex and bar._rune[runeIndex]
+			local sb = bar.runes and bar.runes[i]
+			if sb and info then
+				local prog = info.ready and 1 or min(1, max(0, (now - info.start) / max(info.duration, 1)))
+				sb:SetValue(prog)
+				local wantReady = info.ready or prog >= 1
+				if sb._isReady ~= wantReady then
+					sb._isReady = wantReady
+					if wantReady then
+						sb:SetStatusBarColor(r, g, b)
+					else
+						sb:SetStatusBarColor(grey, grey, grey)
 					end
-					if sb.fs then
-						if cfg.showCooldownText then
-							local remain = ceil((info.start + info.duration) - now)
-							if remain > 0 and not info.ready then
-								sb.fs:SetText(tostring(remain))
-							else
-								sb.fs:SetText("")
-							end
+				end
+				if sb.fs then
+					if cfg.showCooldownText then
+						local remain = ceil((info.start + info.duration) - now)
+						if remain > 0 and not info.ready then
+							sb.fs:SetText(tostring(remain))
 						else
 							sb.fs:SetText("")
 						end
+					else
+						sb.fs:SetText("")
 					end
 				end
 			end
+		end
+		if anyActive then
+			for _, idx in ipairs(charging) do
+				local info = bar._rune[idx]
+				if info and not info.ready then
+					local remain = (info.start + info.duration) - now
+					if remain and remain > 0 then
+						if not soonest or remain < soonest then soonest = remain end
+					end
+				end
+			end
+		end
 
-			if anyActive then
-				bar._runesAnimating = true
-				bar._runeAccum = 0
-				local cfgOnUpdate = cfg
-				bar:SetScript("OnUpdate", function(self, elapsed)
+		if soonest then
+			bar._runeUpdateInterval = min(RUNE_UPDATE_INTERVAL, max(0.05, soonest))
+		else
+			bar._runeUpdateInterval = nil
+		end
+
+		bar._runeConfig = cfg
+		if anyActive then
+			bar._runesAnimating = true
+			if not bar._runeUpdater then
+				bar._runeUpdater = function(self, elapsed)
+					if not self:IsShown() then
+						deactivateRuneTicker(self)
+						return
+					end
 					self._runeAccum = (self._runeAccum or 0) + (elapsed or 0)
-					if self._runeAccum > 0.08 then
+					local threshold = self._runeUpdateInterval or RUNE_UPDATE_INTERVAL
+					if self._runeAccum >= threshold then
 						self._runeAccum = 0
 						local n = GetTime()
+						local cfgOnUpdate = self._runeConfig or {}
 						local allReady = true
 						for pos = 1, 6 do
 							local ri = self._runeOrder and self._runeOrder[pos]
@@ -2023,19 +2246,21 @@ function updatePowerBar(type, runeSlot)
 							end
 						end
 						if allReady then
-							self._runesAnimating = false
-							self:SetScript("OnUpdate", nil)
+							deactivateRuneTicker(self)
 						end
 					end
-				end)
-			else
-				bar._runesAnimating = false
-				bar:SetScript("OnUpdate", nil)
+				end
 			end
-			if bar.text then bar.text:SetText("") end
-			return
+			if bar:GetScript("OnUpdate") ~= bar._runeUpdater then
+				bar._runeAccum = 0
+				bar:SetScript("OnUpdate", bar._runeUpdater)
+			end
+		else
+			deactivateRuneTicker(bar)
 		end
-		local bar = powerbar[type]
+		if bar.text then bar.text:SetText("") end
+		return
+	end
 		local pType = POWER_ENUM[type]
 		local cfg = getBarSettings(type) or {}
 		local maxPower = bar._lastMax
@@ -2050,20 +2275,35 @@ function updatePowerBar(type, runeSlot)
 		local smooth = cfg.smoothFill == true
 		if smooth then
 			bar._smoothTarget = curPower
+			bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			bar._smoothSpeed = SMOOTH_SPEED
 			if not bar._smoothInitialized then
 				bar:SetValue(curPower)
 				bar._smoothInitialized = true
 			end
+			bar._smoothEnabled = true
+			tryActivateSmooth(bar)
 		else
 			bar._smoothTarget = nil
+			bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
+			bar._smoothSpeed = SMOOTH_SPEED
 			if bar._lastVal ~= curPower then bar:SetValue(curPower) end
 			bar._smoothInitialized = nil
+			bar._smoothEnabled = false
+			stopSmoothUpdater(bar)
 		end
 		bar._lastVal = curPower
 		if bar.text then
 			if style == "NONE" then
-				bar.text:SetText("")
-				bar.text:Hide()
+				if bar._textShown then
+					bar.text:SetText("")
+					bar._lastText = ""
+					bar.text:Hide()
+					bar._textShown = false
+				elseif bar._lastText ~= "" then
+					bar.text:SetText("")
+					bar._lastText = ""
+				end
 			else
 				local text
 				if style == "PERCENT" then
@@ -2077,7 +2317,10 @@ function updatePowerBar(type, runeSlot)
 					bar.text:SetText(text)
 					bar._lastText = text
 				end
-				bar.text:Show()
+				if not bar._textShown then
+					bar.text:Show()
+					bar._textShown = true
+				end
 			end
 		end
 		bar._baseColor = bar._baseColor or {}
@@ -2091,19 +2334,22 @@ function updatePowerBar(type, runeSlot)
 		if useMaxColor and reachedCap then
 			local maxCol = cfg.maxColor or { 1, 1, 1, 1 }
 			local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
-			local last = bar._lastColor or {}
-			if bar._usingMaxColor ~= true or last[1] ~= mr or last[2] ~= mg or last[3] ~= mb or last[4] ~= ma then
-				bar:SetStatusBarColor(mr, mg, mb, ma)
-				bar._lastColor = { mr, mg, mb, ma }
+			local lc = bar._lastColor or {}
+			if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
+				lc[1], lc[2], lc[3], lc[4] = mr, mg, mb, ma
+				bar._lastColor = lc
+				bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
 				bar._usingMaxColor = true
 			end
 		else
 			local base = bar._baseColor
 			if base then
-				local last = bar._lastColor or {}
-				if bar._usingMaxColor == true or last[1] ~= base[1] or last[2] ~= base[2] or last[3] ~= base[3] or last[4] ~= base[4] then
-					bar:SetStatusBarColor(base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1)
-					bar._lastColor = { base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1 }
+				local lc = bar._lastColor or {}
+				local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+				if bar._usingMaxColor == true or lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
+					lc[1], lc[2], lc[3], lc[4] = br, bgc, bb, ba
+					bar._lastColor = lc
+					bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
 				end
 			end
 			bar._usingMaxColor = false
@@ -2425,6 +2671,19 @@ local function createPowerBar(type, anchor)
 		local tex = bar:GetStatusBarTexture()
 		if tex then tex:SetAlpha(0) end
 		layoutRunes(bar)
+	end
+	if type == "RUNES" and not bar._runeVisibilityHooks then
+		bar:HookScript("OnHide", function(self)
+			self._pendingRuneRefresh = true
+			deactivateRuneTicker(self)
+		end)
+		bar:HookScript("OnShow", function(self)
+			if self._pendingRuneRefresh then
+				self._pendingRuneRefresh = nil
+				updatePowerBar("RUNES")
+			end
+		end)
+		bar._runeVisibilityHooks = true
 	end
 	bar:SetStatusBarColor(getPowerBarColor(type))
 	configureBarBehavior(bar, settings, type)
@@ -2761,8 +3020,7 @@ function ResourceBars.DisableResourceBars()
 		if bar then
 			bar:Hide()
 			if pType == "RUNES" then
-				bar:SetScript("OnUpdate", nil)
-				bar._runesAnimating = false
+				deactivateRuneTicker(bar)
 			end
 		end
 		powerbar[pType] = nil
@@ -2784,8 +3042,7 @@ function ResourceBars.UpdateRuneEventRegistration()
 		frameAnchor:UnregisterEvent("RUNE_POWER_UPDATE")
 		frameAnchor._runeEvtRegistered = false
 		if powerbar and powerbar.RUNES then
-			powerbar.RUNES:SetScript("OnUpdate", nil)
-			powerbar.RUNES._runesAnimating = false
+			deactivateRuneTicker(powerbar.RUNES)
 		end
 	end
 end
@@ -3078,14 +3335,70 @@ function ResourceBars.Refresh()
 	local rcfg = getBarSettings("RUNES")
 	local runesEnabled = rcfg and (rcfg.enabled == true)
 	if powerbar and powerbar.RUNES and (not powerbar.RUNES:IsShown() or not runesEnabled) then
-		powerbar.RUNES:SetScript("OnUpdate", nil)
-		powerbar.RUNES._runesAnimating = false
+		deactivateRuneTicker(powerbar.RUNES)
 	end
+end
+
+ResourceBars._pendingRefresh = ResourceBars._pendingRefresh or {}
+
+function ResourceBars.QueueRefresh(specIndex, opts)
+	local spec = specIndex or addon.variables.unitSpec
+	if not spec then return end
+	local mode = (opts and opts.reanchorOnly) and "reanchor" or "full"
+	local pending = ResourceBars._pendingRefresh
+	local entry = pending[spec]
+	if not entry then
+		entry = { mode = mode }
+		pending[spec] = entry
+	else
+		if entry.mode ~= "full" and mode == "full" then entry.mode = "full" end
+	end
+	entry.lastRequest = GetTime and GetTime() or 0
+	if not After then
+		pending[spec] = nil
+		if spec ~= addon.variables.unitSpec then return end
+		if entry.mode == "full" then
+			ResourceBars.Refresh()
+		else
+			ResourceBars.ReanchorAll()
+		end
+		return
+	end
+	if entry.timerActive then return end
+	entry.timerActive = true
+
+	local function pump()
+		local current = pending[spec]
+		if not current then return end
+		local last = current.lastRequest or 0
+		local now = GetTime and GetTime() or last
+		if (now - last) < REFRESH_DEBOUNCE then
+			local delay = REFRESH_DEBOUNCE - (now - last)
+			if delay < 0.01 then delay = 0.01 end
+			After(delay, pump)
+			return
+		end
+		current.timerActive = nil
+		pending[spec] = nil
+		if spec ~= addon.variables.unitSpec then return end
+		if current.mode == "full" then
+			ResourceBars.Refresh()
+		else
+			ResourceBars.ReanchorAll()
+		end
+	end
+
+	After(REFRESH_DEBOUNCE, pump)
 end
 
 -- Only refresh live bars when editing the active spec
 function ResourceBars.MaybeRefreshActive(specIndex)
-	if specIndex == addon.variables.unitSpec then ResourceBars.Refresh() end
+	if specIndex ~= addon.variables.unitSpec then return end
+	if ResourceBars.QueueRefresh then
+		ResourceBars.QueueRefresh(specIndex)
+	else
+		ResourceBars.Refresh()
+	end
 end
 
 -- Re-anchor pass only: reapplies anchor points without rebuilding bars
