@@ -1244,6 +1244,13 @@ function addon.Aura.functions.addResourceFrame(container)
 					cbSmooth:SetFullWidth(false)
 					cbSmooth:SetRelativeWidth(0.5)
 					group:AddChild(cbSmooth)
+
+					if (cfg.verticalFill == true) and (cfg.barTexture == nil or cfg.barTexture == "DEFAULT") then
+						local warnText = L["VerticalTextureWarning"]
+						local warnLabel = addon.functions.createLabelAce(warnText, nil, nil, 12)
+						warnLabel:SetFullWidth(true)
+						group:AddChild(warnLabel)
+					end
 				else
 					-- Preserve flow layout when vertical option is hidden for RUNES
 					local spacer = addon.functions.createLabelAce("")
@@ -1402,6 +1409,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local dropTex = addon.functions.createDropdownAce(L["Bar Texture"], listTex, orderTex, function(_, _, key)
 					hCfg.barTexture = key
 					requestActiveRefresh(specIndex)
+					buildSpec(container, specIndex)
 				end)
 				local cur = hCfg.barTexture or "DEFAULT"
 				if not listTex[cur] then cur = "DEFAULT" end
@@ -1493,6 +1501,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local dropTex2 = addon.functions.createDropdownAce(L["Bar Texture"], listTex2, orderTex2, function(_, _, key)
 						cfg.barTexture = key
 						requestActiveRefresh(specIndex)
+						buildSpec(container, specIndex)
 					end)
 					local cur2 = cfg.barTexture or "DEFAULT"
 					if not listTex2[cur2] then cur2 = "DEFAULT" end
