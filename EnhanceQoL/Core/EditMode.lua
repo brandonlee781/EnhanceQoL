@@ -60,6 +60,51 @@ function EditMode:_resolveLayoutName(layoutName)
 	return self:GetActiveLayoutName()
 end
 
+local function isInCombat()
+	return InCombatLockdown and InCombatLockdown()
+end
+
+function EditMode:_ensureCombatWatcher()
+	if self.combatWatcher then return end
+	local watcher = CreateFrame("Frame")
+	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watcher:SetScript("OnEvent", function()
+		EditMode:_flushPendingVisibility()
+	end)
+	self.combatWatcher = watcher
+end
+
+function EditMode:_flushPendingVisibility()
+	local pending = self.pendingVisibility
+	if not pending then return end
+	self.pendingVisibility = nil
+	for entry, shouldShow in pairs(pending) do
+		if entry then self:_setFrameShown(entry, shouldShow, true) end
+	end
+end
+
+function EditMode:_setFrameShown(entry, shouldShow, immediate)
+	local frame = entry.frame
+	if not frame then return end
+
+	local isProtected = frame.IsProtected and frame:IsProtected()
+	if not immediate and isProtected and isInCombat() then
+		self.pendingVisibility = self.pendingVisibility or {}
+		self.pendingVisibility[entry] = shouldShow
+		self:_ensureCombatWatcher()
+		return
+	end
+
+	if self.pendingVisibility then self.pendingVisibility[entry] = nil end
+
+	local currentlyShown = frame:IsShown()
+	if shouldShow then
+		if not currentlyShown then frame:Show() end
+	else
+		if currentlyShown then frame:Hide() end
+	end
+end
+
 local function resolveRelativeFrame(entry)
 	if not entry then return UIParent end
 	local relative = entry.relativeTo
@@ -158,15 +203,8 @@ function EditMode:_applyVisibility(entry, layoutName, enabled)
 	local inEditMode = self:IsInEditMode()
 
 	if frame then
-		if enabled then
-			if inEditMode or entry.showOutsideEditMode then
-				frame:Show()
-			else
-				frame:Hide()
-			end
-		else
-			frame:Hide()
-		end
+		local shouldShow = enabled and (inEditMode or entry.showOutsideEditMode)
+		self:_setFrameShown(entry, shouldShow)
 	end
 
 	if selection then
