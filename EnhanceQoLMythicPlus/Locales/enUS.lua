@@ -76,6 +76,8 @@ L["BRTracker"] = "Combat Resurrection"
 L["brTrackerHeadline"] = "Adds a Combat Resurrection tracker in Mythic+ dungeons"
 L["mythicPlusBRTrackerEnabled"] = "Enable Combat Resurrection tracker"
 L["mythicPlusBRTrackerLocked"] = "Lock the tracker's position"
+L["mythicPlusBRTrackerShowAnchor"] = "Show tracker anchor"
+L["mythicPlusBRTrackerAnchor"] = "BR Tracker Anchor"
 L["mythicPlusBRButtonSizeHeadline"] = "Button Size"
 
 -- Talent Reminder

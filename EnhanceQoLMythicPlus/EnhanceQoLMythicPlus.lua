@@ -13,6 +13,7 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local frameLoad = CreateFrame("Frame")
 
 local brButton
+local brAnchor
 local defaultButtonSize = 60
 local defaultFontSize = 16
 
@@ -35,6 +36,76 @@ end
 
 local function isRaidDifficulty(d) return d == 14 or d == 15 or d == 16 or d == 17 end
 
+local function refreshBRAnchorPosition()
+	if not brAnchor then return end
+	brAnchor:ClearAllPoints()
+	brAnchor:SetPoint(
+		addon.db["mythicPlusBRTrackerPoint"],
+		UIParent,
+		addon.db["mythicPlusBRTrackerPoint"],
+		addon.db["mythicPlusBRTrackerX"],
+		addon.db["mythicPlusBRTrackerY"]
+	)
+end
+
+local function updateBRAnchorSize()
+	if not brAnchor then return end
+	local size = addon.db["mythicPlusBRButtonSize"]
+	brAnchor:SetSize(size, size)
+end
+
+local function ensureBRAnchor()
+	if not brAnchor then
+		brAnchor = CreateFrame("Frame", "EnhanceQoLMythicPlusBRAnchor", UIParent)
+		brAnchor:SetClampedToScreen(true)
+		brAnchor:SetMovable(true)
+		brAnchor:EnableMouse(true)
+		brAnchor:RegisterForDrag("LeftButton")
+
+		local bg = brAnchor:CreateTexture(nil, "BACKGROUND")
+		bg:SetAllPoints()
+		bg:SetColorTexture(0.1, 0.6, 0.6, 0.35)
+		brAnchor.bg = bg
+
+		local border = brAnchor:CreateTexture(nil, "OVERLAY")
+		border:SetAllPoints()
+		border:SetTexture("Interface\\BUTTONS\\UI-Quickslot2")
+		border:SetTexCoord(0.2, 0.8, 0.2, 0.8)
+		border:SetVertexColor(0.1, 0.6, 0.6, 0.7)
+		brAnchor.border = border
+
+		brAnchor.label = brAnchor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		brAnchor.label:SetPoint("CENTER")
+		brAnchor.label:SetText(L["mythicPlusBRTrackerAnchor"])
+
+		brAnchor:SetScript("OnDragStart", brAnchor.StartMoving)
+		brAnchor:SetScript("OnDragStop", function(self)
+			self:StopMovingOrSizing()
+			local point, _, _, xOfs, yOfs = self:GetPoint()
+			addon.db["mythicPlusBRTrackerPoint"] = point
+			addon.db["mythicPlusBRTrackerX"] = xOfs
+			addon.db["mythicPlusBRTrackerY"] = yOfs
+			refreshBRAnchorPosition()
+			if brButton then
+				brButton:ClearAllPoints()
+				brButton:SetPoint(point, UIParent, point, xOfs, yOfs)
+			end
+		end)
+	end
+	updateBRAnchorSize()
+	refreshBRAnchorPosition()
+	return brAnchor
+end
+
+local function updateBRAnchorVisibility()
+	if addon.db["mythicPlusBRTrackerEnabled"] and addon.db["mythicPlusBRTrackerShowAnchor"] then
+		local anchor = ensureBRAnchor()
+		anchor:Show()
+	else
+		if brAnchor then brAnchor:Hide() end
+	end
+end
+
 local function shouldShowBRTracker()
 	if not addon.db["mythicPlusBRTrackerEnabled"] then return false end
 	if not IsInInstance() then return false end
@@ -47,6 +118,8 @@ end
 local function createBRFrame()
 	removeBRFrame()
 	if not addon.db["mythicPlusBRTrackerEnabled"] then return end
+	updateBRAnchorSize()
+	refreshBRAnchorPosition()
 	if IsInGroup() and shouldShowBRTracker() then
 		brButton = CreateFrame("Button", nil, UIParent)
 		brButton:SetSize(addon.db["mythicPlusBRButtonSize"], addon.db["mythicPlusBRButtonSize"])
@@ -64,6 +137,7 @@ local function createBRFrame()
 				addon.db["mythicPlusBRTrackerPoint"] = point
 				addon.db["mythicPlusBRTrackerX"] = xOfs
 				addon.db["mythicPlusBRTrackerY"] = yOfs
+				refreshBRAnchorPosition()
 			end)
 		end
 
@@ -1143,6 +1217,7 @@ local function addMythicPlusRootFrame(container)
 		local cb = addon.functions.createCheckboxAce(L["mythicPlusBRTrackerEnabled"], addon.db["mythicPlusBRTrackerEnabled"], function(_, _, v)
 			addon.db["mythicPlusBRTrackerEnabled"] = v
 			createBRFrame()
+			updateBRAnchorVisibility()
 			buildBR()
 		end)
 		g:AddChild(cb)
@@ -1155,6 +1230,14 @@ local function addMythicPlusRootFrame(container)
 					func = function(_, _, v2)
 						addon.db["mythicPlusBRTrackerLocked"] = v2
 						createBRFrame()
+					end,
+				},
+				{
+					text = L["mythicPlusBRTrackerShowAnchor"],
+					var = "mythicPlusBRTrackerShowAnchor",
+					func = function(_, _, v2)
+						addon.db["mythicPlusBRTrackerShowAnchor"] = v2
+						updateBRAnchorVisibility()
 					end,
 				},
 			}
@@ -1177,6 +1260,7 @@ local function addMythicPlusRootFrame(container)
 				function(self, _, v4)
 					addon.db["mythicPlusBRButtonSize"] = v4
 					createBRFrame()
+					updateBRAnchorSize()
 					self:SetLabel(L["mythicPlusBRButtonSizeHeadline"] .. ": " .. v4)
 				end
 			)
@@ -1286,3 +1370,4 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 end
 
 if addon.db["mythicPlusEnableDungeonFilter"] then addon.MythicPlus.functions.addDungeonFilter() end
+updateBRAnchorVisibility()

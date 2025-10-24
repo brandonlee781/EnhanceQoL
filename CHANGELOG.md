@@ -5,6 +5,7 @@
 ### ✨ Added
 
 - More customizations to Resourcebars
+- Option to reposition the BR Tracker outside of Raid and M+
 
 ### 🐛 Fixed
 
