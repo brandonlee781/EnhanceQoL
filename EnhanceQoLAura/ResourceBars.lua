@@ -481,7 +481,7 @@ local function applyBarFillColor(bar, cfg, pType)
 	cfg = cfg or {}
 	local r, g, b, a
 	if cfg.useBarColor then
-		local color = cfg.barColor or { 1, 1, 1, 1 }
+		local color = cfg.barColor or WHITE
 		r, g, b, a = color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
 	else
 		r, g, b = getPowerBarColor(pType or "MANA")
@@ -2333,7 +2333,7 @@ function updatePowerBar(type, runeSlot)
 	local reachedCap = curPower >= max(maxPower, 1)
 	local useMaxColor = cfg.useMaxColor == true
 	if useMaxColor and reachedCap then
-		local maxCol = cfg.maxColor or { 1, 1, 1, 1 }
+		local maxCol = cfg.maxColor or WHITE
 		local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
 		local lc = bar._lastColor or {}
 		if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
@@ -2685,7 +2685,13 @@ local function createPowerBar(type, anchor)
 		end)
 		bar._runeVisibilityHooks = true
 	end
-	bar:SetStatusBarColor(getPowerBarColor(type))
+	if type == "RUNES" then
+		bar:SetStatusBarColor(getPowerBarColor(type))
+	elseif not (settings and settings.useBarColor == true) then
+		local dr, dg, db = getPowerBarColor(type)
+		local alpha = (settings and settings.barColor and settings.barColor[4]) or 1
+		bar:SetStatusBarColor(dr, dg, db, alpha)
+	end
 	configureBarBehavior(bar, settings, type)
 
 	-- Dragging only when not anchored to another EQOL bar
