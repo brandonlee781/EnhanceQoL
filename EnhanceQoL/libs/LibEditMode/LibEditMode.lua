@@ -1,5 +1,5 @@
-local MINOR = 10
-local lib = LibStub:NewLibrary('LibEditMode', MINOR)
+local MINOR = 9
+local lib = LibStub:NewLibrary("LibEditMode", MINOR)
 if not lib then
 	-- this or a newer version is already loaded
 	return
@@ -8,7 +8,7 @@ end
 lib.internal = {} -- internal methods, do not use directly
 local internal = lib.internal
 
-local layoutNames = setmetatable({'Modern', 'Classic'}, {
+local layoutNames = setmetatable({ "Modern", "Classic" }, {
 	__index = function(t, key)
 		if key > 2 then
 			-- the first 2 indices are reserved for 'Modern' and 'Classic' layouts, and anything
@@ -16,7 +16,7 @@ local layoutNames = setmetatable({'Modern', 'Classic'}, {
 			-- and 'Classic' layouts, so we'll have to substract and check
 			local layouts = C_EditMode.GetLayouts().layouts
 			if (key - 2) > #layouts then
-				error('index is out of bounds')
+				error("index is out of bounds")
 			else
 				return layouts[key - 2].layoutName
 			end
@@ -24,7 +24,7 @@ local layoutNames = setmetatable({'Modern', 'Classic'}, {
 			-- also work for 'Modern' and 'Classic'
 			rawget(t, key)
 		end
-	end
+	end,
 })
 
 lib.frameSelections = lib.frameSelections or {}
@@ -38,45 +38,37 @@ lib.anonCallbacksExit = lib.anonCallbacksExit or {}
 lib.anonCallbacksLayout = lib.anonCallbacksLayout or {}
 
 local function resetSelection()
-	local inCombat = InCombatLockdown and InCombatLockdown()
 	internal.dialog:Hide()
 
 	for frame, selection in next, lib.frameSelections do
-		if selection.isSelected then
-			frame:SetMovable(false)
-		end
+		if selection.isSelected then frame:SetMovable(false) end
 
 		if not lib.isEditing then
 			selection:Hide()
 			selection.isSelected = false
-		elseif not inCombat then
-			selection:ShowHighlighted()
 		else
-			selection:Hide()
-			selection.isSelected = false
+			selection:ShowHighlighted()
 		end
 	end
 end
 
 local function onDragStart(self)
-	if InCombatLockdown and InCombatLockdown() then return end
-	if not (self.parent and self.parent:IsMovable()) then return end
-	self:RegisterEvent('PLAYER_REGEN_DISABLED')
-	self.combatDragActive = true
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
+	end
+
+	self:RegisterEvent("PLAYER_REGEN_DISABLED")
 	self.parent:StartMoving()
 end
 
 local function normalizePosition(frame)
 	-- ripped out of LibWindow-1.1, which is Public Domain
 	local parent = frame:GetParent()
-	if not parent then
-		return
-	end
+	if not parent then return end
 
 	local scale = frame:GetScale()
-	if not scale then
-		return
-	end
+	if not scale then return end
 
 	local left = frame:GetLeft() * scale
 	local top = frame:GetTop() * scale
@@ -88,63 +80,67 @@ local function normalizePosition(frame)
 	local x, y, point
 	if left < (parentWidth - right) and left < math.abs((left + right) / 2 - parentWidth / 2) then
 		x = left
-		point = 'LEFT'
+		point = "LEFT"
 	elseif (parentWidth - right) < math.abs((left + right) / 2 - parentWidth / 2) then
 		x = right - parentWidth
-		point = 'RIGHT'
+		point = "RIGHT"
 	else
 		x = (left + right) / 2 - parentWidth / 2
-		point = ''
+		point = ""
 	end
 
 	if bottom < (parentHeight - top) and bottom < math.abs((bottom + top) / 2 - parentHeight / 2) then
 		y = bottom
-		point = 'BOTTOM' .. point
+		point = "BOTTOM" .. point
 	elseif (parentHeight - top) < math.abs((bottom + top) / 2 - parentHeight / 2) then
 		y = top - parentHeight
-		point = 'TOP' .. point
+		point = "TOP" .. point
 	else
 		y = (bottom + top) / 2 - parentHeight / 2
-		point = '' .. point
+		point = "" .. point
 	end
 
-	if point == '' then
-		point = 'CENTER'
-	end
+	if point == "" then point = "CENTER" end
 
 	return point, x / scale, y / scale
 end
 
-local function onDragStop(self)
-	if InCombatLockdown and InCombatLockdown() then return end
-	local parent = self.parent
-	if parent then parent:StopMovingOrSizing() end
-	if self.combatDragActive then
-		self:UnregisterEvent('PLAYER_REGEN_DISABLED')
-		self.combatDragActive = nil
+local function updatePosition(selection, xDelta, yDelta)
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
 	end
-	if not (parent and parent.IsMovable and parent:IsMovable()) then return end
 
-	-- TODO: snap position to grid
-	-- FrameXML/EditModeUtil.lua
-
+	local parent = selection.parent
 	local point, x, y = normalizePosition(parent)
+	x, y = x + (xDelta or 0), y + (yDelta or 0)
 	parent:ClearAllPoints()
 	parent:SetPoint(point, x, y)
 
 	internal:TriggerCallback(parent, point, x, y)
+
+	if selection.isSelected then internal.dialog:Update(selection) end
 end
 
-local function onSelectionEvent(self, event)
-	if event == 'PLAYER_REGEN_DISABLED' then
-		onDragStop(self)
-		self:Hide()
-		self.isSelected = false
-	end
+local function onDragStop(self)
+	if InCombatLockdown() then return end
+
+	local parent = self.parent
+	parent:StopMovingOrSizing()
+	self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+
+	-- TODO: snap position to grid
+	-- FrameXML/EditModeUtil.lua
+
+	updatePosition(self)
 end
 
 local function onMouseDown(self) -- replacement for EditModeSystemMixin:SelectSystem()
-	if InCombatLockdown and InCombatLockdown() then return end
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
+	end
+
 	resetSelection()
 	EditModeManagerFrame:ClearSelectedSystem() -- possible taint
 
@@ -202,19 +198,18 @@ The `default` table must contain the following entries:
 * `y`: vertical offset from the anchor point _(number)_
 --]]
 function lib:AddFrame(frame, callback, default)
-	local selection = CreateFrame('Frame', nil, frame, 'EditModeSystemSelectionTemplate')
+	local selection = CreateFrame("Frame", nil, frame, "EditModeSystemSelectionTemplate")
 	selection:SetAllPoints()
-	selection:SetScript('OnMouseDown', onMouseDown)
-	selection:SetScript('OnDragStart', onDragStart)
-	selection:SetScript('OnDragStop', onDragStop)
+	selection:SetScript("OnMouseDown", onMouseDown)
+	selection:SetScript("OnDragStart", onDragStart)
+	selection:SetScript("OnDragStop", onDragStop)
+	selection:SetScript("OnEvent", onDragStop)
 	selection:Hide()
 
 	if select(4, GetBuildInfo()) >= 110200 then
 		-- 11.2 requires a system name to work correctly, we'll fake it
 		selection.system = {}
-		selection.system.GetSystemName = function()
-			return frame.editModeName or frame:GetName()
-		end
+		selection.system.GetSystemName = function() return frame.editModeName or frame:GetName() end
 	else
 		selection.Label:SetText(frame.editModeName or frame:GetName())
 	end
@@ -222,25 +217,20 @@ function lib:AddFrame(frame, callback, default)
 	lib.frameSelections[frame] = selection
 	lib.frameCallbacks[frame] = callback
 	lib.frameDefaults[frame] = default
-	selection:SetScript('OnEvent', onSelectionEvent)
 
 	if not internal.dialog then
 		internal.dialog = internal:CreateDialog()
-		internal.dialog:HookScript('OnHide', function()
-			resetSelection()
-		end)
+		internal.dialog:HookScript("OnHide", function() resetSelection() end)
 
 		-- listen for layout changes
-		EventRegistry:RegisterFrameEventAndCallback('EDIT_MODE_LAYOUTS_UPDATED', onEditModeChanged)
+		EventRegistry:RegisterFrameEventAndCallback("EDIT_MODE_LAYOUTS_UPDATED", onEditModeChanged)
 
 		-- hook EditMode shown state, since QuickKeybindMode will hide/show EditMode
-		EditModeManagerFrame:HookScript('OnShow', onEditModeEnter)
-		EditModeManagerFrame:HookScript('OnHide', onEditModeExit)
+		EditModeManagerFrame:HookScript("OnShow", onEditModeEnter)
+		EditModeManagerFrame:HookScript("OnHide", onEditModeExit)
 
 		-- unselect our selections whenever a system is selected
-		hooksecurefunc(EditModeManagerFrame, 'SelectSystem', function()
-			resetSelection()
-		end)
+		hooksecurefunc(EditModeManagerFrame, "SelectSystem", function() resetSelection() end)
 	end
 end
 
@@ -251,9 +241,7 @@ Register extra settings that will be displayed in a dialog attached to the frame
 * `settings`: table containing [SettingObject](Types#settingobject) entries _(table, number indexed)_
 --]]
 function lib:AddFrameSettings(frame, settings)
-	if not lib.frameSelections[frame] then
-		error('frame must be registered')
-	end
+	if not lib.frameSelections[frame] then error("frame must be registered") end
 
 	lib.frameSettings[frame] = settings
 end
@@ -265,9 +253,7 @@ Register extra buttons that will be displayed in a dialog attached to the frame 
 * `data`: table containing [ButtonObject](Types#buttonobject) entries _(table, number indexed)_
 --]]
 function lib:AddFrameSettingsButton(frame, data)
-	if not lib.frameButtons[frame] then
-		lib.frameButtons[frame] = {}
-	end
+	if not lib.frameButtons[frame] then lib.frameButtons[frame] = {} end
 
 	table.insert(lib.frameButtons[frame], data)
 end
@@ -287,14 +273,14 @@ Possible events:
         * `layoutName`: name of the new layout
 --]]
 function lib:RegisterCallback(event, callback)
-	assert(event and type(event) == 'string', 'event must be a string')
-	assert(callback and type(callback) == 'function', 'callback must be a function')
+	assert(event and type(event) == "string", "event must be a string")
+	assert(callback and type(callback) == "function", "callback must be a function")
 
-	if event == 'enter' then
+	if event == "enter" then
 		table.insert(lib.anonCallbacksEnter, callback)
-	elseif event == 'exit' then
+	elseif event == "exit" then
 		table.insert(lib.anonCallbacksExit, callback)
-	elseif event == 'layout' then
+	elseif event == "layout" then
 		table.insert(lib.anonCallbacksLayout, callback)
 	else
 		error('invalid callback event "' .. event .. '"')
@@ -307,16 +293,12 @@ Returns the active Edit Mode layout name.
 This will not return valid data until after the layout has been loaded from the server.  
 Data will be available for the ["layout" callback](#libeditmoderegistercallbackevent-callback).
 --]]
-function lib:GetActiveLayoutName()
-	return lib.activeLayoutName
-end
+function lib:GetActiveLayoutName() return lib.activeLayoutName end
 
 --[[ LibEditMode:IsInEditMode()
 Returns whether the Edit Mode is currently active.
 --]]
-function lib:IsInEditMode()
-	return not not lib.isEditing
-end
+function lib:IsInEditMode() return not not lib.isEditing end
 
 --[[ LibEditMode:GetFrameDefaultPosition(_frame_)
 Returns the default position table registered with the frame.
@@ -327,14 +309,10 @@ Returns:
 
 * `defaultPosition`: table registered with the frame in [AddFrame](#libeditmodeaddframeframe-callback-default) _(table)_
 --]]
-function lib:GetFrameDefaultPosition(frame)
-	return lib.frameDefaults[frame]
-end
+function lib:GetFrameDefaultPosition(frame) return lib.frameDefaults[frame] end
 
 function internal:TriggerCallback(frame, ...)
-	if lib.frameCallbacks[frame] then
-		securecallfunction(lib.frameCallbacks[frame], frame, lib.activeLayoutName, ...)
-	end
+	if lib.frameCallbacks[frame] then securecallfunction(lib.frameCallbacks[frame], frame, lib.activeLayoutName, ...) end
 end
 
 function internal:GetFrameSettings(frame)
@@ -352,6 +330,8 @@ function internal:GetFrameButtons(frame)
 		return nil, 0
 	end
 end
+
+function internal:MoveParent(selection, x, y) updatePosition(selection, x, y) end
 
 --[[ Types:header
 
