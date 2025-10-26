@@ -642,6 +642,31 @@ local CATEGORY_DATA = {
 					61174,
 					42565,
 				},
+				requirements = {
+					[42614] = 43985,
+					[42559] = 43512,
+					[42526] = 43193,
+					[42542] = 43448,
+					[42529] = 42819,
+					[42527] = 43192,
+					[42637] = 43513,
+					[42536] = 42270,
+					[42659] = 42779,
+					[42610] = 42269,
+
+					[42669] = 44287,
+					[42662] = 47061,
+					[42643] = 46947,
+					[42629] = 46948,
+					[42530] = 46945,
+
+					[42581] = 49198,
+					[42574] = 49199,
+					[42538] = 48620,
+					[42604] = 49195,
+					[42616] = 49196,
+					[42534] = 49197,
+				},
 			},
 		},
 	},
@@ -1446,10 +1471,24 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 	end
 	if group.type == "ik_achievement" or group.type == "bronze_achievement" then
 		local cost = group.cost or 0
+		local requirements = nil
+		if group.type == "bronze_achievement" and type(group.requirements) == "table" then requirements = group.requirements end
 		for _, itemId in ipairs(group.items) do
 			local entry = { kind = "achievement", id = itemId }
 			entry.requiredAchievement = itemId
 			entry.requirementComplete = self:PlayerHasAchievement(itemId)
+			if requirements then
+				local requirementKey = itemId
+				local worldQuestId = requirements[requirementKey]
+				if not worldQuestId then worldQuestId = requirements[tostring(requirementKey)] end
+				if worldQuestId then
+					entry.requiredWorldQuest = worldQuestId
+					local questIsActive = true
+					if C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(worldQuestId) and true or false end
+					entry.worldQuestActive = questIsActive
+					entry.requirementAvailable = questIsActive
+				end
+			end
 			applyCategoryPhaseKind(entry, categoryResult, group)
 			addItemResult(categoryResult, entry.requirementComplete, cost, entry)
 		end
@@ -1665,8 +1704,22 @@ function LegionRemix:BuildCategoryDisplay(categoryData)
 	end
 
 	local filteredMissing = {}
+	local unavailableCost, unavailableCount = 0, 0
 	for _, entry in ipairs(categoryData.missing or {}) do
-		if not entry.phase or filters[entry.phase] then table.insert(filteredMissing, entry) end
+		local inPhase = not entry.phase or filters[entry.phase]
+		if inPhase then
+			local available = entry.requirementAvailable ~= false
+			if allActive or available then
+				table.insert(filteredMissing, entry)
+			else
+				unavailableCost = unavailableCost + (entry.cost or 0)
+				unavailableCount = unavailableCount + 1
+			end
+		end
+	end
+	if not allActive and (unavailableCost > 0 or unavailableCount > 0) then
+		totalCost = math.max((totalCost or 0) - unavailableCost, 0)
+		totalCount = math.max((totalCount or 0) - unavailableCount, 0)
 	end
 
 	display.collectedCost = collectedCost
@@ -2190,6 +2243,19 @@ function LegionRemix:ShowCategoryTooltip(row)
 					statusR, statusG, statusB = 1, 0.45, 0.45
 				end
 				GameTooltip:AddDoubleLine("  " .. requirementLabel, statusText, 0.7, 0.85, 1, statusR, statusG, statusB)
+			end
+			if entry.requiredWorldQuest then
+				local questName = nil
+				if C_QuestLog and C_QuestLog.GetTitleForQuestID then questName = C_QuestLog.GetTitleForQuestID(entry.requiredWorldQuest) end
+				if not questName or questName == "" then questName = string.format("Quest #%d", entry.requiredWorldQuest) end
+				if WORLD_QUEST then questName = string.format("%s (%s)", questName, WORLD_QUEST) end
+				local requirementLabel = string.format(L["Requires: %s"], questName)
+				local questActive = entry.worldQuestActive ~= false
+				local statusR, statusG, statusB = 0.4, 1, 0.4
+				if not questActive then
+					statusR, statusG, statusB = 1, 0.45, 0.45
+				end
+				GameTooltip:AddLine("  " .. requirementLabel, statusR, statusG, statusB)
 			end
 		end
 		if #missing > maxEntries then GameTooltip:AddLine(string.format(L["+ %d more..."], #missing - maxEntries), 0.5, 0.5, 0.5) end
