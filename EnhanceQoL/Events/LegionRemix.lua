@@ -477,6 +477,35 @@ local CATEGORY_DATA = {
 					42696,
 					42697,
 				},
+				requirements = {
+					[61076] = {
+						[42526] = 43193,
+						[42542] = 43448,
+						[42614] = 43985,
+						[42527] = 43192,
+						[42637] = 43513,
+						[42536] = 42270,
+						[42610] = 42269,
+						[42669] = 44287,
+						[42559] = 43512,
+						[42529] = 42819,
+						[42659] = 42779,
+					},
+					[61080] = {
+						[42662] = 47061,
+						[42643] = 46947,
+						[42629] = 46948,
+						[42530] = 46945,
+					},
+					[61077] = {
+						[42581] = 49198,
+						[42574] = 49199,
+						[42538] = 48620,
+						[42604] = 49195,
+						[42616] = 49196,
+						[42534] = 49197,
+					},
+				},
 			},
 		},
 	},
@@ -1471,24 +1500,61 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 	end
 	if group.type == "ik_achievement" or group.type == "bronze_achievement" then
 		local cost = group.cost or 0
-		local requirements = nil
-		if group.type == "bronze_achievement" and type(group.requirements) == "table" then requirements = group.requirements end
+		local requirementsLookup = type(group.requirements) == "table" and group.requirements or nil
 		for _, itemId in ipairs(group.items) do
 			local entry = { kind = "achievement", id = itemId }
 			entry.requiredAchievement = itemId
 			entry.requirementComplete = self:PlayerHasAchievement(itemId)
-			if requirements then
+			entry.requirementAvailable = true
+			local worldQuestRequirements
+			if requirementsLookup then
 				local requirementKey = itemId
-				local worldQuestId = requirements[requirementKey]
-				if not worldQuestId then worldQuestId = requirements[tostring(requirementKey)] end
-				if worldQuestId then
-					entry.requiredWorldQuest = worldQuestId
-					local questIsActive = true
-					if C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(worldQuestId) and true or false end
-					entry.worldQuestActive = questIsActive
-					entry.requirementAvailable = questIsActive
+				local requirementData = requirementsLookup[requirementKey]
+				if requirementData == nil then requirementData = requirementsLookup[tostring(requirementKey)] end
+				if type(requirementData) == "number" or type(requirementData) == "string" then
+					local questId = tonumber(requirementData)
+					if questId then
+						local questIsActive = true
+						if C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
+						entry.requiredWorldQuest = questId
+						entry.worldQuestActive = questIsActive
+						entry.requirementAvailable = questIsActive
+						worldQuestRequirements = {
+							{ questId = questId, active = questIsActive, completed = entry.requirementComplete },
+						}
+					end
+				elseif type(requirementData) == "table" then
+					worldQuestRequirements = {}
+					local keys = {}
+					for subKey in pairs(requirementData) do
+						keys[#keys + 1] = subKey
+					end
+					table.sort(keys, function(a, b)
+						local numA, numB = tonumber(a), tonumber(b)
+						if numA and numB then return numA < numB end
+						return tostring(a) < tostring(b)
+					end)
+					local allActive = true
+					for _, subKey in ipairs(keys) do
+						local subAchievementId = tonumber(subKey) or subKey
+						local questValue = requirementData[subKey]
+						local questId = tonumber(questValue) or questValue
+						local subCompleted = subAchievementId and self:PlayerHasAchievement(subAchievementId) or false
+						local questIsActive = true
+						if questId and C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
+						if not subCompleted and not questIsActive then allActive = false end
+						worldQuestRequirements[#worldQuestRequirements + 1] = {
+							achievementId = subAchievementId,
+							questId = questId,
+							active = questIsActive,
+							completed = subCompleted,
+						}
+					end
+					entry.requirementAvailable = allActive
 				end
 			end
+			if worldQuestRequirements and #worldQuestRequirements > 0 then entry.worldQuestRequirements = worldQuestRequirements end
+			if entry.requirementAvailable == nil then entry.requirementAvailable = true end
 			applyCategoryPhaseKind(entry, categoryResult, group)
 			addItemResult(categoryResult, entry.requirementComplete, cost, entry)
 		end
@@ -2244,18 +2310,37 @@ function LegionRemix:ShowCategoryTooltip(row)
 				end
 				GameTooltip:AddDoubleLine("  " .. requirementLabel, statusText, 0.7, 0.85, 1, statusR, statusG, statusB)
 			end
-			if entry.requiredWorldQuest then
-				local questName = nil
-				if C_QuestLog and C_QuestLog.GetTitleForQuestID then questName = C_QuestLog.GetTitleForQuestID(entry.requiredWorldQuest) end
-				if not questName or questName == "" then questName = string.format("Quest #%d", entry.requiredWorldQuest) end
-				if WORLD_QUEST then questName = string.format("%s (%s)", questName, WORLD_QUEST) end
-				local requirementLabel = string.format(L["Requires: %s"], questName)
+			local questRequirements = entry.worldQuestRequirements
+			if (not questRequirements or #questRequirements == 0) and entry.requiredWorldQuest then
 				local questActive = entry.worldQuestActive ~= false
-				local statusR, statusG, statusB = 0.4, 1, 0.4
-				if not questActive then
-					statusR, statusG, statusB = 1, 0.45, 0.45
+				questRequirements = {
+					{ questId = entry.requiredWorldQuest, active = questActive, completed = entry.requirementComplete },
+				}
+			end
+			if questRequirements and #questRequirements > 0 then
+				for _, requirement in ipairs(questRequirements) do
+					if requirement and requirement.questId then
+						if not requirement.completed then
+							local questName = nil
+							if C_QuestLog and C_QuestLog.GetTitleForQuestID then questName = C_QuestLog.GetTitleForQuestID(requirement.questId) end
+							if not questName or questName == "" then questName = string.format("Quest #%d", requirement.questId) end
+							if WORLD_QUEST then questName = string.format("%s (%s)", questName, WORLD_QUEST) end
+							local detailLabel = questName
+							if requirement.achievementId then
+								local subName = select(1, self:GetAchievementDetails(requirement.achievementId))
+								if not subName or subName == "" then subName = string.format(L["Achievement #%d"], requirement.achievementId) end
+								if subName and subName ~= "" then detailLabel = string.format("%s - %s", subName, questName) end
+							end
+							local requirementLabel = string.format(L["Requires: %s"], detailLabel)
+							local isActive = requirement.active ~= false
+							local statusR, statusG, statusB = 0.9, 0.9, 0.6
+							if not isActive then
+								statusR, statusG, statusB = 1, 0.45, 0.45
+							end
+							GameTooltip:AddLine("  " .. requirementLabel, statusR, statusG, statusB)
+						end
+					end
 				end
-				GameTooltip:AddLine("  " .. requirementLabel, statusR, statusG, statusB)
 			end
 		end
 		if #missing > maxEntries then GameTooltip:AddLine(string.format(L["+ %d more..."], #missing - maxEntries), 0.5, 0.5, 0.5) end
