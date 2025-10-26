@@ -6,6 +6,27 @@ local L = addon.L
 local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 
+local DELETE_BUTTON_LABEL = L["DataPanelDelete"] or "Delete panel"
+local DELETE_CONFIRM_TEXT = L["DataPanelDeleteConfirm"] or 'Are you sure you want to delete "%s"? This cannot be undone.'
+
+local DELETE_PANEL_POPUP = addonName .. "DeleteDataPanel"
+StaticPopupDialogs = StaticPopupDialogs or {}
+if not StaticPopupDialogs[DELETE_PANEL_POPUP] then
+	StaticPopupDialogs[DELETE_PANEL_POPUP] = {
+		text = DELETE_CONFIRM_TEXT,
+		button1 = YES,
+		button2 = CANCEL,
+		showAlert = true,
+		hideOnEscape = true,
+		timeout = 0,
+		whileDead = 1,
+		preferredIndex = 3,
+		OnAccept = function(self)
+			if self.data then DataPanel.Delete(self.data) end
+		end,
+	}
+end
+
 local panels = {}
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 local VALID_STRATA = {}
@@ -152,6 +173,15 @@ local function registerEditModePanel(panel)
 		}
 	end
 
+	local buttons = {
+		{
+			text = DELETE_BUTTON_LABEL,
+			click = function()
+				DataPanel:PromptDelete(panel)
+			end,
+		},
+	}
+
 	EditMode:RegisterFrame(id, {
 		frame = panel.frame,
 		title = panel.name,
@@ -159,6 +189,7 @@ local function registerEditModePanel(panel)
 		onApply = function(_, _, data) panel:ApplyEditMode(data or {}) end,
 		onPositionChanged = function(_, _, data) panel:UpdatePositionInfo(data) end,
 		settings = settings,
+		buttons = buttons,
 		showOutsideEditMode = true,
 	})
 	panel.editModeRegistered = true
@@ -205,6 +236,18 @@ function DataPanel.IsMenuModifierActive(btn)
 	local mod = getMenuModifierSetting()
 	if mod == "NONE" then return true end
 	return isModifierDown(mod)
+end
+
+function DataPanel:PromptDelete(target)
+	local panel = target
+	if type(panel) ~= "table" or not panel.id then panel = panels[tostring(target)] end
+	if not panel or not panel.id then return end
+	if InCombatLockdown and InCombatLockdown() then
+		if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT) end
+		return
+	end
+	local dialog = StaticPopup_Show(DELETE_PANEL_POPUP, panel.name or panel.id)
+	if dialog then dialog.data = panel.id end
 end
 
 local function ensureSettings(id, name)

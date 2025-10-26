@@ -4533,27 +4533,6 @@ local function buildDatapanelFrame(container)
 	addButton:SetRelativeWidth(0.3)
 	controlGroup:AddChild(addButton)
 
-	local panelList, panelOrder = {}, {}
-	for id in pairs(panels) do
-		panelList[id] = id
-		panelOrder[#panelOrder + 1] = id
-	end
-	table.sort(panelOrder)
-
-	local dropRemove = addon.functions.createDropdownAce(L["Panel"] or "Panel", panelList, panelOrder, function(self, _, val) self:SetValue(val) end)
-	dropRemove:SetRelativeWidth(0.4)
-	controlGroup:AddChild(dropRemove)
-
-	local removeButton = addon.functions.createButtonAce(L["Remove Panel"] or "Remove Panel", 120, function()
-		local id = dropRemove:GetValue()
-		if id then
-			DataPanel.Delete(id)
-			container:ReleaseChildren()
-			buildDatapanelFrame(container)
-		end
-	end)
-	removeButton:SetRelativeWidth(0.3)
-	controlGroup:AddChild(removeButton)
 	scroll:DoLayout()
 end
 

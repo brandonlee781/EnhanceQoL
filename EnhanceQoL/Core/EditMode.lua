@@ -398,6 +398,37 @@ function EditMode:RegisterSettings(id, settings)
 	self.lib:AddFrameSettings(entry.frame, prepared)
 end
 
+function EditMode:RegisterButtons(id, buttons)
+	if not buttons or #buttons == 0 then return end
+	if not self:IsAvailable() then return end
+
+	local entry = self.frames[id]
+	if not entry or not entry.frame then return end
+
+	entry.buttons = entry.buttons or {}
+	for index = 1, #buttons do
+		local source = buttons[index]
+		if source and source.text and source.click then
+			local prepared = {
+				text = source.text,
+				click = function(...)
+					local ok, err = pcall(source.click, ...)
+					if not ok then geterrorhandler()(err) end
+				end,
+			}
+			self.lib:AddFrameSettingsButton(entry.frame, prepared)
+			entry.buttons[#entry.buttons + 1] = prepared
+		elseif source and source.text then
+			local prepared = {
+				text = source.text,
+				click = function() end,
+			}
+			self.lib:AddFrameSettingsButton(entry.frame, prepared)
+			entry.buttons[#entry.buttons + 1] = prepared
+		end
+	end
+end
+
 function EditMode:RegisterFrame(id, opts)
 	assert(type(id) == "string" and id ~= "", "frame id must be a non-empty string")
 	opts = opts or {}
@@ -450,6 +481,7 @@ function EditMode:RegisterFrame(id, opts)
 		end, defaultPosition)
 
 		if opts.settings then self:RegisterSettings(id, opts.settings) end
+		if opts.buttons then self:RegisterButtons(id, opts.buttons) end
 	end
 
 	self:ApplyLayout(id, self:GetActiveLayoutName())

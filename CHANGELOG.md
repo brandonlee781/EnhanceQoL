@@ -11,6 +11,11 @@
   - Header now shows a `Collected: X / Y` indicator that matches the active filter (All vs. Current), alongside the remaining bronze.
   - Overlay frame strata can now be adjusted, and a gear button beside collapse opens the Legion Remix options directly.
 - Edit Mode data panels can now pick their frame strata per panel for finer layering control.
+- Data Panels now have an Edit Mode delete button with a confirmation prompt for faster cleanup.
+
+### 🔄 Changed
+
+- Removed the old options dropdown for deleting Data Panels; use the Edit Mode button instead.
 
 ### 🐛 Fixed
 
