@@ -4,7 +4,6 @@ local addonName, addon = ...
 -- Cache globals for performance
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local IsAltKeyDown = IsAltKeyDown
 local print = print
 local C_Item_GetItemCount = C_Item.GetItemCount
 local LFDQueueFrame_SetType = LFDQueueFrame_SetType
@@ -103,7 +102,7 @@ local function ensureAnchor()
 	anchor:EnableMouse(false)
 	anchor:RegisterForDrag("LeftButton")
 	anchor:SetScript("OnDragStart", function(self)
-		if editModeActive or IsAltKeyDown() then self:StartMoving() end
+		if editModeActive then self:StartMoving() end
 	end)
 	anchor:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
@@ -214,19 +213,6 @@ local function createLeaveFrame()
 		if editModeActive then return end
 		C_PartyInfo.LeaveParty()
 	end)
-	brButton:RegisterForDrag("LeftButton")
-	brButton:SetScript("OnDragStart", function()
-		if editModeActive or not IsAltKeyDown() then return end
-		local parent = ensureAnchor()
-		parent:StartMoving()
-	end)
-	brButton:SetScript("OnDragStop", function()
-		local parent = ensureAnchor()
-		parent:StopMovingOrSizing()
-		local point, _, _, xOfs, yOfs = parent:GetPoint()
-		addon.db["mageFoodReminderPos"] = { point = point, x = xOfs, y = yOfs }
-		syncEditModePosition()
-	end)
 
 	brButton.info = brButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 	brButton.info:SetPoint("TOP", brButton, "BOTTOM", 0, -3)
@@ -281,19 +267,6 @@ local function createBRFrame()
 				return
 			end
 		end
-	end)
-	brButton:RegisterForDrag("LeftButton")
-	brButton:SetScript("OnDragStart", function()
-		if editModeActive or not IsAltKeyDown() then return end
-		local parent = ensureAnchor()
-		parent:StartMoving()
-	end)
-	brButton:SetScript("OnDragStop", function()
-		local parent = ensureAnchor()
-		parent:StopMovingOrSizing()
-		local point, _, _, xOfs, yOfs = parent:GetPoint()
-		addon.db["mageFoodReminderPos"] = { point = point, x = xOfs, y = yOfs }
-		syncEditModePosition()
 	end)
 
 	brButton.info = brButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
