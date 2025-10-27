@@ -23,6 +23,37 @@ local loadedResults = {}
 
 -- No AH sharding/browse in this tool
 
+local function ensureProfilerDefaults()
+	if not addon or not addon.functions or not addon.functions.InitDBValue then return end
+	if not addon.db then return end
+	addon.functions.InitDBValue("queryAddonProfilerEnabled", false)
+	addon.functions.InitDBValue("queryAddonProfilerDelay", 5)
+end
+
+local function sanitizeProfilerDelay(value)
+	value = tonumber(value) or 0
+	if value < 0 then value = 0 end
+	if value > 600 then value = 600 end
+	return math.floor(value + 0.5)
+end
+
+local function formatProfilerDelayLabel(value)
+	local secs = sanitizeProfilerDelay(value)
+	if secs == 1 then return "Delay before running reset: 1s" end
+	return string.format("Delay before running reset: %ds", secs)
+end
+
+local function scheduleProfilerReset()
+	ensureProfilerDefaults()
+	if not addon.db or not addon.db.queryAddonProfilerEnabled then return end
+	local delay = sanitizeProfilerDelay(addon.db.queryAddonProfilerDelay)
+	C_Timer.After(delay, function()
+		if type(SlashCmdList) ~= "table" then return end
+		local handler = SlashCmdList["NUMY_ADDON_PROFILER"]
+		if type(handler) == "function" then handler("reset") end
+	end)
+end
+
 local function setMode(mode)
 	currentMode = mode
 	local titleSuffix = (mode == "drink" and "Drinks") or (mode == "potion" and "Mana Potions") or "Auto"
@@ -125,9 +156,7 @@ local function trim(str)
 end
 
 local function getCollectionType(enumKey, legacyKey)
-	if Enum and Enum.TransmogCollectionType and Enum.TransmogCollectionType[enumKey] then
-		return Enum.TransmogCollectionType[enumKey]
-	end
+	if Enum and Enum.TransmogCollectionType and Enum.TransmogCollectionType[enumKey] then return Enum.TransmogCollectionType[enumKey] end
 	if legacyKey then
 		local const = _G["LE_TRANSMOG_COLLECTION_TYPE_" .. legacyKey]
 		if const then return const end
@@ -324,9 +353,7 @@ local function runTransmogSetSearch(rawQuery)
 					local extra = C_TransmogSets.GetSetInfo(setInfo.setID)
 					name = extra and extra.name
 				end
-				if name and name:lower():find(lowerQuery, 1, true) then
-					table.insert(outputLines, string.format("[%d] %s", setInfo.setID, name))
-				end
+				if name and name:lower():find(lowerQuery, 1, true) then table.insert(outputLines, string.format("[%d] %s", setInfo.setID, name)) end
 			end
 			if #outputLines == 0 then outputLines = { string.format('Keine Ergebnisse für "%s".', query) } end
 		end
@@ -443,6 +470,7 @@ local function BuildAceWindow()
 	tree:SetTree({
 		{ value = "generator", text = "Generator" },
 		{ value = "inspector", text = "GetItemInfo" },
+		{ value = "profiler", text = "Addon profiler" },
 		{ value = "transmog", text = "Transmog Sets" },
 		{ value = "transmogId", text = "Transmog IDs" },
 		{ value = "transmogWeapon", text = "Transmog Waffen" },
@@ -565,6 +593,60 @@ local function BuildAceWindow()
 		outer:AddChild(follow)
 	end
 
+	local function buildAddonProfiler(container)
+		addon.Query.ui.activeGroup = "profiler"
+		container:ReleaseChildren()
+		ensureProfilerDefaults()
+
+		local outer = AceGUI:Create("SimpleGroup")
+		outer:SetFullWidth(true)
+		outer:SetFullHeight(true)
+		outer:SetLayout("List")
+		container:AddChild(outer)
+
+		local intro = AceGUI:Create("Label")
+		intro:SetFullWidth(true)
+		intro:SetText("Automatically reset NUMY Addon Profiler shortly after logging in.")
+		outer:AddChild(intro)
+
+		local statusText = "Slash command not found: NUMY_ADDON_PROFILER"
+		if type(SlashCmdList) == "table" and type(SlashCmdList["NUMY_ADDON_PROFILER"]) == "function" then statusText = "Slash command detected: NUMY_ADDON_PROFILER" end
+		local status = AceGUI:Create("Label")
+		status:SetFullWidth(true)
+		status:SetText(statusText)
+		outer:AddChild(status)
+
+		local delaySlider
+		local checkbox = AceGUI:Create("CheckBox")
+		checkbox:SetLabel("Reset profiler after login")
+		checkbox:SetValue((addon.db and addon.db.queryAddonProfilerEnabled) or false)
+		checkbox:SetCallback("OnValueChanged", function(_, _, v)
+			local enabled = v and true or false
+			addon.db.queryAddonProfilerEnabled = enabled
+			if delaySlider then delaySlider:SetDisabled(not enabled) end
+		end)
+		outer:AddChild(checkbox)
+
+		delaySlider = AceGUI:Create("Slider")
+		delaySlider:SetFullWidth(true)
+		delaySlider:SetSliderValues(0, 600, 1)
+		local delay = sanitizeProfilerDelay(addon.db and addon.db.queryAddonProfilerDelay)
+		delaySlider:SetValue(delay)
+		delaySlider:SetLabel(formatProfilerDelayLabel(delay))
+		delaySlider:SetCallback("OnValueChanged", function(widget, _, value)
+			local cleaned = sanitizeProfilerDelay(value)
+			addon.db.queryAddonProfilerDelay = cleaned
+			widget:SetLabel(formatProfilerDelayLabel(cleaned))
+		end)
+		delaySlider:SetDisabled(not (addon.db and addon.db.queryAddonProfilerEnabled))
+		outer:AddChild(delaySlider)
+
+		local note = AceGUI:Create("Label")
+		note:SetFullWidth(true)
+		note:SetText("Runs SlashCmdList['NUMY_ADDON_PROFILER'](\"reset\") after the selected delay once you enter the world.")
+		outer:AddChild(note)
+	end
+
 	local function buildTransmog(container)
 		addon.Query.ui.activeGroup = "transmog"
 		container:ReleaseChildren()
@@ -594,9 +676,7 @@ local function BuildAceWindow()
 		local searchBtn = AceGUI:Create("Button")
 		searchBtn:SetText("Suchen")
 		searchBtn:SetWidth(120)
-		searchBtn:SetCallback("OnClick", function()
-			runTransmogSetSearch(input:GetText())
-		end)
+		searchBtn:SetCallback("OnClick", function() runTransmogSetSearch(input:GetText()) end)
 		outer:AddChild(searchBtn)
 
 		local output = AceGUI:Create("MultiLineEditBox")
@@ -637,9 +717,7 @@ local function BuildAceWindow()
 		local searchBtn = AceGUI:Create("Button")
 		searchBtn:SetText("Infos abrufen")
 		searchBtn:SetWidth(140)
-		searchBtn:SetCallback("OnClick", function()
-			runTransmogSetLookup(input:GetText())
-		end)
+		searchBtn:SetCallback("OnClick", function() runTransmogSetLookup(input:GetText()) end)
 		outer:AddChild(searchBtn)
 
 		local output = AceGUI:Create("MultiLineEditBox")
@@ -710,9 +788,7 @@ local function BuildAceWindow()
 		searchBtn:SetText("Suchen")
 		searchBtn:SetWidth(120)
 		searchBtn:SetDisabled(not next(availableOptions))
-		searchBtn:SetCallback("OnClick", function()
-			runTransmogWeaponSearch(input:GetText(), dropdown:GetValue())
-		end)
+		searchBtn:SetCallback("OnClick", function() runTransmogWeaponSearch(input:GetText(), dropdown:GetValue()) end)
 		outer:AddChild(searchBtn)
 
 		local output = AceGUI:Create("MultiLineEditBox")
@@ -731,6 +807,8 @@ local function BuildAceWindow()
 			buildGenerator(tree)
 		elseif group == "inspector" then
 			buildInspector(tree)
+		elseif group == "profiler" then
+			buildAddonProfiler(tree)
 		elseif group == "transmog" then
 			buildTransmog(tree)
 		elseif group == "transmogId" then
@@ -771,11 +849,14 @@ local function onEvent(self, event, ...)
 	if event == "ADDON_LOADED" then
 		-- Ensure slash command is registered as soon as the addon loads
 		onAddonLoaded(event, ...)
+		ensureProfilerDefaults()
 		seedKnownItems()
 	elseif event == "PLAYER_LOGIN" then
 		-- Fallback: also register slash on login and seed known items
 		onAddonLoaded(event, "EnhanceQoLQuery")
+		ensureProfilerDefaults()
 		seedKnownItems()
+		scheduleProfilerReset()
 	elseif event == "ITEM_PUSH" and (addon.Query.ui and addon.Query.ui.window and addon.Query.ui.window.frame and addon.Query.ui.window.frame:IsShown()) then
 		onItemPush(...)
 		-- No AH scan handlers
