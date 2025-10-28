@@ -60,6 +60,7 @@ Submodules\ChatIcons.lua
 Submodules\Ignore\Ignore.lua
 Submodules\Ignore\Ignore.xml
 Submodules\InstanceDifficulty.lua
+Submodules\DungeonJournalLootSpec.lua
 Submodules\Merchant.lua
 Submodules\HealthText.lua
 Submodules\Mailbox.lua
