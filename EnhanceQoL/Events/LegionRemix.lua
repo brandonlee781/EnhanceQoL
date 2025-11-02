@@ -270,6 +270,12 @@ end
 local BRONZE_CURRENCY_ID = 3252
 local WORLD_TIER_WIDGET_CONTAINER = "UIWidgetBelowMinimapContainerFrame"
 local WORLD_TIER_WIDGET_ID = 7190
+local WORLD_TIER_ANCHOR_DEFAULT_WIDTH = 96
+local WORLD_TIER_ANCHOR_DEFAULT_HEIGHT = 64
+local WORLD_TIER_ANCHOR_MIN_WIDTH = 40
+local WORLD_TIER_ANCHOR_MIN_HEIGHT = 32
+local WORLD_TIER_ANCHOR_MAX_WIDTH = 120
+local WORLD_TIER_ANCHOR_MAX_HEIGHT = 96
 
 local function getWorldTierContainer() return _G[WORLD_TIER_WIDGET_CONTAINER] end
 
@@ -1002,6 +1008,13 @@ local function formatBronze(value)
 	return BreakUpLargeNumbers(math.floor(value + 0.5))
 end
 
+local function clamp(value, minValue, maxValue)
+	if value == nil then return minValue end
+	if minValue and value < minValue then value = minValue end
+	if maxValue and value > maxValue then value = maxValue end
+	return value
+end
+
 local function getProfile()
 	if not addon or not addon.db then return nil end
 	addon.db.legionRemix = deepMerge(addon.db.legionRemix, DEFAULTS)
@@ -1162,6 +1175,17 @@ function LegionRemix:EnsureWorldTierDefaults(db)
 		db.worldTierIcon = settings
 	end
 	if type(settings.anchor) ~= "table" then settings.anchor = {} end
+	local anchor = settings.anchor
+	if type(anchor.baseWidth) ~= "number" or anchor.baseWidth <= 0 then
+		local width = anchor.width or WORLD_TIER_ANCHOR_DEFAULT_WIDTH
+		anchor.baseWidth = clamp(width, WORLD_TIER_ANCHOR_MIN_WIDTH, WORLD_TIER_ANCHOR_MAX_WIDTH)
+	end
+	if type(anchor.baseHeight) ~= "number" or anchor.baseHeight <= 0 then
+		local height = anchor.height or WORLD_TIER_ANCHOR_DEFAULT_HEIGHT
+		anchor.baseHeight = clamp(height, WORLD_TIER_ANCHOR_MIN_HEIGHT, WORLD_TIER_ANCHOR_MAX_HEIGHT)
+	end
+	anchor.width = clamp(anchor.width or anchor.baseWidth, WORLD_TIER_ANCHOR_MIN_WIDTH, WORLD_TIER_ANCHOR_MAX_WIDTH)
+	anchor.height = clamp(anchor.height or anchor.baseHeight, WORLD_TIER_ANCHOR_MIN_HEIGHT, WORLD_TIER_ANCHOR_MAX_HEIGHT)
 	if settings.scale == nil then settings.scale = 1 end
 	if settings.hidden == nil then settings.hidden = false end
 	if settings.editEnabled == nil then settings.editEnabled = false end
@@ -3046,18 +3070,22 @@ function LegionRemix:IsWorldTierHidden()
 	return settings and settings.hidden and true or false
 end
 
-function LegionRemix:ShouldSuppressWorldTierIcon()
-	return self:IsWorldTierHidden()
-end
+function LegionRemix:ShouldSuppressWorldTierIcon() return self:IsWorldTierHidden() end
 
 function LegionRemix:SetWorldTierHidden(value)
 	local settings = self:GetWorldTierSettings()
 	if not settings then return end
 	local hidden = value and true or false
 	if settings.hidden == hidden then return end
+	if self.settingWorldTierHidden then
+		settings.hidden = hidden
+		return
+	end
+	self.settingWorldTierHidden = true
 	settings.hidden = hidden
-	self:SyncWorldTierEditModeState()
 	self:ApplyWorldTierIconVisibility()
+	self:SyncWorldTierEditModeState()
+	self.settingWorldTierHidden = nil
 end
 
 function LegionRemix:GetWorldTierScale()
@@ -3076,6 +3104,7 @@ function LegionRemix:SetWorldTierScale(value)
 	if settings.scale == scale then return end
 	settings.scale = scale
 	self:ApplyWorldTierScale()
+	self:ApplyWorldTierAnchorPosition()
 	self:SyncWorldTierEditModeState()
 end
 
@@ -3106,7 +3135,7 @@ end
 function LegionRemix:GetWorldTierAnchorFrame()
 	if self.worldTierAnchor and self.worldTierAnchor:IsObjectType("Frame") then return self.worldTierAnchor end
 	local frame = CreateFrame("Frame", "EnhanceQoL_LegionRemixWorldTierAnchor", UIParent, "BackdropTemplate")
-	frame:SetSize(48, 48)
+	frame:SetSize(WORLD_TIER_ANCHOR_DEFAULT_WIDTH, WORLD_TIER_ANCHOR_DEFAULT_HEIGHT)
 	frame:SetFrameStrata("LOW")
 	frame:SetClampedToScreen(true)
 	frame:SetBackdrop({
@@ -3167,14 +3196,18 @@ function LegionRemix:EnsureWorldTierAnchorDefaults(container)
 	local anchor = settings.anchor
 	local frame = container or getWorldTierWidgetFrame()
 	if not frame then return end
+	local frameWidth = clamp(frame:GetWidth() or WORLD_TIER_ANCHOR_DEFAULT_WIDTH, WORLD_TIER_ANCHOR_MIN_WIDTH, WORLD_TIER_ANCHOR_MAX_WIDTH)
+	local frameHeight = clamp(frame:GetHeight() or WORLD_TIER_ANCHOR_DEFAULT_HEIGHT, WORLD_TIER_ANCHOR_MIN_HEIGHT, WORLD_TIER_ANCHOR_MAX_HEIGHT)
+	anchor.baseWidth = anchor.baseWidth or frameWidth
+	anchor.baseHeight = anchor.baseHeight or frameHeight
+	anchor.width = anchor.width or anchor.baseWidth
+	anchor.height = anchor.height or anchor.baseHeight
 	if not anchor.initialized then
 		anchor.point = "CENTER"
 		anchor.relativePoint = "CENTER"
 		anchor.x = 0
 		anchor.y = 0
 		anchor.relativeTo = "UIParent"
-		anchor.width = anchor.width or frame:GetWidth() or 80
-		anchor.height = anchor.height or frame:GetHeight() or 48
 		anchor.initialized = true
 		return
 	end
@@ -3192,9 +3225,7 @@ function LegionRemix:EnsureWorldTierAnchorDefaults(container)
 		anchor.x = x or 0
 		anchor.y = y or 0
 	end
-	anchor.relativeTo = "UIParent"
-	anchor.width = anchor.width or frame:GetWidth() or 80
-	anchor.height = anchor.height or frame:GetHeight() or 48
+	anchor.relativeTo = anchor.relativeTo or "UIParent"
 	anchor.initialized = true
 end
 
@@ -3207,10 +3238,16 @@ function LegionRemix:ApplyWorldTierAnchorPosition()
 	local relativePoint = anchor.relativePoint or point
 	local x = anchor.x or 0
 	local y = anchor.y or 0
-	local width = anchor.width or anchorFrame:GetWidth() or 80
-	local height = anchor.height or anchorFrame:GetHeight() or 48
-	if width <= 0 then width = 80 end
-	if height <= 0 then height = 48 end
+	local baseWidth = anchor.baseWidth or anchor.width or WORLD_TIER_ANCHOR_DEFAULT_WIDTH
+	local baseHeight = anchor.baseHeight or anchor.height or WORLD_TIER_ANCHOR_DEFAULT_HEIGHT
+	local scale = self:GetWorldTierScale()
+	if scale <= 0 then scale = 1 end
+	local width = clamp(baseWidth * scale, WORLD_TIER_ANCHOR_MIN_WIDTH, WORLD_TIER_ANCHOR_MAX_WIDTH * scale)
+	local height = clamp(baseHeight * scale, WORLD_TIER_ANCHOR_MIN_HEIGHT, WORLD_TIER_ANCHOR_MAX_HEIGHT * scale)
+	anchor.baseWidth = baseWidth
+	anchor.baseHeight = baseHeight
+	anchor.width = baseWidth
+	anchor.height = baseHeight
 	anchorFrame:SetParent(UIParent)
 	anchorFrame:ClearAllPoints()
 	anchorFrame:SetPoint(point, UIParent, relativePoint, x, y)
@@ -3225,7 +3262,6 @@ function LegionRemix:ApplyWorldTierAnchorToWidget()
 	frame:SetParent(anchorFrame)
 	frame:ClearAllPoints()
 	frame:SetPoint("CENTER", anchorFrame, "CENTER", 0, 0)
-	-- frame:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMRIGHT", 0, 0)
 end
 
 function LegionRemix:SaveWorldTierAnchor(frame)
@@ -3250,8 +3286,16 @@ function LegionRemix:SaveWorldTierAnchor(frame)
 		anchor.y = y or 0
 	end
 	anchor.relativeTo = "UIParent"
-	anchor.width = frame:GetWidth()
-	anchor.height = frame:GetHeight()
+	local scale = self:GetWorldTierScale()
+	if not scale or scale <= 0 then scale = 1 end
+	local width = frame:GetWidth() or WORLD_TIER_ANCHOR_DEFAULT_WIDTH
+	local height = frame:GetHeight() or WORLD_TIER_ANCHOR_DEFAULT_HEIGHT
+	local baseWidth = clamp(width / scale, WORLD_TIER_ANCHOR_MIN_WIDTH, WORLD_TIER_ANCHOR_MAX_WIDTH)
+	local baseHeight = clamp(height / scale, WORLD_TIER_ANCHOR_MIN_HEIGHT, WORLD_TIER_ANCHOR_MAX_HEIGHT)
+	anchor.baseWidth = baseWidth
+	anchor.baseHeight = baseHeight
+	anchor.width = baseWidth
+	anchor.height = baseHeight
 	anchor.initialized = true
 	self:SyncWorldTierEditModeState()
 	self:SyncWorldTierEditModePosition()
@@ -3331,12 +3375,12 @@ function LegionRemix:RegisterWorldTierEditModeFrame()
 	local settings = self:GetWorldTierSettings()
 	local anchorConfig = settings and settings.anchor or {}
 	local defaults = {
-		point = anchorConfig.point or "TOPLEFT",
-		relativePoint = anchorConfig.relativePoint or anchorConfig.point or "TOPLEFT",
-		x = anchorConfig.x or 0,
-		y = anchorConfig.y or 0,
-		scale = self:GetWorldTierScale(),
-		hidden = self:IsWorldTierHidden(),
+		point = "CENTER",
+		relativePoint = "CENTER",
+		x = 0,
+		y = 0,
+		scale = 1,
+		hidden = false,
 	}
 
 	local editSettings
@@ -3418,6 +3462,7 @@ function LegionRemix:ApplyWorldTierEditModePosition(data)
 	anchor:SetPoint(point, UIParent, relativePoint, x, y)
 	self:SaveWorldTierAnchor(anchor)
 	self.applyingWorldTierEdit = nil
+	self:ApplyWorldTierAnchorPosition()
 	self:ApplyWorldTierAnchorToWidget()
 end
 
@@ -3465,9 +3510,7 @@ function LegionRemix:OnWorldTierWidgetHide()
 	self.handlingWorldTierWidget = nil
 end
 
-function LegionRemix:SetHideWorldTierIcon(value)
-	self:SetWorldTierHidden(value)
-end
+function LegionRemix:SetHideWorldTierIcon(value) self:SetWorldTierHidden(value) end
 
 function LegionRemix:IsCollapsed()
 	local db = self:GetDB()
@@ -3734,9 +3777,7 @@ function LegionRemix:BuildOptionsUI(container)
 		LegionRemix:BuildOptionsUI(container)
 	end)
 
-	addCheckbox(scroll, L["Edit World Tier icon"], function() return LegionRemix:IsWorldTierEditingEnabled() end, function(value)
-		LegionRemix:SetWorldTierEditingEnabled(value)
-	end)
+	addCheckbox(scroll, L["Edit World Tier icon"], function() return LegionRemix:IsWorldTierEditingEnabled() end, function(value) LegionRemix:SetWorldTierEditingEnabled(value) end)
 end
 
 LegionRemix.functions = LegionRemix.functions or {}
