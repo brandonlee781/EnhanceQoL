@@ -784,6 +784,17 @@ addon.variables.actionBarNames = {
 if _G.MainMenuBar then table.insert(addon.variables.actionBarNames, { name = "MainMenuBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
 if _G.MainActionBar then table.insert(addon.variables.actionBarNames, { name = "MainActionBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
 
+local petChildren
+do
+	local mana = _G.PetFrameManaBar
+	local health = _G.PetFrameHealthBar
+	if mana or health then
+		petChildren = {}
+		if mana then table.insert(petChildren, mana) end
+		if health then table.insert(petChildren, health) end
+	end
+end
+
 addon.variables.unitFrameNames = {
 	{ name = "PlayerFrame", var = "unitframeSettingPlayerFrame", text = HUD_EDIT_MODE_PLAYER_FRAME_LABEL },
 	{
@@ -793,13 +804,13 @@ addon.variables.unitFrameNames = {
 		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
 	},
 	{ name = "TargetFrame", var = "unitframeSettingTargetFrame", text = HUD_EDIT_MODE_TARGET_FRAME_LABEL },
-	{
-		name = "PetFrame",
-		var = "unitframeSettingPetFrame",
-		text = HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
-		children = { PetFrameManaBar, PetFrameHealthBar },
-		revealAllChilds = true,
-	},
+		{
+			name = "PetFrame",
+			var = "unitframeSettingPetFrame",
+			text = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+			children = petChildren or {},
+			revealAllChilds = true,
+		},
 	{
 		name = "MicroMenu",
 		var = "unitframeSettingMicroMenu",
