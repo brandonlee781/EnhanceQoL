@@ -784,9 +784,6 @@ addon.variables.actionBarNames = {
 if _G.MainMenuBar then table.insert(addon.variables.actionBarNames, { name = "MainMenuBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
 if _G.MainActionBar then table.insert(addon.variables.actionBarNames, { name = "MainActionBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
 
-local stanceChildren
-if StanceBar and StanceBar.GetChildren then stanceChildren = { StanceBar:GetChildren() } end
-
 addon.variables.unitFrameNames = {
 	{ name = "PlayerFrame", var = "unitframeSettingPlayerFrame", text = HUD_EDIT_MODE_PLAYER_FRAME_LABEL },
 	{
@@ -801,14 +798,6 @@ addon.variables.unitFrameNames = {
 		var = "unitframeSettingPetFrame",
 		text = HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
 		children = { PetFrameManaBar, PetFrameHealthBar },
-		revealAllChilds = true,
-	},
-	{
-		name = "StanceBar",
-		var = "unitframeSettingStanceBar",
-		text = HUD_EDIT_MODE_STANCE_BAR_LABEL,
-		disableSetting = { "mouseoverActionBarStanceBar" },
-		children = stanceChildren or {},
 		revealAllChilds = true,
 	},
 	{
