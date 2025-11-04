@@ -39,6 +39,9 @@
 ### Action Bars & Mouse
 - **Mouseover action bars** – show each bar only on mouseover.
 - **Full button range coloring** – tint the entire action button when out of range.
+- **Customize button labels** – choose individual fonts, sizes, and outlines for macro names and keybind text.
+- **Shorten keybind text** – display compact abbreviations such as **SM3** for **Shift + Mouse Button 3**.
+- **Hide keybinds per bar** – toggle keybind visibility independently for every action bar.
 
 ### Unit Frames
 - **Hide floating combat text over your character.**
@@ -244,4 +247,3 @@ Expose console variables as checkboxes:
 - **Ignore Heroic-track items.**
 - **Ignore Mythic-track items.**
 - **Select crafting expansions for vendoring.**
-

@@ -57,6 +57,8 @@ English • German • French • Spanish • Italian • Russian • Korean •
 *   Mouse-over action bars.
 *   **Full button range coloring** – tint entire action button when out of range.
 *   Visible cursor ring and trail, with options to hide the dot or adjust visuals.
+*   Customize macro/keybind fonts, outlines, and sizes independently.
+*   Hide or shorten keybind text per bar (e.g., show `SM3` for Shift + Mouse Button 3).
 
 ### Unit Frames
 
@@ -149,4 +151,3 @@ English • German • French • Spanish • Italian • Russian • Korean •
 Enhance QoL is community-driven: players suggest ideas and features are implemented quickly. The goal is not to replace major addons but to fill the small gaps Blizzard leaves behind, while staying efficient and unobtrusive.
 
 Play your way – let *Enhance QoL* take care of the little things so you can focus on the fun parts of Azeroth.
-

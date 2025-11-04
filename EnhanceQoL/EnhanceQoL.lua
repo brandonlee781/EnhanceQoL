@@ -29,6 +29,8 @@ addon.AceGUI = AceGUI
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL")
 
 addon.functions = addon.functions or {}
+addon.ActionBarLabels = addon.ActionBarLabels or {}
+local ActionBarLabels = addon.ActionBarLabels
 
 local OPTIONS_FRAME_MIN_SCALE = 0.5
 local OPTIONS_FRAME_MAX_SCALE = 2
@@ -917,87 +919,6 @@ local function EnsureActionBarVisibilityWatcher()
 	watcher:SetScript("OnEvent", RefreshAllActionBarVisibilityAlpha)
 	addon.variables.actionBarVisibilityWatcher = watcher
 end
-
--- Enhance QoL: Full button range coloring (taint-safe)
-local function EnsureOverlay(btn)
-	if btn.EQOL_RangeOverlay then return btn.EQOL_RangeOverlay end
-	local tex = btn:CreateTexture(nil, "OVERLAY", nil, 7)
-	tex:SetAllPoints(btn.icon or btn.Icon or btn)
-	tex:Hide()
-	btn.EQOL_RangeOverlay = tex
-	return tex
-end
-
-local function ShowRangeOverlay(btn, show)
-	local ov = EnsureOverlay(btn)
-	if show and addon.db and addon.db.actionBarFullRangeColoring then
-		local col = addon.db.actionBarFullRangeColor or { r = 1, g = 0.1, b = 0.1 }
-		local alpha = addon.db.actionBarFullRangeAlpha or 0.35
-		ov:SetColorTexture(col.r, col.g, col.b, alpha)
-		ov:Show()
-	else
-		ov:Hide()
-	end
-end
-
-local function RefreshAllRangeOverlays()
-	for _, info in ipairs(addon.variables.actionBarNames or {}) do
-		local prefix
-		if info.name == "MainMenuBar" or info.name == "MainActionBar" then
-			prefix = "ActionButton"
-		elseif info.name == "PetActionBar" then
-			prefix = "PetActionButton"
-		elseif info.name == "StanceBar" then
-			prefix = "StanceButton"
-		else
-			prefix = info.name .. "Button"
-		end
-		for i = 1, 12 do
-			local button = _G[prefix .. i]
-			if button then ActionButton_UpdateRangeIndicator(button) end
-		end
-	end
-end
-
-local function UpdateMacroNameVisibility(button, hide)
-	if not button or not button.GetName then return end
-
-	local nameFrame = button.Name or _G[button:GetName() .. "Name"]
-	if not nameFrame then return end
-
-	if hide then
-		if not nameFrame.EQOL_IsHiddenByEQOL then
-			nameFrame.EQOL_OriginalAlpha = nameFrame:GetAlpha()
-			nameFrame:SetAlpha(0)
-			nameFrame.EQOL_IsHiddenByEQOL = true
-		end
-	elseif nameFrame.EQOL_IsHiddenByEQOL then
-		nameFrame:SetAlpha(nameFrame.EQOL_OriginalAlpha or 1)
-		nameFrame.EQOL_IsHiddenByEQOL = nil
-	end
-end
-
-local function RefreshAllMacroNameVisibility()
-	local hide = addon.db and addon.db.hideMacroNames
-	for _, info in ipairs(addon.variables.actionBarNames or {}) do
-		if info.name ~= "PetActionBar" and info.name ~= "StanceBar" then
-			local prefix = (info.name == "MainMenuBar" or info.name == "MainActionBar") and "ActionButton" or (info.name .. "Button")
-			for i = 1, 12 do
-				local button = _G[prefix .. i]
-				if button then UpdateMacroNameVisibility(button, hide) end
-			end
-		end
-	end
-end
-
-hooksecurefunc("ActionButton_UpdateRangeIndicator", function(self, checksRange, inRange)
-	if not self or not self.action then return end
-	if checksRange and inRange == false then
-		ShowRangeOverlay(self, true)
-	else
-		ShowRangeOverlay(self, false)
-	end
-end)
 
 local doneHook = false
 local inspectDone = {}
@@ -2953,15 +2874,8 @@ local function addActionBarFrame(container, d)
 		visibilityGroup:AddChild(dropdown)
 	end
 
-	local cbHideMacroNames = addon.functions.createCheckboxAce(L["hideMacroNames"], addon.db["hideMacroNames"], function(_, _, value)
-		addon.db["hideMacroNames"] = value
-		RefreshAllMacroNameVisibility()
-	end, L["hideMacroNamesDesc"])
-	groupCore:AddChild(cbHideMacroNames)
-
-	groupCore:AddChild(addon.functions.createSpacerAce())
-
-	local anchorGroup
+	local anchorSection
+	local anchorDropdownContainer
 	local anchorOptions = {
 		TOPLEFT = L["topLeft"] or "Top Left",
 		TOPRIGHT = L["topRight"] or "Top Right",
@@ -2970,9 +2884,9 @@ local function addActionBarFrame(container, d)
 	}
 
 	local function rebuildAnchorDropdowns()
-		if not anchorGroup then return end
-		anchorGroup:ReleaseChildren()
-		if anchorGroup.SetLayout then anchorGroup:SetLayout("Flow") end
+		if not anchorDropdownContainer then return end
+		anchorDropdownContainer:ReleaseChildren()
+		anchorDropdownContainer:SetLayout("Flow")
 		for index = 1, #ACTION_BAR_FRAME_NAMES do
 			local label = L["actionBarAnchorDropdown"] and string.format(L["actionBarAnchorDropdown"], index) or string.format("Action Bar %d button anchor", index)
 			local dropdown = addon.functions.createDropdownAce(label, anchorOptions, ACTION_BAR_ANCHOR_ORDER, function(_, _, key)
@@ -2986,27 +2900,199 @@ local function addActionBarFrame(container, d)
 			if currentValue then dropdown:SetValue(currentValue) end
 			dropdown:SetDisabled(not addon.db["actionBarAnchorEnabled"])
 			if dropdown.SetRelativeWidth then dropdown:SetRelativeWidth(0.5) end
-			anchorGroup:AddChild(dropdown)
+			anchorDropdownContainer:AddChild(dropdown)
 		end
-		anchorGroup:DoLayout()
-		groupCore:DoLayout()
+		if anchorDropdownContainer.DoLayout then anchorDropdownContainer:DoLayout() end
+		if anchorSection and anchorSection.DoLayout then anchorSection:DoLayout() end
 		if wrapper and wrapper.DoLayout then wrapper:DoLayout() end
 		if scroll and scroll.DoLayout then scroll:DoLayout() end
 	end
+
+	anchorSection = addon.functions.createContainer("InlineGroup", "List")
+	anchorSection:SetTitle(L["actionBarAnchorSectionTitle"] or "Button growth")
+	anchorSection:SetFullWidth(true)
+	groupCore:AddChild(anchorSection)
 
 	local anchorToggle = addon.functions.createCheckboxAce(L["actionBarAnchorEnable"] or "Modify Action Bar anchor", addon.db["actionBarAnchorEnabled"] == true, function(_, _, value)
 		addon.db["actionBarAnchorEnabled"] = value and true or false
 		RefreshAllActionBarAnchors()
 		rebuildAnchorDropdowns()
 	end, L["actionBarAnchorEnableDesc"])
-	groupCore:AddChild(anchorToggle)
+	anchorSection:AddChild(anchorToggle)
 
-	anchorGroup = addon.functions.createContainer("InlineGroup", "Flow")
-	anchorGroup:SetTitle(L["actionBarAnchorSectionTitle"] or "Button growth")
-	anchorGroup:SetFullWidth(true)
-	groupCore:AddChild(anchorGroup)
+	anchorDropdownContainer = addon.functions.createContainer("SimpleGroup", "Flow")
+	anchorDropdownContainer:SetFullWidth(true)
+	anchorSection:AddChild(anchorDropdownContainer)
 
 	rebuildAnchorDropdowns()
+
+	groupCore:AddChild(addon.functions.createSpacerAce())
+
+	local LSM = LibStub("LibSharedMedia-3.0", true)
+	local function buildFontDropdownData()
+		local map = {
+			[addon.variables.defaultFont] = L["actionBarFontDefault"] or "Blizzard Font",
+		}
+		if LSM and LSM.HashTable then
+			for name, path in pairs(LSM:HashTable("font") or {}) do
+				if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
+			end
+		end
+		return addon.functions.prepareListForDropdown(map)
+	end
+
+	local outlineMap = {
+		NONE = L["None"] or NONE,
+		OUTLINE = L["Outline"] or "Outline",
+		THICKOUTLINE = L["Thick Outline"] or "Thick Outline",
+		MONOCHROMEOUTLINE = L["Monochrome Outline"] or "Monochrome Outline",
+	}
+	local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
+
+	local labelGroup = addon.functions.createContainer("InlineGroup", "List")
+	labelGroup:SetTitle(L["actionBarLabelGroupTitle"] or "Button text")
+	labelGroup:SetFullWidth(true)
+	groupCore:AddChild(labelGroup)
+
+	local fontList, fontOrder = buildFontDropdownData()
+	local macroControls, hotkeyControls = {}, {}
+	local cbHideMacroNames, macroOverrideCheckbox, hotkeyOverrideCheckbox
+
+	local function updateLabelControlStates()
+		local hideMacros = addon.db["hideMacroNames"] == true
+		local macroOverrideEnabled = addon.db.actionBarMacroFontOverride == true and not hideMacros
+		local hotkeyOverrideEnabled = addon.db.actionBarHotkeyFontOverride == true
+
+		if macroOverrideCheckbox then macroOverrideCheckbox:SetDisabled(hideMacros) end
+		for _, widget in ipairs(macroControls) do
+			if widget and widget.SetDisabled then widget:SetDisabled(not macroOverrideEnabled) end
+		end
+		for _, widget in ipairs(hotkeyControls) do
+			if widget and widget.SetDisabled then widget:SetDisabled(not hotkeyOverrideEnabled) end
+		end
+	end
+
+	cbHideMacroNames = addon.functions.createCheckboxAce(L["hideMacroNames"], addon.db["hideMacroNames"], function(_, _, value)
+		addon.db["hideMacroNames"] = value
+		updateLabelControlStates()
+		if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+	end, L["hideMacroNamesDesc"])
+	labelGroup:AddChild(cbHideMacroNames)
+
+	macroOverrideCheckbox = addon.functions.createCheckboxAce(L["actionBarMacroFontOverride"] or "Change macro font", addon.db.actionBarMacroFontOverride == true, function(_, _, value)
+		addon.db.actionBarMacroFontOverride = value and true or false
+		updateLabelControlStates()
+		if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+	end)
+	labelGroup:AddChild(macroOverrideCheckbox)
+
+	local macroFontRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	macroFontRow:SetFullWidth(true)
+	local macroFont = addon.functions.createDropdownAce(L["actionBarMacroFontLabel"] or "Macro name font", fontList, fontOrder, function(_, _, key)
+		addon.db.actionBarMacroFontFace = key
+		if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+	end)
+	local macroFaceValue = addon.db.actionBarMacroFontFace or addon.variables.defaultFont
+	if not fontList[macroFaceValue] then macroFaceValue = addon.variables.defaultFont end
+	macroFont:SetValue(macroFaceValue)
+	macroFont:SetFullWidth(false)
+	macroFont:SetRelativeWidth(0.6)
+	macroFontRow:AddChild(macroFont)
+	table.insert(macroControls, macroFont)
+
+	local macroOutline = addon.functions.createDropdownAce(L["actionBarFontOutlineLabel"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
+		addon.db.actionBarMacroFontOutline = key
+		if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+	end)
+	macroOutline:SetValue(addon.db.actionBarMacroFontOutline or "OUTLINE")
+	macroOutline:SetFullWidth(false)
+	macroOutline:SetRelativeWidth(0.4)
+	macroFontRow:AddChild(macroOutline)
+	table.insert(macroControls, macroOutline)
+	labelGroup:AddChild(macroFontRow)
+
+	local macroSizeValue = math.floor((addon.db.actionBarMacroFontSize or 12) + 0.5)
+	local macroSizeLabel = (L["actionBarMacroFontSize"] or "Macro font size") .. ": " .. macroSizeValue
+	local macroSizeSlider = addon.functions.createSliderAce(macroSizeLabel, macroSizeValue, 8, 24, 1, function(self, _, val)
+		local value = math.floor(val + 0.5)
+		addon.db.actionBarMacroFontSize = value
+		self:SetLabel((L["actionBarMacroFontSize"] or "Macro font size") .. ": " .. value)
+		if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+	end)
+	table.insert(macroControls, macroSizeSlider)
+	labelGroup:AddChild(macroSizeSlider)
+
+	hotkeyOverrideCheckbox = addon.functions.createCheckboxAce(L["actionBarHotkeyFontOverride"] or "Change keybind font", addon.db.actionBarHotkeyFontOverride == true, function(_, _, value)
+		addon.db.actionBarHotkeyFontOverride = value and true or false
+		updateLabelControlStates()
+		if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	end)
+	labelGroup:AddChild(hotkeyOverrideCheckbox)
+
+	local hotkeyFontRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	hotkeyFontRow:SetFullWidth(true)
+	local hotkeyFont = addon.functions.createDropdownAce(L["actionBarHotkeyFontLabel"] or "Keybind font", fontList, fontOrder, function(_, _, key)
+		addon.db.actionBarHotkeyFontFace = key
+		if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	end)
+	local hotkeyFaceValue = addon.db.actionBarHotkeyFontFace or addon.variables.defaultFont
+	if not fontList[hotkeyFaceValue] then hotkeyFaceValue = addon.variables.defaultFont end
+	hotkeyFont:SetValue(hotkeyFaceValue)
+	hotkeyFont:SetFullWidth(false)
+	hotkeyFont:SetRelativeWidth(0.6)
+	hotkeyFontRow:AddChild(hotkeyFont)
+	table.insert(hotkeyControls, hotkeyFont)
+
+	local hotkeyOutline = addon.functions.createDropdownAce(L["actionBarFontOutlineLabel"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
+		addon.db.actionBarHotkeyFontOutline = key
+		if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	end)
+	hotkeyOutline:SetValue(addon.db.actionBarHotkeyFontOutline or "OUTLINE")
+	hotkeyOutline:SetFullWidth(false)
+	hotkeyOutline:SetRelativeWidth(0.4)
+	hotkeyFontRow:AddChild(hotkeyOutline)
+	table.insert(hotkeyControls, hotkeyOutline)
+	labelGroup:AddChild(hotkeyFontRow)
+
+	local hotkeySizeValue = math.floor((addon.db.actionBarHotkeyFontSize or 12) + 0.5)
+	local hotkeySizeLabel = (L["actionBarHotkeyFontSize"] or "Keybind font size") .. ": " .. hotkeySizeValue
+	local hotkeySizeSlider = addon.functions.createSliderAce(hotkeySizeLabel, hotkeySizeValue, 8, 24, 1, function(self, _, val)
+		local value = math.floor(val + 0.5)
+		addon.db.actionBarHotkeyFontSize = value
+		self:SetLabel((L["actionBarHotkeyFontSize"] or "Keybind font size") .. ": " .. value)
+		if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	end)
+	table.insert(hotkeyControls, hotkeySizeSlider)
+	labelGroup:AddChild(hotkeySizeSlider)
+
+	updateLabelControlStates()
+
+	local shortHotkeys = addon.functions.createCheckboxAce(L["actionBarShortHotkeys"] or "Shorten keybind text", addon.db.actionBarShortHotkeys == true, function(_, _, value)
+		addon.db.actionBarShortHotkeys = value and true or false
+		if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	end, L["actionBarShortHotkeysDesc"])
+	labelGroup:AddChild(shortHotkeys)
+
+	local perBarGroup = addon.functions.createContainer("InlineGroup", "Flow")
+	perBarGroup:SetTitle(L["actionBarHideHotkeysGroup"] or "Hide keybinds per bar")
+	perBarGroup:SetFullWidth(true)
+	labelGroup:AddChild(perBarGroup)
+
+	for _, cbData in ipairs(addon.variables.actionBarNames or {}) do
+		if cbData.name then
+				local checkbox = addon.functions.createCheckboxAce(cbData.text or cbData.name, addon.db.actionBarHiddenHotkeys[cbData.name] == true, function(_, _, value)
+					if value then
+						addon.db.actionBarHiddenHotkeys[cbData.name] = true
+					else
+						addon.db.actionBarHiddenHotkeys[cbData.name] = nil
+					end
+					if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+				end, L["actionBarHideHotkeysDesc"])
+			checkbox:SetFullWidth(false)
+			if checkbox.SetRelativeWidth then checkbox:SetRelativeWidth(0.5) end
+			perBarGroup:AddChild(checkbox)
+		end
+	end
 
 	groupCore:AddChild(addon.functions.createSpacerAce())
 
@@ -3021,7 +3107,7 @@ local function addActionBarFrame(container, d)
 			colorPicker:SetColor(c.r, c.g, c.b)
 			colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
 				addon.db["actionBarFullRangeColor"] = { r = r, g = g, b = b }
-				RefreshAllRangeOverlays()
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
 			end)
 			rangeOptionsGroup:AddChild(colorPicker)
 
@@ -3029,7 +3115,7 @@ local function addActionBarFrame(container, d)
 			local sliderAlpha = addon.functions.createSliderAce(L["rangeOverlayAlpha"] .. ": " .. alphaPercent .. "%", alphaPercent, 1, 100, 1, function(self, _, val)
 				addon.db["actionBarFullRangeAlpha"] = val / 100
 				self:SetLabel(L["rangeOverlayAlpha"] .. ": " .. val .. "%")
-				RefreshAllRangeOverlays()
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
 			end)
 			rangeOptionsGroup:AddChild(sliderAlpha)
 		end
@@ -3038,7 +3124,7 @@ local function addActionBarFrame(container, d)
 
 	local cbRange = addon.functions.createCheckboxAce(L["fullButtonRangeColoring"], addon.db["actionBarFullRangeColoring"], function(_, _, value)
 		addon.db["actionBarFullRangeColoring"] = value
-		RefreshAllRangeOverlays()
+		if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
 		rebuildRangeOptions()
 	end, L["fullButtonRangeColoringDesc"])
 	groupCore:AddChild(cbRange)
@@ -6287,6 +6373,27 @@ local function initActionBars()
 	addon.functions.InitDBValue("actionBarFullRangeColor", { r = 1, g = 0.1, b = 0.1 })
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
 	addon.functions.InitDBValue("hideMacroNames", false)
+	addon.functions.InitDBValue("actionBarMacroFontOverride", false)
+	addon.functions.InitDBValue("actionBarHotkeyFontOverride", false)
+	addon.functions.InitDBValue("actionBarMacroFontFace", addon.variables.defaultFont)
+	addon.functions.InitDBValue("actionBarMacroFontSize", 12)
+	addon.functions.InitDBValue("actionBarMacroFontOutline", "OUTLINE")
+	addon.functions.InitDBValue("actionBarHotkeyFontFace", addon.variables.defaultFont)
+	addon.functions.InitDBValue("actionBarHotkeyFontSize", 12)
+	addon.functions.InitDBValue("actionBarHotkeyFontOutline", "OUTLINE")
+	addon.functions.InitDBValue("actionBarShortHotkeys", false)
+	addon.functions.InitDBValue("actionBarHiddenHotkeys", {})
+	if type(addon.db.actionBarHiddenHotkeys) ~= "table" then addon.db.actionBarHiddenHotkeys = {} end
+	local normalizeFontSize = ActionBarLabels and ActionBarLabels.NormalizeFontSize
+	local function clampFontSize(value)
+		if normalizeFontSize then return normalizeFontSize(value, 6, 32) end
+		local num = tonumber(value) or 6
+		if num < 6 then num = 6 end
+		if num > 32 then num = 32 end
+		return num
+	end
+	addon.db.actionBarMacroFontSize = clampFontSize(addon.db.actionBarMacroFontSize)
+	addon.db.actionBarHotkeyFontSize = clampFontSize(addon.db.actionBarHotkeyFontSize)
 	for _, cbData in ipairs(addon.variables.actionBarNames) do
 		if cbData.var and cbData.name then
 			local cfg = NormalizeActionBarVisibilityConfig(cbData.var, addon.db[cbData.var])
@@ -6295,7 +6402,7 @@ local function initActionBars()
 	end
 	RefreshAllActionBarVisibilityAlpha()
 	EnsureActionBarVisibilityWatcher()
-	RefreshAllMacroNameVisibility()
+	if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
 	addon.variables.actionBarAnchorDefaults = addon.variables.actionBarAnchorDefaults or {}
 	for index = 1, #ACTION_BAR_FRAME_NAMES do
 		local dbKey = "actionBarAnchor" .. index
@@ -6311,6 +6418,7 @@ local function initActionBars()
 		end
 	end
 	RefreshAllActionBarAnchors()
+	if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
 end
 
 local function initParty()

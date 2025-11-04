@@ -6,6 +6,7 @@
 
 - Hide the _release button_ and only make it usable with a modifier
   - Enable it by difficulty
+- Action Bar → new _Button text_ inline group with macro/keybind font & outline controls (opt-in via dedicated toggles), per-bar keybind visibility, and an optional keybind shortening mode (e.g., **SM3** for Shift + Mouse Button 3). Macro fonts now disable automatically when “Hide macro text” is on.
 
 ### 🐛 Fixed
 

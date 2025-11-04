@@ -46,6 +46,7 @@ General\functions.lua
 Core\EditMode.lua
 Events\LegionRemixPhaseData.lua
 Events\LegionRemix.lua
+Modules\ActionBarLabels.lua
 EnhanceQoL.lua
 Core\DataHub.lua
 Core\DataPanel.lua

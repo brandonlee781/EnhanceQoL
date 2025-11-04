@@ -44,6 +44,8 @@ English • German • French • Spanish • Italian • Russian • Korean •
 *   Mouse-over action bars.
 *   Optional full button range coloring.
 *   Customisable mouse ring and mouse trail for better cursor visibility.
+*   Choose separate fonts, sizes, and outlines for macro names and keybind text.
+*   Per-bar keybind visibility plus optional shorthand labels (e.g., `SM3` for Shift + Mouse Button 3).
 
 ### Group & Raid Tools
 

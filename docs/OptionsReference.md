@@ -49,6 +49,9 @@ Each action bar can be set to appear only on mouseover:
 - mouseoverActionBarPet (pet bar).
 - mouseoverActionBarStanceBar (stance bar).
 - **Full button range coloring** (Tint the entire action button when a spell is out of range; includes color and opacity controls).
+- **Hide macro names** (Hide the label on buttons that cast a macro).
+- **Customize button labels** (Select fonts, outlines, and sizes for macro names and keybind text independently).
+- **Shorten keybind text / Hide keybinds per bar** (Use abbreviations such as `SM3` for Shift + Mouse Button 3 and toggle keybind visibility for each bar).
 
 ## Unit Frames
 - **Hide floating combat text over your character** (Hide floating combat text (damage and healing) over your character).
