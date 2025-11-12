@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.15.1] – 2025-11-15
+
+
+### ❌ Removed
+
+- Cloak Upgrade button in inventory for midnight beta
+
+### 🐛 Fixed
+
+- Nameplate health percent/absolute fixed for midnight beta
+
+---
+
 ## [5.15.0] – 2025-11-10
 
 ### ✨ Added

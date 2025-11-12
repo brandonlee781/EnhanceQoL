@@ -298,7 +298,6 @@ local function addVendorMainFrame2(container)
 	doLayout()
 end
 
-
 local function addBagFrame(container)
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	container:AddChild(wrapper)
@@ -577,7 +576,6 @@ local function addBagFrame(container)
 	scroll:DoLayout()
 end
 
-
 local function addCharacterFrame(container)
 	local posList = {
 		TOPLEFT = L["topLeft"],
@@ -691,11 +689,14 @@ local function addCharacterFrame(container)
 	groupInfo:SetTitle(INFO)
 	wrapper:AddChild(groupInfo)
 
-	local cbCloak = addon.functions.createCheckboxAce(L["showCloakUpgradeButton"], addon.db["showCloakUpgradeButton"], function(_, _, value)
-		addon.db["showCloakUpgradeButton"] = value
-		if addon.functions.updateCloakUpgradeButton then addon.functions.updateCloakUpgradeButton() end
-	end)
-	groupInfo:AddChild(cbCloak)
+	-- TODO remove on midnight release
+	if not addon.variables.isMidnight then
+		local cbCloak = addon.functions.createCheckboxAce(L["showCloakUpgradeButton"], addon.db["showCloakUpgradeButton"], function(_, _, value)
+			addon.db["showCloakUpgradeButton"] = value
+			if addon.functions.updateCloakUpgradeButton then addon.functions.updateCloakUpgradeButton() end
+		end)
+		groupInfo:AddChild(cbCloak)
+	end
 
 	local cbInstant = addon.functions.createCheckboxAce(L["instantCatalystEnabled"], addon.db["instantCatalystEnabled"], function(_, _, value)
 		addon.db["instantCatalystEnabled"] = value
@@ -903,7 +904,6 @@ local function addMiscSubsetFrame(container, include)
 
 	scroll:DoLayout()
 end
-
 
 local function addContainerActionsFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "List")

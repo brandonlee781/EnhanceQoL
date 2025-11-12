@@ -508,13 +508,13 @@ local function UpdateFrameVisibilityContext()
 	if InCombatLockdown and InCombatLockdown() then
 		inCombat = true
 	elseif UnitAffectingCombat then
-		inCombat = UnitAffectingCombat('player') and true or false
+		inCombat = UnitAffectingCombat("player") and true or false
 	end
 	frameVisibilityContext.inCombat = inCombat
 
 	if frameVisibilityHealthEnabled then
-		local maxHP = UnitHealthMax and UnitHealthMax('player') or 0
-		local currentHP = UnitHealth and UnitHealth('player') or 0
+		local maxHP = UnitHealthMax and UnitHealthMax("player") or 0
+		local currentHP = UnitHealth and UnitHealth("player") or 0
 		frameVisibilityContext.playerHealthMissing = maxHP > 0 and currentHP < maxHP
 	else
 		frameVisibilityContext.playerHealthMissing = false
@@ -598,15 +598,15 @@ local function UpdateFrameVisibilityHealthRegistration()
 
 	if needs then
 		if watcher._eqol_healthRegistered then return end
-		SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH', 'player')
-		SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH_FREQUENT', 'player')
-		SafeRegisterUnitEvent(watcher, 'UNIT_MAXHEALTH', 'player')
+		SafeRegisterUnitEvent(watcher, "UNIT_HEALTH", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_HEALTH_FREQUENT", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_MAXHEALTH", "player")
 		watcher._eqol_healthRegistered = true
 	else
 		if not watcher._eqol_healthRegistered then return end
-		watcher:UnregisterEvent('UNIT_HEALTH')
-		watcher:UnregisterEvent('UNIT_HEALTH_FREQUENT')
-		watcher:UnregisterEvent('UNIT_MAXHEALTH')
+		watcher:UnregisterEvent("UNIT_HEALTH")
+		watcher:UnregisterEvent("UNIT_HEALTH_FREQUENT")
+		watcher:UnregisterEvent("UNIT_MAXHEALTH")
 		watcher._eqol_healthRegistered = false
 		watcher._eqol_lastHealthEvent = nil
 	end
@@ -622,11 +622,11 @@ local function EnsureFrameVisibilityWatcher()
 	addon.variables = addon.variables or {}
 	if addon.variables.frameVisibilityWatcher then return end
 
-	local watcher = CreateFrame('Frame')
-	watcher:SetScript('OnEvent', function(self, event, unit)
-		local isHealthEvent = event == 'UNIT_HEALTH' or event == 'UNIT_HEALTH_FREQUENT' or event == 'UNIT_MAXHEALTH'
+	local watcher = CreateFrame("Frame")
+	watcher:SetScript("OnEvent", function(self, event, unit)
+		local isHealthEvent = event == "UNIT_HEALTH" or event == "UNIT_HEALTH_FREQUENT" or event == "UNIT_MAXHEALTH"
 		if isHealthEvent then
-			if not frameVisibilityHealthEnabled or unit ~= 'player' then return end
+			if not frameVisibilityHealthEnabled or unit ~= "player" then return end
 			local now = GetTime()
 			local last = self._eqol_lastHealthEvent or 0
 			if (now - last) < FRAME_VISIBILITY_HEALTH_THROTTLE then return end
@@ -635,9 +635,9 @@ local function EnsureFrameVisibilityWatcher()
 		UpdateFrameVisibilityContext()
 		RefreshAllFrameVisibilities()
 	end)
-	watcher:RegisterEvent('PLAYER_ENTERING_WORLD')
-	watcher:RegisterEvent('PLAYER_REGEN_DISABLED')
-	watcher:RegisterEvent('PLAYER_REGEN_ENABLED')
+	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 	addon.variables.frameVisibilityWatcher = watcher
 	UpdateFrameVisibilityContext()
 	UpdateFrameVisibilityHealthRegistration()
@@ -747,28 +747,28 @@ local function HookFrameForMouseover(frame, cbData)
 		genericHoverOutCheck(state)
 	end
 
-	if frame.OnEnter or frame:GetScript('OnEnter') then
-		frame:HookScript('OnEnter', handleEnter)
+	if frame.OnEnter or frame:GetScript("OnEnter") then
+		frame:HookScript("OnEnter", handleEnter)
 	else
-		frame:SetScript('OnEnter', handleEnter)
+		frame:SetScript("OnEnter", handleEnter)
 	end
 
-	if frame.OnLeave or frame:GetScript('OnLeave') then
-		frame:HookScript('OnLeave', handleLeave)
+	if frame.OnLeave or frame:GetScript("OnLeave") then
+		frame:HookScript("OnLeave", handleLeave)
 	else
-		frame:SetScript('OnLeave', handleLeave)
+		frame:SetScript("OnLeave", handleLeave)
 	end
 
 	if cbData and cbData.children and cbData.revealAllChilds then
 		for _, child in pairs(cbData.children) do
 			if child and not child.EQOL_MouseoverHooked then
-				child:HookScript('OnEnter', function()
+				child:HookScript("OnEnter", function()
 					local state = frameVisibilityStates[frame]
 					if not state or not state.config or not state.config.MOUSEOVER then return end
 					state.isMouseOver = true
 					ApplyFrameVisibilityState(state)
 				end)
-				child:HookScript('OnLeave', function()
+				child:HookScript("OnLeave", function()
 					local state = frameVisibilityStates[frame]
 					if not state then return end
 					genericHoverOutCheck(state)
@@ -810,7 +810,7 @@ UpdateUnitFrameMouseover = function(barName, cbData)
 
 	local state = EnsureFrameState(frame, cbData)
 	state.config = config
-	state.supportsPlayerHealthRule = (cbData.unitToken == 'player')
+	state.supportsPlayerHealthRule = (cbData.unitToken == "player")
 
 	local driverExpression = BuildUnitFrameDriverExpression(config)
 	local needsHealth = config and config.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule
@@ -1121,9 +1121,7 @@ local function EnsureActionBarVisibilityWatcher()
 	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-	watcher:SetScript("OnEvent", function(_, event)
-		RefreshAllActionBarVisibilityAlpha(nil, event)
-	end)
+	watcher:SetScript("OnEvent", function(_, event) RefreshAllActionBarVisibilityAlpha(nil, event) end)
 	addon.variables.actionBarVisibilityWatcher = watcher
 end
 
@@ -5242,42 +5240,45 @@ local function initCharacter()
 
 	if addon.db["showDurabilityOnCharframe"] == false or (addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner()) then addon.general.durabilityIconFrame:Hide() end
 
-	addon.general.cloakUpgradeFrame = CreateFrame("Button", nil, PaperDollFrame, "BackdropTemplate")
-	addon.general.cloakUpgradeFrame:SetSize(32, 32)
-	addon.general.cloakUpgradeFrame:SetPoint("LEFT", addon.general.durabilityIconFrame, "RIGHT", 4, 0)
+	-- TODO remove on midnight release
+	if not addon.variables.isMidnight then
+		addon.general.cloakUpgradeFrame = CreateFrame("Button", nil, PaperDollFrame, "BackdropTemplate")
+		addon.general.cloakUpgradeFrame:SetSize(32, 32)
+		addon.general.cloakUpgradeFrame:SetPoint("LEFT", addon.general.durabilityIconFrame, "RIGHT", 4, 0)
 
-	addon.general.cloakUpgradeFrame.icon = addon.general.cloakUpgradeFrame:CreateTexture(nil, "OVERLAY")
-	addon.general.cloakUpgradeFrame.icon:SetSize(32, 32)
-	addon.general.cloakUpgradeFrame.icon:SetPoint("CENTER", addon.general.cloakUpgradeFrame, "CENTER")
-	addon.general.cloakUpgradeFrame.icon:SetTexture(addon.variables.cloakUpgradeIcon)
+		addon.general.cloakUpgradeFrame.icon = addon.general.cloakUpgradeFrame:CreateTexture(nil, "OVERLAY")
+		addon.general.cloakUpgradeFrame.icon:SetSize(32, 32)
+		addon.general.cloakUpgradeFrame.icon:SetPoint("CENTER", addon.general.cloakUpgradeFrame, "CENTER")
+		addon.general.cloakUpgradeFrame.icon:SetTexture(addon.variables.cloakUpgradeIcon)
 
-	addon.general.cloakUpgradeFrame:SetScript("OnClick", function()
-		GenericTraitUI_LoadUI()
-		GenericTraitFrame:SetSystemID(29)
-		GenericTraitFrame:SetTreeID(1115)
-		ToggleFrame(GenericTraitFrame)
-	end)
-	addon.general.cloakUpgradeFrame:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(L["cloakUpgradeTooltip"] or "Upgrade skills")
-		GameTooltip:Show()
-	end)
-	addon.general.cloakUpgradeFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		addon.general.cloakUpgradeFrame:SetScript("OnClick", function()
+			GenericTraitUI_LoadUI()
+			GenericTraitFrame:SetSystemID(29)
+			GenericTraitFrame:SetTreeID(1115)
+			ToggleFrame(GenericTraitFrame)
+		end)
+		addon.general.cloakUpgradeFrame:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(L["cloakUpgradeTooltip"] or "Upgrade skills")
+			GameTooltip:Show()
+		end)
+		addon.general.cloakUpgradeFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-	local function updateCloakUpgradeButton()
-		if PaperDollFrame and PaperDollFrame:IsShown() then
-			if addon.db["showCloakUpgradeButton"] and C_Item.IsEquippedItem(235499) then
-				addon.general.cloakUpgradeFrame:Show()
-			else
-				addon.general.cloakUpgradeFrame:Hide()
+		local function updateCloakUpgradeButton()
+			if PaperDollFrame and PaperDollFrame:IsShown() then
+				if addon.db["showCloakUpgradeButton"] and C_Item.IsEquippedItem(235499) then
+					addon.general.cloakUpgradeFrame:Show()
+				else
+					addon.general.cloakUpgradeFrame:Hide()
+				end
 			end
 		end
+		addon.functions.updateCloakUpgradeButton = updateCloakUpgradeButton
+		local cloakEventFrame = CreateFrame("Frame")
+		cloakEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+		cloakEventFrame:SetScript("OnEvent", updateCloakUpgradeButton)
+		cloakEventFrame:Hide()
 	end
-	addon.functions.updateCloakUpgradeButton = updateCloakUpgradeButton
-	local cloakEventFrame = CreateFrame("Frame")
-	cloakEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-	cloakEventFrame:SetScript("OnEvent", updateCloakUpgradeButton)
-	cloakEventFrame:Hide()
 
 	for key, value in pairs(addon.variables.itemSlots) do
 		-- Hintergrund für das Item-Level
@@ -5337,7 +5338,7 @@ local function initCharacter()
 
 	PaperDollFrame:HookScript("OnShow", function(self)
 		setCharFrame()
-		addon.functions.updateCloakUpgradeButton()
+		if not addon.variables.isMidnight then addon.functions.updateCloakUpgradeButton() end --todo remove on midnight release
 	end)
 
 	if OrderHallCommandBar then

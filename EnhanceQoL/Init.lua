@@ -805,13 +805,13 @@ addon.variables.unitFrameNames = {
 		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
 	},
 	{ name = "TargetFrame", var = "unitframeSettingTargetFrame", text = HUD_EDIT_MODE_TARGET_FRAME_LABEL },
-		{
-			name = "PetFrame",
-			var = "unitframeSettingPetFrame",
-			text = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
-			children = petChildren or {},
-			revealAllChilds = true,
-		},
+	{
+		name = "PetFrame",
+		var = "unitframeSettingPetFrame",
+		text = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+		children = petChildren or {},
+		revealAllChilds = true,
+	},
 	{
 		name = "MicroMenu",
 		var = "unitframeSettingMicroMenu",
@@ -965,3 +965,5 @@ addon.variables.cvarOptions = {
 		category = "cvarCategoryUtility",
 	},
 }
+
+addon.variables.isMidnight = select(4, GetBuildInfo()) >= 120000
