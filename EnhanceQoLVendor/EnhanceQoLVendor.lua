@@ -32,9 +32,9 @@ local function ensureDestroyListFrame()
 	if not button then return nil end
 
 	local frame = CreateFrame("Frame", addonName .. "_DestroyList", button, "BackdropTemplate")
-    frame:SetFrameStrata("HIGH")
-    frame:SetFrameLevel((destroyState.button and destroyState.button:GetFrameLevel() or 5) + 10)
-    frame:SetBackdrop({
+	frame:SetFrameStrata("HIGH")
+	frame:SetFrameLevel((destroyState.button and destroyState.button:GetFrameLevel() or 5) + 10)
+	frame:SetBackdrop({
 		bgFile = "Interface\\Buttons\\WHITE8x8",
 		edgeFile = "Interface\\Buttons\\WHITE8x8",
 		edgeSize = 1,
@@ -394,10 +394,13 @@ local function ensureDestroyButton()
 		else
 			destroyHideList()
 		end
-		if GameTooltip then
-			GameTooltip:SetOwner(self, "ANCHOR_TOP")
-			GameTooltip:SetText(L["vendorDestroyButtonTooltip"])
-			GameTooltip:Show()
+		-- TODO fix after midnight bug of blizzard is done
+		if not addon.variables.isMidnight then
+			if GameTooltip then
+				GameTooltip:SetOwner(self, "ANCHOR_TOP")
+				GameTooltip:SetText(L["vendorDestroyButtonTooltip"])
+				GameTooltip:Show()
+			end
 		end
 	end)
 	button:SetScript("OnLeave", function(self)
@@ -430,13 +433,13 @@ local function ensureDestroyButton()
 		end
 
 		local info = C_Container.GetContainerItemInfo(bag, slot)
-	if not info then
-		print(L["vendorDestroyMissing"] or "Queued item is no longer in your bags.")
-		table.remove(queue, 1)
-		updateDestroyUI(copyDestroyQueue(queue))
-		scheduleDestroyButtonUpdate()
-		return
-	end
+		if not info then
+			print(L["vendorDestroyMissing"] or "Queued item is no longer in your bags.")
+			table.remove(queue, 1)
+			updateDestroyUI(copyDestroyQueue(queue))
+			scheduleDestroyButtonUpdate()
+			return
+		end
 
 		local link = C_Container.GetContainerItemLink(bag, slot)
 		if not link and entry.itemID then link = C_Item.GetItemLink(entry.itemID) end
@@ -444,14 +447,14 @@ local function ensureDestroyButton()
 		link = tostring(link)
 
 		local reason = getDestroyProtectionReason(entry.itemID, info)
-	if reason then
-		notifyDestroyProtection(entry.itemID, link, reason)
-		if addon.db["vendorIncludeDestroyList"] then addon.db["vendorIncludeDestroyList"][entry.itemID] = nil end
-		table.remove(queue, 1)
-		updateDestroyUI(copyDestroyQueue(queue))
-		scheduleDestroyButtonUpdate()
-		return
-	end
+		if reason then
+			notifyDestroyProtection(entry.itemID, link, reason)
+			if addon.db["vendorIncludeDestroyList"] then addon.db["vendorIncludeDestroyList"][entry.itemID] = nil end
+			table.remove(queue, 1)
+			updateDestroyUI(copyDestroyQueue(queue))
+			scheduleDestroyButtonUpdate()
+			return
+		end
 
 		if info.isLocked then
 			print(L["vendorDestroyLocked"] or "Item is locked.")
@@ -466,18 +469,18 @@ local function ensureDestroyButton()
 			return
 		end
 
-	DeleteCursorItem()
-	if CursorHasItem() then
-		ClearCursor()
-		print(L["vendorDestroyConfirm"] or "Item requires manual confirmation to delete.")
-		return
-	end
+		DeleteCursorItem()
+		if CursorHasItem() then
+			ClearCursor()
+			print(L["vendorDestroyConfirm"] or "Item requires manual confirmation to delete.")
+			return
+		end
 
-	table.remove(queue, 1)
-	if addon.db["vendorDestroyShowMessages"] ~= false then print(string.format(L["vendorDestroyDestroyed"] or "Destroyed: %s", link .. (count > 1 and (" x" .. count) or ""))) end
-	updateDestroyUI(copyDestroyQueue(queue))
-	updateSellMarks(nil, true)
-end)
+		table.remove(queue, 1)
+		if addon.db["vendorDestroyShowMessages"] ~= false then print(string.format(L["vendorDestroyDestroyed"] or "Destroyed: %s", link .. (count > 1 and (" x" .. count) or ""))) end
+		updateDestroyUI(copyDestroyQueue(queue))
+		updateSellMarks(nil, true)
+	end)
 	setDestroyButtonVisibility(button, false)
 	anchorDestroyButton(button)
 
@@ -683,13 +686,9 @@ local function lookupDestroyItemsFast()
 					local inSell = includeSell and includeSell[itemID]
 
 					if info.hasNoValue and (inDestroy or inSell) then
-						if not getDestroyProtectionReason(itemID, info, info.quality) then
-							table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info))
-						end
+						if not getDestroyProtectionReason(itemID, info, info.quality) then table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info)) end
 					elseif inDestroy then
-						if not getDestroyProtectionReason(itemID, info, info.quality) then
-							table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info))
-						end
+						if not getDestroyProtectionReason(itemID, info, info.quality) then table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info)) end
 					elseif inSell then
 						local sellPrice = select(11, C_Item.GetItemInfo(itemID)) or 0
 						if sellPrice <= 0 and not getDestroyProtectionReason(itemID, info, info.quality) then
@@ -722,25 +721,25 @@ local function lookupItems()
 				local inSellList = addon.db["vendorIncludeSellList"] and addon.db["vendorIncludeSellList"][itemID]
 
 				local processed = false
-                if hasNoValue and (inDestroyList or inSellList) then
-                    local reason = getDestroyProtectionReason(itemID, bagInfo, qualityFromBag)
-                    if reason then
-                        notifyDestroyProtection(itemID, itemLink or itemNameFromBag, reason)
-                        if inDestroyList and addon.db["vendorIncludeDestroyList"] then addon.db["vendorIncludeDestroyList"][itemID] = nil end
-                        if inSellList and addon.db["vendorIncludeSellList"] then addon.db["vendorIncludeSellList"][itemID] = nil end
-                    else
-                        local displayName = itemNameFromBag or (itemLink and itemLink:match("%[(.+)%]")) or ("Item #" .. tostring(itemID))
-                        table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, displayName, bagInfo))
-                    end
-                    processed = true
-                end
+				if hasNoValue and (inDestroyList or inSellList) then
+					local reason = getDestroyProtectionReason(itemID, bagInfo, qualityFromBag)
+					if reason then
+						notifyDestroyProtection(itemID, itemLink or itemNameFromBag, reason)
+						if inDestroyList and addon.db["vendorIncludeDestroyList"] then addon.db["vendorIncludeDestroyList"][itemID] = nil end
+						if inSellList and addon.db["vendorIncludeSellList"] then addon.db["vendorIncludeSellList"][itemID] = nil end
+					else
+						local displayName = itemNameFromBag or (itemLink and itemLink:match("%[(.+)%]")) or ("Item #" .. tostring(itemID))
+						table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, displayName, bagInfo))
+					end
+					processed = true
+				end
 
 				if not processed then
 					local itemName, _, quality, itemLevel, _, _, _, _, _, _, sellPrice, classID, subclassID, bindType, expansionID = C_Item.GetItemInfo(itemLink)
 					if not itemName then
 						C_Item.RequestLoadItemDataByID(itemID)
 					else
-                        local resolvedName = itemNameFromBag or itemName
+						local resolvedName = itemNameFromBag or itemName
 						local reason
 
 						if inDestroyList then
@@ -786,7 +785,7 @@ local function lookupItems()
 										if addon.db["vendor" .. addon.Vendor.variables.tabNames[quality] .. "AbsolutIlvl"] then
 											rIlvl = addon.db["vendor" .. addon.Vendor.variables.tabNames[quality] .. "MinIlvlDif"]
 										end
-                                    if effectiveILvl <= rIlvl then table.insert(itemsToSell, { bag = bag, slot = slot, itemID = itemID }) end
+										if effectiveILvl <= rIlvl then table.insert(itemsToSell, { bag = bag, slot = slot, itemID = itemID }) end
 									end
 								end
 							end
@@ -1345,15 +1344,17 @@ local function addGeneralFrame(container)
 				addGeneralFrame(container)
 			end,
 		},
-		{
+	}
+	if not addon.variables.isMidnight then
+		table.insert(data, {
 			text = L["vendorShowSellTooltip"],
 			var = "vendorShowSellTooltip",
 			func = function(self, _, checked)
 				addon.db["vendorShowSellTooltip"] = checked
 				if inventoryOpen() then updateSellMarks(nil, true) end
 			end,
-		},
-	}
+		})
+	end
 
 	if addon.db["vendorShowSellOverlay"] then
 		table.insert(data, {
@@ -1497,7 +1498,7 @@ local function performUpdateSellMarks(resetCache)
 	local itemsToSell, itemsToDestroy = lookupItems()
 	itemsToSell = itemsToSell or {}
 	itemsToDestroy = itemsToDestroy or {}
-    updateDestroyUI(itemsToDestroy)
+	updateDestroyUI(itemsToDestroy)
 
 	for _, v in ipairs(itemsToSell) do
 		sellMarkLookup[v.bag .. "_" .. v.slot] = true
@@ -1587,19 +1588,13 @@ local function hookBagFrame(frame)
 	if not frame then return end
 	if frame._EnhanceQoLVendorDestroyHook then return end
 	frame._EnhanceQoLVendorDestroyHook = true
-	hooksecurefunc(frame, "UpdateItems", function(self)
-		applySellDestroyOverlaysToFrame(self)
-	end)
+	hooksecurefunc(frame, "UpdateItems", function(self) applySellDestroyOverlaysToFrame(self) end)
 	frame:HookScript("OnShow", function()
-		if destroyState.button and (not InCombatLockdown or not InCombatLockdown()) then
-			anchorDestroyButton(destroyState.button)
-		end
+		if destroyState.button and (not InCombatLockdown or not InCombatLockdown()) then anchorDestroyButton(destroyState.button) end
 		updateSellMarks(nil, true)
 		if addon.db["vendorDestroyEnable"] then scheduleDestroyButtonUpdate() end
 	end)
-	frame:HookScript("OnHide", function()
-		destroyHideList()
-	end)
+	frame:HookScript("OnHide", function() destroyHideList() end)
 end
 
 if ContainerFrameCombinedBags then hookBagFrame(ContainerFrameCombinedBags) end
@@ -1608,7 +1603,8 @@ for _, frame in ipairs(frames) do
 	hookBagFrame(frame)
 end
 
-if TooltipDataProcessor then
+-- TODO bug in midnight beta
+if TooltipDataProcessor and not addon.variables.isMidnight then
 	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
 		if not addon.db["vendorShowSellTooltip"] then return end
 		if not data or not tooltip.GetOwner then return end

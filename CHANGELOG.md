@@ -16,6 +16,7 @@
   - Item ID
 - feature to hide buffs on raid frames in midnight beta (disabled until a fix is found)
 - Tooltip for Dungeon Teleports
+- Vendor module tooltips
 
 ### ❌ removed
 - Cloak Upgrade button in inventory for midnight beta
