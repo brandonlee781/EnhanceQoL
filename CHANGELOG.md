@@ -6,11 +6,13 @@
 ### ❌ Removed
 
 - Cloak Upgrade button in inventory for midnight beta
+- Removed the feature to hide buffs on raid frames in midnight beta (disabled until a fix is found)
 
 ### 🐛 Fixed
 
 - Nameplate health percent/absolute fixed for midnight beta
 - Tooltip error while hovering and enabled ignore list
+- Show Playerframe on 100% health fixed for midnight beta
 
 ---
 

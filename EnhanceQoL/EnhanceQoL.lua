@@ -496,12 +496,34 @@ end
 
 local UpdateUnitFrameMouseover -- forward declaration
 
-local frameVisibilityContext = { inCombat = false, playerHealthMissing = false }
+local frameVisibilityContext = { inCombat = false, playerHealthMissing = false, playerHealthAlpha = 0 }
 local frameVisibilityStates = {}
 local hookedUnitFrames = {}
 local frameVisibilityHealthEnabled = false
 local FRAME_VISIBILITY_HEALTH_THROTTLE = 0.1
 local ApplyFrameVisibilityState -- forward declaration
+local midnightPlayerHealthCurve
+
+local function GetMidnightPlayerHealthAlpha()
+	if not addon or not addon.variables or not addon.variables.isMidnight then return nil end
+	if not UnitHealthPercentColor or not C_CurveUtil or not C_CurveUtil.CreateColorCurve or not CreateColor then return nil end
+
+	if not midnightPlayerHealthCurve then
+		local curve = C_CurveUtil.CreateColorCurve()
+		if not curve then return nil end
+		if curve.SetType and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step then curve:SetType(Enum.LuaCurveType.Step) end
+		if curve.AddPoint then
+			curve:AddPoint(0, CreateColor(1, 1, 1, 1))
+			curve:AddPoint(1, CreateColor(1, 1, 1, 0))
+			midnightPlayerHealthCurve = curve
+		end
+	end
+
+	local ok, color = pcall(UnitHealthPercentColor, "player", midnightPlayerHealthCurve)
+	if not ok or not color or not color.GetRGBA then return nil end
+	local _, _, _, alpha = color:GetRGBA()
+	return alpha
+end
 
 local function UpdateFrameVisibilityContext()
 	local inCombat = false
@@ -513,11 +535,21 @@ local function UpdateFrameVisibilityContext()
 	frameVisibilityContext.inCombat = inCombat
 
 	if frameVisibilityHealthEnabled then
-		local maxHP = UnitHealthMax and UnitHealthMax("player") or 0
-		local currentHP = UnitHealth and UnitHealth("player") or 0
-		frameVisibilityContext.playerHealthMissing = maxHP > 0 and currentHP < maxHP
+		local isMidnight = addon and addon.variables and addon.variables.isMidnight
+		if isMidnight then
+			local alpha = GetMidnightPlayerHealthAlpha()
+			frameVisibilityContext.playerHealthAlpha = alpha
+			frameVisibilityContext.playerHealthMissing = alpha ~= nil
+		else
+			local maxHP = UnitHealthMax and UnitHealthMax("player") or 0
+			local currentHP = UnitHealth and UnitHealth("player") or 0
+			local missing = maxHP > 0 and currentHP < maxHP
+			frameVisibilityContext.playerHealthMissing = missing
+			frameVisibilityContext.playerHealthAlpha = missing and 1 or 0
+		end
 	else
 		frameVisibilityContext.playerHealthMissing = false
+		frameVisibilityContext.playerHealthAlpha = 0
 	end
 end
 
@@ -718,16 +750,33 @@ ApplyFrameVisibilityState = function(state)
 	if state.driverActive then return end
 
 	EnsureFrameVisibilityWatcher()
+	local context = frameVisibilityContext
 	local shouldShow = EvaluateFrameVisibility(state)
-	if shouldShow then
-		if state.visible == true then return end
-		ApplyToFrameAndChildren(state, 1)
-		state.visible = true
-	else
-		if state.visible == false then return end
-		ApplyToFrameAndChildren(state, 0)
-		state.visible = false
+	local targetAlpha = shouldShow and 1 or 0
+	local healthActive = context and state.supportsPlayerHealthRule and state.config and state.config.PLAYER_HEALTH_NOT_FULL and context.playerHealthMissing
+	local isMidnightPlayerFrame = addon and addon.variables and addon.variables.isMidnight and state.frame == _G.PlayerFrame
+	local applyMidnightAlpha = shouldShow and healthActive and isMidnightPlayerFrame
+
+	if applyMidnightAlpha then
+		local midnightAlpha = context.playerHealthAlpha
+		if midnightAlpha == nil then midnightAlpha = 0 end
+		targetAlpha = midnightAlpha
 	end
+
+	if shouldShow then
+		if state.visible == true and not applyMidnightAlpha then
+			UpdateFrameVisibilityHealthRegistration()
+			return
+		end
+	else
+		if state.visible == false then
+			UpdateFrameVisibilityHealthRegistration()
+			return
+		end
+	end
+
+	ApplyToFrameAndChildren(state, targetAlpha)
+	state.visible = shouldShow
 	UpdateFrameVisibilityHealthRegistration()
 end
 
@@ -759,6 +808,8 @@ local function HookFrameForMouseover(frame, cbData)
 		frame:SetScript("OnLeave", handleLeave)
 	end
 
+	print(frame:GetName())
+	if true then return end
 	if cbData and cbData.children and cbData.revealAllChilds then
 		for _, child in pairs(cbData.children) do
 			if child and not child.EQOL_MouseoverHooked then
@@ -800,6 +851,7 @@ UpdateUnitFrameMouseover = function(barName, cbData)
 	if not frame then return end
 
 	local config = NormalizeUnitFrameVisibilityConfig(cbData.var)
+
 	if not config then
 		ApplyUnitFrameStateDriver(frame, nil)
 		RestoreUnitFrameVisibility(frame, cbData)
@@ -815,6 +867,7 @@ UpdateUnitFrameMouseover = function(barName, cbData)
 	local driverExpression = BuildUnitFrameDriverExpression(config)
 	local needsHealth = config and config.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule
 	local useDriver = driverExpression and not config.MOUSEOVER and not needsHealth
+
 
 	if useDriver then
 		state.driverActive = true
@@ -1107,7 +1160,7 @@ local function EnsureSkyridingStateDriver()
 		addon.variables.isPlayerSkyriding = false
 		RefreshAllActionBarVisibilityAlpha()
 	end)
-	local expr = "[advancedflyable, mounted] show; [advancedflyable, stance:3] show; hide"
+	local expr = "[advflyable, mounted] show; [advflyable, stance:3] show; hide"
 	RegisterStateDriver(driver, "visibility", expr)
 	addon.variables.skyridingDriver = driver
 	addon.variables.isPlayerSkyriding = driver:IsShown()
@@ -4051,16 +4104,31 @@ local function initUnitFrame()
 	end) end
 	addon.functions.togglePartyFrameTitle(addon.db["hidePartyFrameTitle"])
 
-	local function DisableBlizzBuffs(cuf)
-		if addon.db["hideRaidFrameBuffs"] then
-			if not cuf.optionTable then return end
-			if cuf.optionTable.displayBuffs then
-				cuf.optionTable.displayBuffs = false
-				CompactUnitFrame_UpdateAuras(cuf) -- entfernt sofort bestehende Buff-Buttons
+	if not addon.variables.isMidnight then
+		-- TODO actually no workaround for auras on raid frames so disabling this feature for now
+		local function DisableBlizzBuffs(cuf)
+			if addon.db["hideRaidFrameBuffs"] then
+				if not cuf.optionTable then return end
+				if cuf.optionTable.displayBuffs then
+					cuf.optionTable.displayBuffs = false
+					CompactUnitFrame_UpdateAuras(cuf) -- entfernt sofort bestehende Buff-Buttons
+				end
+			end
+		end
+		hooksecurefunc("CompactUnitFrame_SetUpFrame", DisableBlizzBuffs)
+
+		function addon.functions.updateRaidFrameBuffs()
+			if addon.variables.isMidnight then return end
+			for i = 1, 5 do
+				local f = _G["CompactPartyFrameMember" .. i]
+				if f then DisableBlizzBuffs(f) end
+			end
+			for i = 1, 40 do
+				local f = _G["CompactRaidFrame" .. i]
+				if f then DisableBlizzBuffs(f) end
 			end
 		end
 	end
-	hooksecurefunc("CompactUnitFrame_SetUpFrame", DisableBlizzBuffs)
 
 	local function TruncateFrameName(cuf)
 		if not addon.db["unitFrameTruncateNames"] then return end
@@ -4101,16 +4169,6 @@ local function initUnitFrame()
 		for i = 1, 40 do
 			local f = _G["CompactRaidFrame" .. i]
 			TruncateFrameName(f)
-		end
-	end
-	function addon.functions.updateRaidFrameBuffs()
-		for i = 1, 5 do
-			local f = _G["CompactPartyFrameMember" .. i]
-			if f then DisableBlizzBuffs(f) end
-		end
-		for i = 1, 40 do
-			local f = _G["CompactRaidFrame" .. i]
-			if f then DisableBlizzBuffs(f) end
 		end
 	end
 

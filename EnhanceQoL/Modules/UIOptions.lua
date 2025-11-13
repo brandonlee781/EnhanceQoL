@@ -15,9 +15,7 @@ local CHAT_BUBBLE_FONT_MIN = _G.CHAT_BUBBLE_FONT_MIN or 1
 local CHAT_BUBBLE_FONT_MAX = _G.CHAT_BUBBLE_FONT_MAX or 36
 
 local function setCVarValue(...)
-	if addon.functions and addon.functions.setCVarValue then
-		return addon.functions.setCVarValue(...)
-	end
+	if addon.functions and addon.functions.setCVarValue then return addon.functions.setCVarValue(...) end
 end
 
 local noop = function() end
@@ -186,8 +184,7 @@ local function buildActionBarExtras(parent)
 		anchorDropdownContainer:ReleaseChildren()
 		anchorDropdownContainer:SetLayout("Flow")
 		for index = 1, #ACTION_BAR_FRAME_NAMES do
-			local label =
-				L["actionBarAnchorDropdown"] and string.format(L["actionBarAnchorDropdown"], index) or string.format("Action Bar %d button anchor", index)
+			local label = L["actionBarAnchorDropdown"] and string.format(L["actionBarAnchorDropdown"], index) or string.format("Action Bar %d button anchor", index)
 			local dropdown = addon.functions.createDropdownAce(label, anchorOptions, ACTION_BAR_ANCHOR_ORDER, function(_, _, key)
 				if not ACTION_BAR_ANCHOR_CONFIG[key] then return end
 				addon.db["actionBarAnchor" .. index] = key
@@ -556,9 +553,7 @@ local function addVisibilityHub(container)
 		local disableOthers = config.ALWAYS_HIDDEN == true
 		for _, rule in ipairs(rules) do
 			local value = config and config[rule.key] == true
-			local cb = addon.functions.createCheckboxAce(rule.label or rule.key or "", value, function(_, _, checked)
-				updateRuleSelection(rule.key, checked)
-			end, rule.description)
+			local cb = addon.functions.createCheckboxAce(rule.label or rule.key or "", value, function(_, _, checked) updateRuleSelection(rule.key, checked) end, rule.description)
 			cb:SetRelativeWidth(0.5)
 			if disableOthers and rule.key ~= "ALWAYS_HIDDEN" then cb:SetDisabled(true) end
 			scenarioGroup:AddChild(cb)
@@ -620,7 +615,6 @@ local function addVisibilityHub(container)
 
 	rebuildElementDropdown()
 end
-
 
 local function addUnitFrame2(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
@@ -763,12 +757,15 @@ local function addUnitFrame2(container)
 		g:AddChild(labelHeadlineUF)
 		g:AddChild(addon.functions.createSpacerAce())
 
-		local cbRaid = addon.functions.createCheckboxAce(L["hideRaidFrameBuffs"], addon.db["hideRaidFrameBuffs"], function(_, _, value)
-			addon.db["hideRaidFrameBuffs"] = value
-			addon.functions.updateRaidFrameBuffs()
-			addon.variables.requireReload = true
-		end)
-		g:AddChild(cbRaid)
+		-- TODO actually no workaround for auras on raid frames so disabling this feature for now
+		if not addon.variables.isMidnight then
+			local cbRaid = addon.functions.createCheckboxAce(L["hideRaidFrameBuffs"], addon.db["hideRaidFrameBuffs"], function(_, _, value)
+				addon.db["hideRaidFrameBuffs"] = value
+				addon.functions.updateRaidFrameBuffs()
+				addon.variables.requireReload = true
+			end)
+			g:AddChild(cbRaid)
+		end
 
 		local cbLeader = addon.functions.createCheckboxAce(L["showLeaderIconRaidFrame"], addon.db["showLeaderIconRaidFrame"], function(_, _, value)
 			addon.db["showLeaderIconRaidFrame"] = value
@@ -1292,7 +1289,6 @@ end
 
 local TooltipUtil = _G.TooltipUtil
 
-
 local function addSocialFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "List")
 	scroll:SetFullWidth(true)
@@ -1531,7 +1527,6 @@ local function addSocialFrame(container)
 	scroll:DoLayout()
 end
 
-
 local function addCVarFrame(container, d)
 	local scroll = addon.functions.createContainer("ScrollFrame", "List")
 	scroll:SetFullWidth(true)
@@ -1648,7 +1643,6 @@ local function addCVarFrame(container, d)
 	end
 	scroll:DoLayout()
 end
-
 
 if addon.functions and addon.functions.RegisterOptionsPage then
 	addon.functions.RegisterOptionsPage("ui", addUIFrame)
