@@ -2,57 +2,62 @@
 
 ## [5.15.1] – 2025-11-15
 
-## Midnight beta changes
+## Midnight Beta – Addon Status
 
-### Side-note
+Because of Blizzard’s new addon API restrictions in **Midnight**, some EQoL features have to behave differently in combat than before.  
+Here’s what currently works, what’s limited, and what’s turned off in the Midnight beta.
 
-- Cooldowntracker of trinkets is still working in _Aura Tracker_
+### 💡 Side note
+
+- The **trinket cooldown tracking** inside **_Aura Tracker_** still works.
 
 ### 🔄 Changed
 
-- _Aura Tracker_
-  - Tracking of auras infight is completely guarded, currently close to zero auras are iteratable in combat - everything is checked after combat/when restrictions are lifted
-  - After combat everything new will be checked and displayed
-  - Resource bars are 100% midnight compatible
-    - Smooth-bars option is disabled, but blizzard will bring a new feature for that
+- **Aura Tracker**
+  - In **combat**, almost all auras are now “hidden” from addons by Blizzard.  
+    → Practically **no auras can be iterated in combat** anymore.  
+    → Aura checks and updates happen **after combat**, when the restrictions are lifted.
+  - **Out of combat**, new auras are scanned and displayed as usual.
+  - **Resource bars**
+    - Fully **Midnight-compatible**.
 
-### ⏰ temporary disabled
+### ⏰ Temporarily disabled
 
-- Tooltip features
-  - NPC ID
-  - Mythic+ Score, Key, best dungeon
-  - Rightclick for Frame Settings
-  - Currency ID
-  - Spell ID
-  - NPC ID
-  - Item ID
-- feature to hide buffs on raid frames in midnight beta (disabled until a fix is found)
-- Tooltip for Dungeon Teleports
-- Vendor module tooltips
-- Change the max color for power resource bars
+These features are turned off **only for the Midnight beta** until there’s a safe way to re-implement them:
 
-### ❌ removed
-- Cloak Upgrade button in inventory for midnight beta
-- account moneyframe feature because of a bug with tooltip handling in midnight beta
-- Module CombatMeter
-- MythicPlus features
-  - Automark of tank and healer (these require hardware events now)
-  - Potiontracker
-- Aura features
-  - Casttracker
+- **Tooltip enhancements**
+  - Actually all stuff doing anything like adding data to the tooltip is disabled, as of a bug in midnight beta
+- **Buff hiding on raid frames** in Midnight beta (disabled until a working solution is found)
+- **Vendor module** tooltip information
+- Changing the **max color** for power/resource bars
+- The **“Smooth bars”** option is temporarily disabled. Blizzard is adding a built-in smoothing feature, which EQoL will use once it’s available.
+- Account money frame feature (due to tooltip-handling bugs)
+
+### ❌ Removed (Midnight beta)
+
+These features are currently removed in the Midnight beta because of API changes or bugs:
+
+- **Inventory**
+  - Cloak Upgrade button (Midnight beta only)
+- **Module:** `CombatMeter`
+- **Mythic+ features**
+  - Auto-marking tank and healer (now requires hardware events / secure input)
+  - Potion tracker
+- **Aura-based features**
+  - Cast tracker
   - Cooldown notify
 
 ### 🐛 Fixed
 
-- Nameplate health percent/absolute fixed for midnight beta
-- Tooltip error while hovering and enabled ignore list
-- Show Playerframe on 100% health fixed for midnight beta
-- Boss Frames were not targetable when changing the visibility behaviour
-- Error while hovering option menu of EQOL
-- Removed UNIT_HEALTH_FREQUENT as this is deprecated
-- Contextmenu hardening for NPC-ID checks
-- Healthmacro combat checks protected
-- Healthbar colors were sometimes wrong
+- Nameplate **health percentage / absolute values** corrected for Midnight beta
+- Tooltip error when hovering items with the **ignore list** enabled
+- Player frame now correctly shown at **100% health** in Midnight beta
+- Boss frames are now **targetable** again when changing visibility behaviour
+- Error when hovering the **EQoL options menu** fixed
+- Removed `UNIT_HEALTH_FREQUENT` (API is deprecated)
+- Context menu checks for **NPC ID** hardened to avoid errors
+- Health macro combat checks moved into **protected** logic
+- **Healthbar colors** no longer sometimes display the wrong color
 
 ---
 
