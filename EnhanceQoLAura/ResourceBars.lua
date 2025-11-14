@@ -1692,6 +1692,7 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
 					cfg.useMaxColor = val and true or false
+					wasMax = nil
 					refreshMaxColorControls()
 					notifyRefresh()
 				end)
@@ -2426,7 +2427,11 @@ function updateHealthBar(evt)
 				else
 					if wasMax ~= settings.useMaxColor then
 						wasMax = settings.useMaxColor
-						SetColorCurvePoints(settings.maxColor or WHITE)
+						if settings.useMaxColor then
+							SetColorCurvePoints(settings.maxColor or WHITE)
+						else
+							SetColorCurvePoints()
+						end
 					end
 					local color = UnitHealthPercentColor("player", curve)
 					healthBar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
