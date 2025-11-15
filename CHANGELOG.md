@@ -7,10 +7,6 @@
 Because of Blizzard’s new addon API restrictions in **Midnight**, some EQoL features have to behave differently in combat than before.  
 Here’s what currently works, what’s limited, and what’s turned off in the Midnight beta.
 
-### 💡 Side note
-
-- The **trinket cooldown tracking** inside **_Aura Tracker_** still works.
-
 ### ✨ Added
 
 - Dungeon teleports and talent reminder for midnight dungeon
@@ -58,6 +54,10 @@ These features are currently removed in the Midnight beta because of API changes
 - **Aura-based features**
   - Cast tracker
   - Cooldown notify
+
+### 💡 Side note
+
+- The **trinket cooldown tracking** inside **_Aura Tracker_** still works.
 
 ### 🐛 Fixed
 
