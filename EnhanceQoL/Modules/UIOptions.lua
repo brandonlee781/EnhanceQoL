@@ -920,13 +920,6 @@ local function addUnitFrame2(container)
 	buildHealthText()
 	buildCoreUF()
 	buildCast()
-	if addon.Aura and addon.Aura.UF and addon.Aura.UF.AddOptionsInline then
-		local g = addon.functions.createContainer("InlineGroup", "List")
-		g:SetTitle(L["UFPlayerPlus"] or "Custom Player Frame")
-		g:SetFullWidth(true)
-		wrapper:AddChild(g)
-		addon.Aura.UF.AddOptionsInline(g)
-	end
 	wrapper:ResumeLayout()
 	doLayout()
 end
