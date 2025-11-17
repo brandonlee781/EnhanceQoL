@@ -54,11 +54,18 @@ local STATUS_NAME = "EQOLUFPlayerStatus"
 local MIN_WIDTH = 50
 
 local issecretvalue = _G.issecretvalue
-local function getMainPower()
+local mainPowerEnum
+local mainPowerToken
+local function refreshMainPower()
 	local class = addon.variables and addon.variables.unitClass
 	local spec = addon.variables and addon.variables.unitSpec
 	local enumId, token = UnitPowerType(PLAYER_UNIT)
-	return enumId, token
+	mainPowerEnum, mainPowerToken = enumId, token
+	return mainPowerEnum, mainPowerToken
+end
+local function getMainPower()
+	if not mainPowerEnum or not mainPowerToken then return refreshMainPower() end
+	return mainPowerEnum, mainPowerToken
 end
 local function findTreeNode(path)
 	if not addon.treeGroupData or type(path) ~= "string" then return nil end
@@ -675,27 +682,32 @@ local eventFrame
 
 local function onEvent(self, event, unit, arg1)
 	if event == "PLAYER_ENTERING_WORLD" then
+		refreshMainPower()
 		applyConfig()
 		hideBlizzardPlayerFrame()
 	elseif event == "PLAYER_DEAD" then
 		state.health:SetValue(0)
 		updateHealth(ensureDB("player"))
 	elseif event == "PLAYER_ALIVE" then
+		refreshMainPower()
 		updateHealth(ensureDB("player"))
 		updatePower(ensureDB("player"))
 	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		if unit == PLAYER_UNIT then updateHealth(ensureDB("player")) end
-	elseif event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
+	elseif event == "UNIT_MAXPOWER" then
 		if unit == PLAYER_UNIT then updatePower(ensureDB("player")) end
+	elseif event == "UNIT_DISPLAYPOWER" then
+		if unit == PLAYER_UNIT then
+			refreshMainPower()
+			updatePower(ensureDB("player"))
+		end
 	elseif event == "UNIT_POWER_UPDATE" and not FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(ensureDB("player")) end
 	elseif event == "UNIT_POWER_FREQUENT" and FREQUENT[arg1] then
-		if unit == PLAYER_UNIT then
-			updatePower(ensureDB("player")) end
+		if unit == PLAYER_UNIT then updatePower(ensureDB("player")) end
 	elseif event == "UNIT_NAME_UPDATE" or event == "PLAYER_LEVEL_UP" then
 		updateNameAndLevel(ensureDB("player"))
 	end
-
 end
 
 function UF.Enable()
