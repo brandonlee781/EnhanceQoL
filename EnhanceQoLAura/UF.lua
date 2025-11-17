@@ -58,6 +58,9 @@ local TARGET_HEALTH_NAME = "EQOLUFTargetHealth"
 local TARGET_POWER_NAME = "EQOLUFTargetPower"
 local TARGET_STATUS_NAME = "EQOLUFTargetStatus"
 local MIN_WIDTH = 50
+local TARGET_AURA_SIZE = 24
+local TARGET_AURA_PADDING = 2
+local TARGET_AURA_MAX = 16
 
 local UNITS = {
 	player = {
@@ -106,20 +109,88 @@ local function cacheTargetAura(aura)
 	}
 end
 
+local function updateTargetAuraIcons()
+	local st = states.target
+	if not st or not st.auraContainer or not st.frame then return end
+	local icons = st.auraButtons or {}
+	st.auraButtons = icons
+
+	local list = {}
+	for _, aura in pairs(targetAuras) do
+		-- if aura.isHarmful then list[#list + 1] = aura end
+		list[#list + 1] = aura
+	end
+	table.sort(list, function(a, b)
+		local ea = a.expirationTime or math.huge
+		local eb = b.expirationTime or math.huge
+		if ea == eb then return (a.auraInstanceID or 0) < (b.auraInstanceID or 0) end
+		return ea < eb
+	end)
+
+	local width = st.frame:GetWidth() or 0
+	local perRow = math.max(1, math.floor((width + TARGET_AURA_PADDING) / (TARGET_AURA_SIZE + TARGET_AURA_PADDING)))
+	local shown = 0
+
+	for i, aura in ipairs(list) do
+		if i > TARGET_AURA_MAX then break end
+		shown = shown + 1
+		local btn = icons[i]
+		if not btn then
+			btn = CreateFrame("Button", nil, st.auraContainer)
+			btn:SetSize(TARGET_AURA_SIZE, TARGET_AURA_SIZE)
+			btn.icon = btn:CreateTexture(nil, "ARTWORK")
+			btn.icon:SetAllPoints(btn)
+			btn.cd = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
+			btn.cd:SetAllPoints(btn)
+			btn.count = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			btn.count:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+			icons[i] = btn
+		end
+		btn.icon:SetTexture(aura.icon or "")
+		if aura.duration and aura.duration > 0 and aura.expirationTime then
+			btn.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+		else
+			btn.cd:Clear()
+		end
+		if aura.applications and aura.applications > 1 then
+			btn.count:SetText(aura.applications)
+			btn.count:Show()
+		else
+			btn.count:SetText("")
+			btn.count:Hide()
+		end
+		local row = math.floor((shown - 1) / perRow)
+		local col = (shown - 1) % perRow
+		btn:ClearAllPoints()
+		btn:SetPoint("TOPLEFT", st.auraContainer, "TOPLEFT", col * (TARGET_AURA_SIZE + TARGET_AURA_PADDING), -row * (TARGET_AURA_SIZE + TARGET_AURA_PADDING))
+		btn:Show()
+	end
+
+	for i = shown + 1, #icons do
+		if icons[i] then icons[i]:Hide() end
+	end
+
+	local rows = math.ceil(shown / perRow)
+	st.auraContainer:SetHeight(rows > 0 and (rows * (TARGET_AURA_SIZE + TARGET_AURA_PADDING) - TARGET_AURA_PADDING) or 0.001)
+	st.auraContainer:SetShown(shown > 0)
+end
+
 local function fullScanTargetAuras()
 	resetTargetAuras()
 	if not UnitExists or not UnitExists("target") then return end
 	if C_UnitAuras and C_UnitAuras.GetAuraSlots then
-		local helpful = {C_UnitAuras.GetAuraSlots("target", "HELPFUL")}
+		local helpful = { C_UnitAuras.GetAuraSlots("target", "HELPFUL") }
 		for i = 2, #helpful do
 			cacheTargetAura(C_UnitAuras.GetAuraDataBySlot("target", helpful[i]))
 		end
-		local harmful = {C_UnitAuras.GetAuraSlots("target", "HARMFUL")}
+		local harmful = { C_UnitAuras.GetAuraSlots("target", "HARMFUL") }
 		for i = 2, #harmful do
 			cacheTargetAura(C_UnitAuras.GetAuraDataBySlot("target", harmful[i]))
 		end
 	end
+	updateTargetAuraIcons()
 end
+
 local function refreshMainPower(unit)
 	unit = unit or PLAYER_UNIT
 	local enumId, token = UnitPowerType(unit)
@@ -290,10 +361,6 @@ do
 	targetDefaults.anchor.x = (targetDefaults.anchor.x or 0) + 260
 	defaults.target = targetDefaults
 end
-
-local states = {}
-local targetAuras = {}
-local targetAuras = {}
 
 local function ensureDB(unit)
 	addon.db = addon.db or {}
@@ -645,6 +712,12 @@ local function layoutFrame(cfg, unit)
 
 	-- Apply border only around the bar region wrapper
 	if st.barGroup then setBackdrop(st.barGroup, cfg.border) end
+
+	if unit == "target" and st.auraContainer then
+		st.auraContainer:ClearAllPoints()
+		st.auraContainer:SetPoint("TOPLEFT", st.frame, "BOTTOMLEFT", 0, -TARGET_AURA_PADDING)
+		st.auraContainer:SetWidth(width + borderInset * 2)
+	end
 end
 
 local function ensureFrames(unit)
@@ -675,6 +748,11 @@ local function ensureFrames(unit)
 	st.powerTextRight = st.power:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.nameText = st.status:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.levelText = st.status:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+
+	if unit == "target" then
+		st.auraContainer = CreateFrame("Frame", nil, st.frame)
+		st.auraButtons = {}
+	end
 
 	st.frame:SetMovable(true)
 	st.frame:EnableMouse(true)
@@ -770,6 +848,7 @@ local function applyConfig(unit)
 	local st = states[unit]
 	if not cfg.enabled then
 		if st and st.frame then st.frame:Hide() end
+		if unit == "target" then resetTargetAuras() end
 		return
 	end
 	ensureFrames(unit)
@@ -837,12 +916,14 @@ local function onEvent(self, event, unit, arg1)
 			if states and states["target"] and states["target"].frame then states["target"].frame:Show() end
 		else
 			resetTargetAuras()
+			updateTargetAuraIcons()
 			if states and states["target"] and states["target"].frame then states["target"].frame:Hide() end
 		end
 	elseif event == "UNIT_AURA" and unit == "target" then
 		local eventInfo = arg1
 		if not UnitExists("target") then
 			resetTargetAuras()
+			updateTargetAuraIcons()
 			return
 		end
 		if not eventInfo or eventInfo.isFullUpdate then
@@ -851,6 +932,11 @@ local function onEvent(self, event, unit, arg1)
 		end
 		if eventInfo.addedAuras then
 			for _, aura in ipairs(eventInfo.addedAuras) do
+				cacheTargetAura(aura)
+			end
+		end
+		if eventInfo.updatedAuras then
+			for _, aura in ipairs(eventInfo.updatedAuras) do
 				cacheTargetAura(aura)
 			end
 		end
@@ -865,6 +951,7 @@ local function onEvent(self, event, unit, arg1)
 				targetAuras[inst] = nil
 			end
 		end
+		updateTargetAuraIcons()
 	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		if unit == PLAYER_UNIT then updateHealth(ensureDB("player"), "player") end
 		if unit == "target" then updateHealth(ensureDB("target"), "target") end
