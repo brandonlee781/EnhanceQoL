@@ -5,6 +5,7 @@
 ### ✨ Added
 
 - Shortening per _Currency_ in _Currency Stream_ added
+- Hide border and/or background of *Button Sink*
 
 ### 🔄 Changed
 

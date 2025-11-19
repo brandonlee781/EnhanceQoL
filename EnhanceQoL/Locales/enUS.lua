@@ -457,6 +457,8 @@ L["ignoreMinimapSinkHole"] = "Ignore the following minimap button from the sinkh
 L["useMinimapButtonBinIcon"] = "Use a Minimap button for the sink"
 L["useMinimapButtonBinMouseover"] = "Show a movable frame for the button sink with mouseover"
 L["lockMinimapButtonBin"] = "Lock the button sink frame"
+L["minimapButtonBinHideBackground"] = "Hide button sink background"
+L["minimapButtonBinHideBorder"] = "Hide button sink border"
 L["minimapButtonBinColumns"] = "Button sink columns"
 L["minimapButtonBinColumnsDesc"] = "Number of columns shown in the Minimap Button Sink."
 

@@ -2255,6 +2255,18 @@ local function addMinimapFrame(container)
 			end)
 			g:AddChild(cbMouse)
 
+			local cbHideBg = addon.functions.createCheckboxAce(L["minimapButtonBinHideBackground"], addon.db["minimapButtonBinHideBackground"], function(self, _, value)
+				addon.db["minimapButtonBinHideBackground"] = value and true or false
+				if addon.functions.applyButtonSinkAppearance then addon.functions.applyButtonSinkAppearance() end
+			end)
+			g:AddChild(cbHideBg)
+
+			local cbHideBorder = addon.functions.createCheckboxAce(L["minimapButtonBinHideBorder"], addon.db["minimapButtonBinHideBorder"], function(self, _, value)
+				addon.db["minimapButtonBinHideBorder"] = value and true or false
+				if addon.functions.applyButtonSinkAppearance then addon.functions.applyButtonSinkAppearance() end
+			end)
+			g:AddChild(cbHideBorder)
+
 			if not addon.db["useMinimapButtonBinIcon"] then
 				local cbLock = addon.functions.createCheckboxAce(L["lockMinimapButtonBin"], addon.db["lockMinimapButtonBin"], function(self, _, value)
 					addon.db["lockMinimapButtonBin"] = value
@@ -4782,6 +4794,8 @@ local function initUI()
 	addon.functions.InitDBValue("enableMinimapButtonBin", false)
 	addon.functions.InitDBValue("buttonsink", {})
 	addon.functions.InitDBValue("minimapButtonBinColumns", DEFAULT_BUTTON_SINK_COLUMNS)
+	addon.functions.InitDBValue("minimapButtonBinHideBackground", false)
+	addon.functions.InitDBValue("minimapButtonBinHideBorder", false)
 	addon.functions.InitDBValue("enableLootspecQuickswitch", false)
 	addon.functions.InitDBValue("lootspec_quickswitch", {})
 	addon.functions.InitDBValue("minimapSinkHoleData", {})
@@ -5136,6 +5150,33 @@ local function initUI()
 		end
 	end
 
+	local function applyButtonSinkAppearance(frame)
+		frame = frame or (addon.variables and addon.variables.buttonSink)
+		if not frame or not frame.SetBackdrop then return end
+		local hideBg = addon.db["minimapButtonBinHideBackground"]
+		local hideBorder = addon.db["minimapButtonBinHideBorder"]
+		if hideBg and hideBorder then
+			frame:SetBackdrop(nil)
+			return
+		end
+		frame:SetBackdrop({
+			bgFile = "Interface\\Buttons\\WHITE8x8",
+			edgeFile = "Interface\\Buttons\\WHITE8x8",
+			edgeSize = 1,
+		})
+		if hideBg then
+			frame:SetBackdropColor(0, 0, 0, 0)
+		else
+			frame:SetBackdropColor(0, 0, 0, 0.4)
+		end
+		if hideBorder then
+			frame:SetBackdropBorderColor(1, 1, 1, 0)
+		else
+			frame:SetBackdropBorderColor(1, 1, 1, 1)
+		end
+	end
+	addon.functions.applyButtonSinkAppearance = applyButtonSinkAppearance
+
 	local function firstStartButtonSink(counter)
 		if hookedATT then return end
 		if C_AddOns.IsAddOnLoadable("AllTheThings") then
@@ -5163,11 +5204,6 @@ local function initUI()
 			firstStartButtonSink(0)
 			local buttonBag = CreateFrame("Frame", addonName .. "_ButtonSink", UIParent, "BackdropTemplate")
 			buttonBag:SetSize(150, 150)
-			buttonBag:SetBackdrop({
-				bgFile = "Interface\\Buttons\\WHITE8x8",
-				edgeFile = "Interface\\Buttons\\WHITE8x8",
-				edgeSize = 1,
-			})
 
 			if addon.db["useMinimapButtonBinIcon"] then
 				buttonBag:SetScript("OnLeave", function(self)
@@ -5201,9 +5237,8 @@ local function initUI()
 					buttonBag:SetAlpha(0)
 				end
 			end
-			buttonBag:SetBackdropColor(0, 0, 0, 0.4)
-			buttonBag:SetBackdropBorderColor(1, 1, 1, 1)
 			addon.variables.buttonSink = buttonBag
+			applyButtonSinkAppearance(buttonBag)
 			addon.functions.gatherMinimapButtons()
 			addon.functions.LayoutButtons()
 
