@@ -579,7 +579,7 @@ globals = {
 	"C_ArtifactUI.GetPointsRemaining",
 	"SettingsDropdownControlMixin",
 	"SettingsCategoryListButtonMixin",
-	
+	"SettingsCheckboxControlMixin",
 	"C_ArtifactUI.GetPowerInfo",
 	"C_ArtifactUI.GetPowerLinks",
 	"C_ArtifactUI.GetPowers",

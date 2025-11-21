@@ -95,7 +95,7 @@ addon.functions.SettingsCreateCheckboxes(cGearUpgrade, data)
 
 addon.functions.SettingsCreateHeadline(cGearUpgrade, L["Show on Inspect Frame"])
 
-local data = {
+data = {
 	{
 		var = "inspect_ilvl",
 		text = STAT_AVERAGE_ITEM_LEVEL,
