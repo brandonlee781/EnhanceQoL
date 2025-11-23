@@ -194,37 +194,63 @@ data = {
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cLoot, data)
 
-addon.functions.SettingsCreateText(cLoot, "|c" .. ITEM_QUALITY_COLORS[3].color:GenerateHexColor() .. ITEM_QUALITY3_DESC .. "|r")
+for i = 3, 5 do
+	addon.functions.SettingsCreateText(cLoot, "|c" .. ITEM_QUALITY_COLORS[i].color:GenerateHexColor() .. _G["ITEM_QUALITY" .. i .. "_DESC"] .. "|r")
 
-data = {
-	{
-		var = "lootToastCheckIlvl_rare",
-		text = L["lootToastCheckIlvl"],
-		get = function() return addon.db.lootToastFilters[3].ilvl or false end,
-		func = function(value) addon.db.lootToastFilters[3].ilvl = value end,
-		children = {
-			{
-				var = "lootToastItemLevel_rare",
-				text = L["lootToastItemLevel"],
-				parentCheck = function()
-					return addon.SettingsLayout.elements["enableLootToastFilter"]
-						and addon.SettingsLayout.elements["enableLootToastFilter"].setting
-						and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
-						and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"]
-						and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting
-						and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting:GetValue() == true
-				end,
-				get = function() return addon.db and addon.db.lootToastItemLevels and addon.db.lootToastItemLevels[3] or 0 end,
-				set = function(value) addon.db.lootToastItemLevels[3] = value end,
-				min = 0,
-				max = 1000,
-				step = 1,
-				element = addon.SettingsLayout.elements["enableLootToastFilter"].element,
-				parent = true,
-				default = 0,
-				sType = "slider",
+	data = {
+		{
+			var = "lootToastCheckIlvl_" .. i,
+			text = L["lootToastCheckIlvl"],
+			get = function() return addon.db.lootToastFilters and addon.db.lootToastFilters[i] and addon.db.lootToastFilters[i].ilvl or false end,
+			func = function(value)
+				addon.db.lootToastFilters = addon.db.lootToastFilters or {}
+				addon.db.lootToastFilters[i] = addon.db.lootToastFilters[i] or {}
+				addon.db.lootToastFilters[i].ilvl = value
+			end,
+			children = {
+				{
+					var = "lootToastItemLevel_" .. i,
+					text = L["lootToastItemLevel"],
+					parentCheck = function()
+						return addon.SettingsLayout.elements["enableLootToastFilter"]
+							and addon.SettingsLayout.elements["enableLootToastFilter"].setting
+							and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"]
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting:GetValue() == true
+					end,
+					get = function() return addon.db and addon.db.lootToastItemLevels and addon.db.lootToastItemLevels[i] or 0 end,
+					set = function(value)
+						addon.db.lootToastItemLevels = addon.db.lootToastItemLevels or {}
+						addon.db.lootToastItemLevels[i] = addon.db.lootToastItemLevels[i] or {}
+						addon.db.lootToastItemLevels[i] = value
+					end,
+					min = 0,
+					max = 1000,
+					step = 1,
+					element = addon.SettingsLayout.elements["enableLootToastFilter"].element,
+					parent = true,
+					default = 0,
+					sType = "slider",
+				},
 			},
+			parent = true,
+			element = addon.SettingsLayout.elements["enableLootToastFilter"].element,
+			parentCheck = function()
+				return addon.SettingsLayout.elements["enableLootToastFilter"]
+					and addon.SettingsLayout.elements["enableLootToastFilter"].setting
+					and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
+			end,
+			notify = "enableLootToastFilter",
 		},
+	}
+
+	table.sort(data, function(a, b) return a.text < b.text end)
+	addon.functions.SettingsCreateCheckboxes(cLoot, data)
+
+	addon.functions.SettingsCreateMultiDropdown(cLoot, {
+		var = "lootToastFilters_" .. i,
+		text = L["lootToastAlwaysShow"],
 		parent = true,
 		element = addon.SettingsLayout.elements["enableLootToastFilter"].element,
 		parentCheck = function()
@@ -232,12 +258,13 @@ data = {
 				and addon.SettingsLayout.elements["enableLootToastFilter"].setting
 				and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
 		end,
-		notify = "enableLootToastFilter",
-	},
-}
-
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cLoot, data)
+		options = {
+			{ value = "mounts", text =  L["lootToastAlwaysShowMounts"]},
+			{ value = "pets", text =  L["lootToastAlwaysShowPets"]},
+			{ value = "upgrade", text =  L["lootToastAlwaysShowUpgrades"]},
+		},
+	})
+end
 
 addon.functions.SettingsCreateHeadline(cLoot, L["dungeonJournalLootSpecIcons"])
 

@@ -152,7 +152,6 @@ function addon.functions.SettingsCreateButton(layout, text, func, tooltip, searc
 end
 
 function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
-	print(cbData)
 	addon.db = addon.db or {}
 	addon.db[cbData.var] = addon.db[cbData.var] or {}
 
