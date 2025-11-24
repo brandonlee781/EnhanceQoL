@@ -8,4 +8,5 @@
 	<Script file='VendorEconomy.lua'/>
 	<Script file='Loot.lua'/>
 	<Script file='MapNavigation.lua'/>
+	<Script file='Quest.lua'/>
 </Ui>

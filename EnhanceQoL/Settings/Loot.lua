@@ -137,6 +137,7 @@ data = {
 			addon.db.enableLootToastFilter = value and true or false
 			addon.functions.initLootToast()
 		end,
+		notify = "enableLootToastCustomSound",
 		children = {
 			{
 				var = "enableLootToastCustomSound",
@@ -182,8 +183,6 @@ data = {
 						var = "lootToastCustomSound",
 						type = Settings.VarType.String,
 						sType = "dropdown",
-						-- TODO notify geht nicht
-						notify = "enableLootToastFilter",
 					},
 				},
 			},
