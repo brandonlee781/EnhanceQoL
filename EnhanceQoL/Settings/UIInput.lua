@@ -322,7 +322,7 @@ data = {
 		text = L["gameMenuScaleEnabled"],
 		func = function(v)
 			addon.db["gameMenuScaleEnabled"] = v
-			if value then
+			if v then
 				addon.functions.applyGameMenuScale()
 			else
 				-- Only restore default if we were the last to apply a scale

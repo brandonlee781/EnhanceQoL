@@ -44,6 +44,7 @@ local UnregisterStateDriver = UnregisterStateDriver
 local InCombatLockdown = InCombatLockdown
 local IsMounted = IsMounted
 local UnitInVehicle = UnitInVehicle
+local applyVisibilityDriverToFrame
 
 local frameAnchor
 local mainFrame
@@ -4037,7 +4038,7 @@ local function canApplyVisibilityDriver()
 	return true
 end
 
-local function applyVisibilityDriverToFrame(frame, expression)
+function applyVisibilityDriverToFrame(frame, expression)
 	if not frame then return end
 	if InCombatLockdown and InCombatLockdown() then
 		ResourceBars._pendingVisibilityDriverUpdates = ResourceBars._pendingVisibilityDriverUpdates or {}

@@ -829,72 +829,6 @@ local function addUnitFrame2(container)
 	doLayout()
 end
 
-local function buildDatapanelFrame(container)
-	local DataPanel = addon.DataPanel
-	local DataHub = addon.DataHub
-	local panels = DataPanel.List()
-
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	container:AddChild(scroll)
-
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	scroll:AddChild(wrapper)
-
-	-- Panel management controls
-	local controlGroup = addon.functions.createContainer("InlineGroup", "Flow")
-	controlGroup:SetTitle(L["Panels"] or "Panels")
-	wrapper:AddChild(controlGroup)
-
-	addon.db = addon.db or {}
-	addon.db.dataPanelsOptions = addon.db.dataPanelsOptions or {}
-
-	local editModeHint = addon.functions.createLabelAce("|cffffd700" .. (L["DataPanelEditModeHint"] or "Configure DataPanels in Edit Mode.") .. "|r", nil, nil, 12)
-	editModeHint:SetFullWidth(true)
-	controlGroup:AddChild(editModeHint)
-
-	local hintToggle = addon.functions.createCheckboxAce(L["Show options tooltip hint"], addon.DataPanel.ShouldShowOptionsHint and addon.DataPanel.ShouldShowOptionsHint(), function(_, _, val)
-		if addon.DataPanel.SetShowOptionsHint then addon.DataPanel.SetShowOptionsHint(val and true or false) end
-		for name in pairs(DataHub.streams) do
-			DataHub:RequestUpdate(name)
-		end
-	end)
-	hintToggle:SetRelativeWidth(1.0)
-	controlGroup:AddChild(hintToggle)
-
-	addon.db.dataPanelsOptions.menuModifier = addon.db.dataPanelsOptions.menuModifier or "NONE"
-	local modifierList = {
-		NONE = L["Context menu modifier: None"] or (NONE or "None"),
-		SHIFT = SHIFT_KEY_TEXT or "Shift",
-		CTRL = CTRL_KEY_TEXT or "Ctrl",
-		ALT = ALT_KEY_TEXT or "Alt",
-	}
-	local modifierOrder = { "NONE", "SHIFT", "CTRL", "ALT" }
-	local modifierDropdown = addon.functions.createDropdownAce(L["Context menu modifier"] or "Context menu modifier", modifierList, modifierOrder, function(widget, _, key)
-		if addon.DataPanel.SetMenuModifier then addon.DataPanel.SetMenuModifier(key) end
-		if widget and widget.SetValue then widget:SetValue(key) end
-	end)
-	if modifierDropdown.SetValue then modifierDropdown:SetValue(addon.DataPanel.GetMenuModifier and addon.DataPanel.GetMenuModifier() or "NONE") end
-	modifierDropdown:SetRelativeWidth(1.0)
-	controlGroup:AddChild(modifierDropdown)
-
-	local newName = addon.functions.createEditboxAce(L["Panel Name"] or "Panel Name")
-	newName:SetRelativeWidth(0.4)
-	controlGroup:AddChild(newName)
-
-	local addButton = addon.functions.createButtonAce(L["Add Panel"] or "Add Panel", 120, function()
-		local id = newName:GetText()
-		if id and id ~= "" then
-			DataPanel.Create(id)
-			container:ReleaseChildren()
-			buildDatapanelFrame(container)
-		end
-	end)
-	addButton:SetRelativeWidth(0.3)
-	controlGroup:AddChild(addButton)
-
-	scroll:DoLayout()
-end
-
 local TooltipUtil = _G.TooltipUtil
 
 local function addSocialFrame(container)
@@ -1255,7 +1189,6 @@ end
 if addon.functions and addon.functions.RegisterOptionsPage then
 	addon.functions.RegisterOptionsPage("ui\001actionbar", addVisibilityHub)
 	addon.functions.RegisterOptionsPage("ui\001unitframe", addUnitFrame2)
-	addon.functions.RegisterOptionsPage("ui\001datapanel", buildDatapanelFrame)
 	addon.functions.RegisterOptionsPage("ui\001social", addSocialFrame)
 	addon.functions.RegisterOptionsPage("ui\001system", addCVarFrame)
 end

@@ -8,6 +8,7 @@ end
 
 addon.Mouse = {}
 addon.Mouse.functions = {}
+addon.Mouse.variables = {}
 addon.LMouse = {} -- Locales for aura
 
 addon.functions.InitDBValue("mouseRingEnabled", false)

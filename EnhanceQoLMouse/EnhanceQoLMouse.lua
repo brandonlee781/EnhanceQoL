@@ -15,6 +15,7 @@ local AceGUI = addon.AceGUI
 local GetCursorPosition = GetCursorPosition
 local TEX_MOUSE = "Interface\\AddOns\\" .. addonName .. "\\Icons\\Mouse.tga"
 local TEX_DOT = "Interface\\AddOns\\" .. addonName .. "\\Icons\\Dot.tga"
+addon.Mouse.variables.TEXT_DOT = TEX_DOT
 local TEX_TRAIL = "Interface\\AddOns\\" .. addonName .. "\\Icons\\MouseTrail.tga"
 
 local MaxActuationPoint = 1 -- Minimaler Bewegungsabstand für Trail-Elemente

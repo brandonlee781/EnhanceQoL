@@ -60,7 +60,7 @@ local data = {
 						end
 					elseif addon.mousePointer and not v then
 						local dot = addon.mousePointer:CreateTexture(nil, "BACKGROUND")
-						dot:SetTexture(TEX_DOT)
+						dot:SetTexture(addon.Mouse.variables.TEXT_DOT)
 						dot:SetSize(10, 10)
 						dot:SetPoint("CENTER", addon.mousePointer, "CENTER", 0, 0)
 						addon.mousePointer.dot = dot
