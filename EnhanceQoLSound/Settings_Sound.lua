@@ -36,23 +36,79 @@ end
 local cSound = addon.functions.SettingsCreateCategory(nil, SOUND or SOUND_LABEL or "Sound", nil, "Sound")
 addon.SettingsLayout.soundCategory = cSound
 
+local headlineCache = {}
+local function EnsureHeadlineForPath(path)
+	local key = table.concat(path, "/")
+	if headlineCache[key] then return end
+	headlineCache[key] = true
+	local label = GetLabel(path[#path])
+	addon.functions.SettingsCreateHeadline(cSound, label)
+end
+
+local function SortKeys(keys)
+	table.sort(keys, function(a, b)
+		local la, lb = GetLabel(a), GetLabel(b)
+		if la == lb then return tostring(a) < tostring(b) end
+		return la < lb
+	end)
+end
+
 local function AddSoundOptions(path, data)
-	if type(data) ~= "table" then return end
+	if type(data) ~= "table" then return false end
+
+	if IsPureNumbersTable(data) then
+		local varName = "sounds_" .. table.concat(path, "_")
+		local label = GetLabel(path[#path])
+		local soundList = data
+		addon.functions.SettingsCreateCheckbox(cSound, {
+			var = varName,
+			text = label,
+			func = function(value)
+				addon.db[varName] = value and true or false
+				for _, soundID in ipairs(soundList) do
+					if value then
+						MuteSoundFile(soundID)
+					else
+						UnmuteSoundFile(soundID)
+					end
+				end
+			end,
+			default = false,
+		})
+		return true
+	end
 
 	if AllChildrenArePureNumbers(data) then
-		local groupKey = table.concat(path, "_")
 		local keys = {}
 		for key in pairs(data) do table.insert(keys, key) end
-		table.sort(keys, function(a, b)
-			local la, lb = GetLabel(a), GetLabel(b)
-			if la == lb then return tostring(a) < tostring(b) end
-			return la < lb
-		end)
+		SortKeys(keys)
 
+		if #path == 1 then
+			local needHeadline
+			for _, key in ipairs(keys) do
+				local child = data[key]
+				if type(child) == "table" and IsPureNumbersTable(child) then
+					needHeadline = true
+					break
+				end
+			end
+			if needHeadline then EnsureHeadlineForPath(path) end
+
+			local created = false
+			for _, key in ipairs(keys) do
+				table.insert(path, key)
+				if AddSoundOptions(path, data[key]) then created = true end
+				table.remove(path)
+			end
+			return created
+		end
+
+		local created = false
+		local groupKey = table.concat(path, "_")
+		if #keys > 0 then EnsureHeadlineForPath(path) end
 		for _, key in ipairs(keys) do
 			local varName = "sounds_" .. groupKey .. "_" .. key
 			local label = GetLabel(key)
-			if #path > 1 then label = GetLabel(path[#path]) .. " - " .. label end
 			local soundList = data[key]
 
 			addon.functions.SettingsCreateCheckbox(cSound, {
@@ -72,35 +128,30 @@ local function AddSoundOptions(path, data)
 				end,
 				default = false,
 			})
+			created = true
 		end
-	else
-		local children = {}
-		for key in pairs(data) do table.insert(children, key) end
-		table.sort(children, function(a, b)
-			local la, lb = GetLabel(a), GetLabel(b)
-			if la == lb then return tostring(a) < tostring(b) end
-			return la < lb
-		end)
-
-		for _, key in ipairs(children) do
-			if type(data[key]) == "table" then
-				table.insert(path, key)
-				AddSoundOptions(path, data[key])
-				table.remove(path)
-			end
-		end
+		return created
 	end
+
+	local created = false
+	local children = {}
+	for key, value in pairs(data) do
+		if type(value) == "table" then table.insert(children, key) end
+	end
+	SortKeys(children)
+
+	for _, key in ipairs(children) do
+		table.insert(path, key)
+		if AddSoundOptions(path, data[key]) then created = true end
+		table.remove(path)
+	end
+	return created
 end
 
 local topKeys = {}
 for key in pairs(addon.Sounds.soundFiles) do table.insert(topKeys, key) end
-table.sort(topKeys, function(a, b)
-	local la, lb = GetLabel(a), GetLabel(b)
-	if la == lb then return tostring(a) < tostring(b) end
-	return la < lb
-end)
+SortKeys(topKeys)
 
 for _, treeKey in ipairs(topKeys) do
-	addon.functions.SettingsCreateHeadline(cSound, GetLabel(treeKey))
 	AddSoundOptions({ treeKey }, addon.Sounds.soundFiles[treeKey])
 end
