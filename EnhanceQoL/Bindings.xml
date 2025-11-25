@@ -1,0 +1,11 @@
+<Bindings>
+    <Binding name="CLICK EQOLWorldMarkerCycler:LeftButton"
+             category="Enhance QoL"
+             >
+    </Binding>
+
+    <Binding name="CLICK EQOLWorldMarkerCycler:RightButton"
+             category="Enhance QoL"
+             >
+    </Binding>
+</Bindings>

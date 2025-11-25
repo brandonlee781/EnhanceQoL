@@ -232,10 +232,10 @@ local function setBRInfo(info)
 
 			-- TODO actually no way to do saturation stuff in m+/raid in midnight
 			-- if current > 0 then
-				brButton.charges:SetTextColor(0, 1, 0)
-				brButton.icon:SetDesaturated(false)
-				brButton.cooldownFrame:SetSwipeColor(0, 0, 0, 0.3)
-				brButton.charges:Show()
+			brButton.charges:SetTextColor(0, 1, 0)
+			brButton.icon:SetDesaturated(false)
+			brButton.cooldownFrame:SetSwipeColor(0, 0, 0, 0.3)
+			brButton.charges:Show()
 			-- else
 			-- 	brButton.cooldownFrame:SetSwipeColor(0, 0, 0, 1)
 			-- 	brButton.icon:SetDesaturated(true)
@@ -642,98 +642,6 @@ local function addPotionTrackerFrame(container)
 	scroll:DoLayout()
 end
 
-local function addTeleportFrame(container)
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	container:AddChild(scroll)
-
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	scroll:AddChild(wrapper)
-
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
-	groupCore:SetTitle(L["teleportsHeadline"])
-
-	local cbTeleportsEnabled = addon.functions.createCheckboxAce(L["teleportEnabled"], addon.db["teleportFrame"], function(self, _, value)
-		addon.db["teleportFrame"] = value
-		container:ReleaseChildren()
-		addTeleportFrame(container)
-		addon.MythicPlus.functions.toggleFrame()
-	end, L["teleportEnabledDesc"])
-	groupCore:AddChild(cbTeleportsEnabled)
-
-	-- World Map Compendium toggle, independent of Teleport Frame
-	local cbWorldMapEnabled = addon.functions.createCheckboxAce(L["teleportsWorldMapEnabled"], addon.db["teleportsWorldMapEnabled"], function(self, _, value)
-		addon.db["teleportsWorldMapEnabled"] = value
-		if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
-		-- Rebuild this section so the hint label appears/disappears immediately
-		container:ReleaseChildren()
-		addTeleportFrame(container)
-	end, L["teleportsWorldMapEnabledDesc"])
-	groupCore:AddChild(cbWorldMapEnabled)
-
-	-- Show the classic season list inside the World Map panel
-	local cbWorldMapSeason = addon.functions.createCheckboxAce(L["teleportsWorldMapShowSeason"], addon.db["teleportsWorldMapShowSeason"], function(self, _, value)
-		addon.db["teleportsWorldMapShowSeason"] = value
-		if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
-		container:ReleaseChildren()
-		addTeleportFrame(container)
-	end, L["teleportsWorldMapShowSeasonDesc"])
-	groupCore:AddChild(cbWorldMapSeason)
-
-	-- Show a short usage hint when the World Map panel is enabled
-	if addon.db["teleportsWorldMapEnabled"] then
-		local hint = addon.functions.createLabelAce(
-			"|cffffd700" .. (L["teleportsWorldMapHelp"] or "Right-click to display the teleport destination\nShift+Right-click to toggle favorite") .. "|r",
-			nil,
-			nil,
-			12
-		)
-		hint:SetFullWidth(true)
-		groupCore:AddChild(hint)
-		groupCore:AddChild(addon.functions.createSpacerAce())
-	end
-
-	-- if addon.db["teleportFrame"] then
-	local data = {
-		{
-			text = L["portalHideMissing"],
-			var = "portalHideMissing",
-		},
-	}
-	-- TODO bug in tooltip in midnight beta - remove for now
-	if not addon.variables.isMidnight then
-		table.insert(data, {
-			text = L["portalShowTooltip"],
-			var = "portalShowTooltip",
-			func = function(self, _, value)
-				addon.db["portalShowTooltip"] = value
-				if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
-			end,
-		})
-	end
-
-	table.sort(data, function(a, b) return a.text < b.text end)
-
-	for _, cbData in ipairs(data) do
-		local uFunc = function(self, _, value)
-			addon.db[cbData.var] = value
-			addon.MythicPlus.functions.toggleFrame()
-			if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
-		end
-		if cbData.func then uFunc = cbData.func end
-		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc)
-		groupCore:AddChild(cbElement)
-	end
-	-- end
-
-	-- Legacy/old compendium options removed; modern World Map compendium is always used.
-
-	scroll:DoLayout()
-	wrapper:DoLayout()
-end
-
 local function addAutoMarkFrame(container)
 	-- TODO this feature will be removed, as it is restricted to hardware events
 	if addon.variables.isMidnight then return end
@@ -1125,9 +1033,6 @@ end
 -- Place Potion Tracker under Combat (works everywhere)
 if not addon.variables.isMidnight then addon.functions.addToTree("combat", { value = "potiontracker", text = L["Potion Tracker"] }, true) end
 
--- Place Teleports under Map & Navigation
-addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] }, true)
-
 -- Combined Mythic+ category root
 local function addMythicPlusRootFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
@@ -1366,8 +1271,6 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 		if ppos then group = "mythicplus\001groupfilter" end
 		local ppos2 = group:find("party\001potiontracker", 1, true)
 		if ppos2 then group = "mythicplus\001potiontracker" end
-		local npos = group:find("nav\001teleports", 1, true)
-		if npos then group = "mythicplus\001teleports" end
 
 		local dpos = group:find("dungeon\001", 1, true)
 		if dpos then
@@ -1394,8 +1297,6 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 		-- TODO rename automark to Dungeon and put brtracker into that frame, each in his own group in the container
 	elseif group == "mythicplus\001automark" then
 		addAutoMarkFrame(container)
-	elseif group == "mythicplus\001teleports" then
-		addTeleportFrame(container)
 	elseif group == "mythicplus\001talents" then
 		addTalentFrame(container)
 	elseif group == "mythicplus\001groupfilter" then

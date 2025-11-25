@@ -24,6 +24,9 @@ Starting to change stuff to blizzard options, for now only a small part is there
 - Shortening per _Currency_ in _Currency Stream_ added
 - Hide border and/or background of _Button Sink_
 - Scaling, width, height of Reputation and XP-Bar implemented
+- World Marker Cycle
+  - Set a keybind to cycle through all world markers
+  - Set another keybind to clear all world markers
 
 ### 🔄 Changed
 

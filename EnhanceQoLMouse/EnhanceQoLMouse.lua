@@ -220,19 +220,6 @@ local function removeMouseRing()
 end
 addon.Mouse.functions.removeMouseRing = removeMouseRing
 
-addon.variables.statusTable.groups["mouse"] = true
--- Place Mouse under UI & Input
-addon.functions.addToTree("ui", {
-	value = "mouse",
-	text = MOUSE_LABEL,
-})
-
-function addon.Mouse.functions.treeCallback(container, group)
-	container:ReleaseChildren() -- Entfernt vorherige Inhalte
-	-- Prüfen, welche Gruppe ausgewählt wurde
-	if group == "mouse" then Settings.OpenToCategory(addon.SettingsLayout.mouseCategory:GetID()) end
-end
-
 if addon.db["mouseRingEnabled"] then createMouseRing() end
 
 applyPreset(addon.db["mouseTrailDensity"])

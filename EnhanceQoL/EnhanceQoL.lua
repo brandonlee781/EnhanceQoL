@@ -2367,15 +2367,15 @@ local function initUI()
 			LDBIcon:Hide(addonName)
 		end
 	end
-	function addon.functions.toggleZoneText(value)
+	function addon.functions.toggleZoneText(value, ignore)
 		if value then
 			ZoneTextFrame:UnregisterAllEvents()
 			ZoneTextFrame:Hide()
-		else
+		elseif not ignore then
 			addon.variables.requireReload = true
 		end
 	end
-	addon.functions.toggleZoneText(addon.db["hideZoneText"])
+	addon.functions.toggleZoneText(addon.db["hideZoneText"], true)
 
 	function addon.functions.toggleQuickJoinToastButton(value)
 		if value == false then
@@ -3191,32 +3191,16 @@ local function CreateUI()
 		value = "items",
 		text = L["ItemsInventory"],
 		children = {
-			{ value = "loot", text = L["Loot"] },
-			{ value = "gear", text = L["GearUpgrades"] },
 			{ value = "economy", text = L["VendorsEconomy"] },
-			{ value = "container", text = L["ContainerActions"] },
 		},
 	})
-
-	-- Top: Map & Navigation (Teleports added by Mythic+)
-	addon.functions.addToTree(nil, {
-		value = "nav",
-		text = L["MapNavigation"],
-		children = {
-			{ value = "quest", text = L["Quest"] },
-		},
-	})
-
 	-- Top: UI & Input
 	addon.functions.addToTree(nil, {
 		value = "ui",
 		text = L["UIInput"],
 		children = {
 			{ value = "actionbar", text = L["VisibilityHubName"] or ACTIONBARS_LABEL },
-			{ value = "chatframe", text = HUD_EDIT_MODE_CHAT_FRAME_LABEL },
 			{ value = "unitframe", text = UNITFRAME_LABEL },
-			{ value = "datapanel", text = "Datapanel" },
-			{ value = "social", text = L["Social"] },
 			{ value = "system", text = L["System"] },
 		},
 	})
@@ -3383,7 +3367,13 @@ local function CreateUI()
 		root:CreateButton(L["SettingsDataPanelCreate"], function() local dialog = StaticPopup_Show("EQOL_CREATE_DATAPANEL") end)
 
 		DoDevider()
-		root:CreateButton(SETTINGS, function() Settings.OpenToCategory(addon.SettingsLayout.rootCategory:GetID()) end)
+		root:CreateButton(LFG_LIST_LEGACY .. " " .. SETTINGS, function()
+			if frame:IsShown() then
+				frame:Hide()
+			else
+				frame:Show()
+			end
+		end)
 	end
 
 	-- Datenobjekt fr den Minimap-Button
@@ -3393,11 +3383,7 @@ local function CreateUI()
 		icon = "Interface\\AddOns\\" .. addonName .. "\\Icons\\Icon.tga", -- Hier kannst du dein eigenes Icon verwenden
 		OnClick = function(_, msg)
 			if msg == "LeftButton" then
-				if frame:IsShown() then
-					frame:Hide()
-				else
-					frame:Show()
-				end
+				Settings.OpenToCategory(addon.SettingsLayout.rootCategory:GetID())
 			else
 				MenuUtil.CreateContextMenu(UIParent, QuickMenuGenerator)
 			end

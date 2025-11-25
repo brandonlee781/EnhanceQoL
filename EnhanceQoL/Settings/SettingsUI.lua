@@ -18,14 +18,23 @@ hooksecurefunc(SettingsCheckboxControlMixin, "Init", function(self)
 	if not setting or not setting.variable or not addon.variables.NewVersionTableEQOL[setting.variable] then return end
 	if self.NewFeature then self.NewFeature:SetShown(true) end
 end)
+
 hooksecurefunc(SettingsDropdownControlMixin, "Init", function(self)
 	local setting = self.GetSetting and self:GetSetting()
 	if not setting or not setting.variable or not addon.variables.NewVersionTableEQOL[setting.variable] then return end
 	if self.NewFeature then self.NewFeature:SetShown(true) end
 end)
+
 hooksecurefunc(SettingsSliderControlMixin, "Init", function(self)
 	local setting = self.GetSetting and self:GetSetting()
 	if not setting or not setting.variable or not addon.variables.NewVersionTableEQOL[setting.variable] then return end
+	if self.NewFeature then self.NewFeature:SetShown(true) end
+end)
+
+hooksecurefunc(SettingsListSectionHeaderMixin, "Init", function(self)
+	if not self.GetData then return end
+	local data = self:GetData()
+	if not data.data or not data.data._eqol or not addon.variables.NewVersionTableEQOL[data.data._eqol] then return end
 	if self.NewFeature then self.NewFeature:SetShown(true) end
 end)
 
@@ -115,8 +124,14 @@ function addon.functions.SettingsCreateHeadline(cat, text)
 	charHeader:AddSearchTags(text)
 end
 
-function addon.functions.SettingsCreateText(cat, text)
-	local charHeader = Settings.CreateElementInitializer("EQOL_SettingsListSectionHintTemplate", { name = text })
+function addon.functions.SettingsCreateKeybind(cat, bindingIndex)
+	local data = { bindingIndex = bindingIndex }
+	local initializer = Settings.CreateElementInitializer("KeyBindingFrameBindingTemplate", data)
+	Settings.RegisterInitializer(cat, initializer)
+end
+
+function addon.functions.SettingsCreateText(cat, text, newTag)
+	local charHeader = Settings.CreateElementInitializer("EQOL_SettingsListSectionHintTemplate", { name = text, _eqol = newTag })
 	Settings.RegisterInitializer(cat, charHeader)
 	charHeader:AddSearchTags(text)
 end

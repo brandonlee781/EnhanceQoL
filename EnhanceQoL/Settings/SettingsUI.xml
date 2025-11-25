@@ -11,4 +11,5 @@
 	<Script file='Quest.lua'/>
 	<Script file='ChatFrame.lua'/>
 	<Script file='DataPanel.lua'/>
+	<Script file='Social.lua'/>
 </Ui>

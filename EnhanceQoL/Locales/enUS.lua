@@ -9,6 +9,9 @@ L["Persist LFG signup note"] = "Persist LFG signup note"
 L["Hide Minimap Button"] = "Hide Minimap Button"
 L["Left-Click to show options"] = "Left-Click to show options"
 L["Right-Click for options"] = "Right-click for options"
+L["Cycle World Marker"] = "Cycle World Marker"
+L["Clear World Marker"] = "Clear all World Marker"
+L["WorldMarkerCycle"] = "One-Button to cycle through World Markers. World Markers can only be placed in party/raid"
 
 -- DataPanel
 L["DataPanelWidth"] = "Panel width"
@@ -622,8 +625,8 @@ L["IgnoreTooltipNote"] = "Show ignore note in tooltip"
 L["ignoreTooltipNote"] = "Show ignore note in tooltip"
 L["IgnoreTooltipMaxChars"] = "Ignore note max characters"
 L["IgnoreTooltipWordsPerLine"] = "Ignore note words per line"
-L["IgnoreDesc"] =
-	'Blocks duel, pet-battle, trade, invite and whisper requests from ignored players. Automatically adds same-realm names to Blizzard’s ignore list when space is available.\nIn the Dungeon Finder ignored players are shown as "!!! <Name> !!!".\n\nOpen the list with /eil.'
+L["IgnoreDesc2"] =
+	'Blocks duel, pet-battle, trade, invite and whisper requests from ignored players. \nAutomatically adds same-realm names to Blizzard’s ignore list when space is available.\nIn the Dungeon Finder ignored players are shown as "!!! <Name> !!!".\n\nOpen the list with /eil.'
 L["blockDuelRequests"] = "Block duel requests"
 L["blockPetBattleRequests"] = "Block pet battle duel requests"
 L["blockPartyInvites"] = "Block party invites"

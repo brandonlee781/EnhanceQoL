@@ -128,12 +128,37 @@ local function toggleLFGFilterPosition()
 	end
 end
 
+addon.functions.FindBindingIndex = function(data)
+	local found = {}
+	if not type(data) == "table" then return end
+
+	for i = 1, GetNumBindings() do
+		local command = GetBinding(i)
+		if data[command] then found[command] = i end
+	end
+	return found
+end
+
 function addon.functions.initDungeonFrame()
 	addon.functions.InitDBValue("autoChooseDelvePower", false)
 	addon.functions.InitDBValue("lfgSortByRio", false)
 	addon.functions.InitDBValue("groupfinderSkipRoleSelect", false)
 	addon.functions.InitDBValue("enableChatIMRaiderIO", false)
 	addon.functions.InitDBValue("timeoutReleaseDifficulties", {})
+
+	local find = {
+		["CLICK EQOLWorldMarkerCycler:LeftButton"] = true,
+		["CLICK EQOLWorldMarkerCycler:RightButton"] = true,
+	}
+	addon.variables.keybindFindings = addon.functions.FindBindingIndex(find)
+
+	if #addon.variables.keybindFindings then
+		addon.functions.SettingsCreateHeadline(addon.SettingsLayout.characterInspectCategory, AUCTION_CATEGORY_MISCELLANEOUS, "CombatDungeon_Misc")
+		addon.functions.SettingsCreateText(addon.SettingsLayout.characterInspectCategory, "|cff99e599" .. L["WorldMarkerCycle"] .. "|r", "EQOL_WorldMarkerCycle")
+	end
+	for i, v in pairs(addon.variables.keybindFindings) do
+		addon.functions.SettingsCreateKeybind(addon.SettingsLayout.characterInspectCategory, v)
+	end
 
 	if LFGListFrame and LFGListFrame.SearchPanel and LFGListFrame.SearchPanel.FilterButton and LFGListFrame.SearchPanel.FilterButton.ResetButton then
 		lfgPoint, lfgRelativeTo, lfgRelativePoint, lfgXOfs, lfgYOfs = LFGListFrame.SearchPanel.FilterButton.ResetButton:GetPoint()
@@ -171,6 +196,37 @@ function addon.functions.initDungeonFrame()
 
 		Menu.ModifyMenu("MENU_LFG_FRAME_MEMBER_APPLY", AddLFGApplicantRIO)
 	end
+
+	_G["BINDING_NAME_CLICK EQOLWorldMarkerCycler:LeftButton"] = L["Cycle World Marker"]
+	_G["BINDING_NAME_CLICK EQOLWorldMarkerCycler:RightButton"] = L["Clear World Marker"]
+
+	local btn = CreateFrame("Button", "EQOLWorldMarkerCycler", UIParent, "SecureActionButtonTemplate")
+	btn:SetAttribute("type", "macro")
+	btn:RegisterForClicks("AnyDown")
+	local body = "i = 0;order = newtable()"
+	for i = 1, 8 do
+		body = body .. format("\ntinsert(order, %s)", i)
+	end
+	SecureHandlerExecute(btn, body)
+
+	SecureHandlerUnwrapScript(btn, "PreClick")
+	-- TODO check midnight later, /cwm 0 not working for now
+	
+	SecureHandlerWrapScript(
+		btn,
+		"PreClick",
+		btn,
+		[=[ 
+		if not down or not next(order) then return end
+		if button == "RightButton" then
+			i = 0
+			self:SetAttribute("macrotext", "/cwm 1\n/cwm 2\n/cwm 3\n/cwm 4\n/cwm 5\n/cwm 6\n/cwm 7\n/cwm 8")
+		else
+			i = i%#order + 1
+			self:SetAttribute("macrotext", "/wm [@cursor]"..order[i])
+		end
+	]=]
+	)
 end
 
 ---- END REGION
