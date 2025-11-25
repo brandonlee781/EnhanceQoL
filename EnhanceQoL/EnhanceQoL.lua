@@ -1441,7 +1441,7 @@ local function setCVarValue(cvarKey, newValue)
 	if newValue == nil then return end
 
 	newValue = tostring(newValue)
-	local currentValue = GetCVar(cvarKey)
+	local currentValue = C_CVar.GetCVar(cvarKey)
 	if currentValue ~= nil then currentValue = tostring(currentValue) end
 
 	if currentValue == newValue then return end
@@ -1453,7 +1453,7 @@ local function setCVarValue(cvarKey, newValue)
 	end
 
 	guard[cvarKey] = true
-	SetCVar(cvarKey, newValue)
+	C_CVar.SetCVar(cvarKey, newValue)
 end
 addon.functions.setCVarValue = setCVarValue
 
@@ -3202,7 +3202,6 @@ local function CreateUI()
 		children = {
 			{ value = "actionbar", text = L["VisibilityHubName"] or ACTIONBARS_LABEL },
 			{ value = "unitframe", text = UNITFRAME_LABEL },
-			{ value = "system", text = L["System"] },
 		},
 	})
 

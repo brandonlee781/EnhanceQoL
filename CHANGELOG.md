@@ -24,6 +24,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
     - Chat Frame
     - Data Panel
     - Mouse
+    - System
     - Tooltip
 
 ### ✨ Added
