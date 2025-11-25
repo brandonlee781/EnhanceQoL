@@ -216,7 +216,7 @@ function addon.functions.initDungeonFrame()
 		btn,
 		"PreClick",
 		btn,
-		[=[ 
+		[=[
 		if not down or not next(order) then return end
 		if button == "RightButton" then
 			i = 0
