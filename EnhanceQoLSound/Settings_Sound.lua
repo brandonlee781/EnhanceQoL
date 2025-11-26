@@ -34,6 +34,8 @@ end
 local cSound = addon.functions.SettingsCreateCategory(nil, SOUND or SOUND_LABEL or "Sound", nil, "Sound")
 addon.SettingsLayout.soundCategory = cSound
 
+addon.functions.SettingsCreateHeadline(cSound, L["soundMuteExplained"])
+
 local headlineCache = {}
 local function EnsureHeadlineForPath(path)
 	local key = table.concat(path, "/")

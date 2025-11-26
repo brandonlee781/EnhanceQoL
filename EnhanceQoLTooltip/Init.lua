@@ -11,7 +11,7 @@ addon.functions.InitDBValue("TooltipAnchorOffsetX", 0)
 addon.functions.InitDBValue("TooltipAnchorOffsetY", 0)
 
 addon.functions.InitDBValue("TooltipUnitHideType", 1)
-addon.functions.InitDBValue("TooltipUnitHideInCombat", true)
+addon.functions.InitDBValue("TooltipUnitHideInCombat", false)
 addon.functions.InitDBValue("TooltipUnitHideInDungeon", false)
 addon.functions.InitDBValue("TooltipUnitHideHealthBar", false)
 addon.functions.InitDBValue("TooltipShowMythicScore", false)

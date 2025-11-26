@@ -208,8 +208,6 @@ addon.functions.SettingsCreateMultiDropdown(cUnitFrame, {
 
 ----- REGION END
 
-function addon.functions.initUIInput() end
-
 local eventHandlers = {}
 
 local function registerEvents(frame)

@@ -45,7 +45,6 @@ addon.functions.InitDBValue("groupfinderSkipRoleSelect", false)
 addon.functions.InitDBValue("groupfinderSkipRoleSelectOption", 1)
 addon.functions.InitDBValue("groupfinderShowDungeonScoreFrame", false)
 
--- TODO turn ignoreMythic, heroic, normal and timewalking into a dropdown so we safe room and can easily extent it.
 -- Misc
 addon.functions.InitDBValue("autoMarkTankInDungeon", false)
 addon.functions.InitDBValue("autoMarkTankInDungeonMarker", 6)
@@ -145,9 +144,9 @@ addon.functions.InitDBValue("portalShowTooltip", false)
 addon.functions.InitDBValue("teleportNameCache", {})
 addon.functions.InitDBValue("teleportFavorites", {})
 -- Enable/disable World Map Teleport Panel independently
-addon.functions.InitDBValue("teleportsWorldMapEnabled", true)
+addon.functions.InitDBValue("teleportsWorldMapEnabled", false)
 -- Also show the classic current season list in the World Map panel
-addon.functions.InitDBValue("teleportsWorldMapShowSeason", true)
+addon.functions.InitDBValue("teleportsWorldMapShowSeason", false)
 -- Favorites override is now always active in code
 addon.functions.InitDBValue("teleportFrameLocked", true)
 addon.functions.InitDBValue("teleportFrameData", {})
