@@ -27,3 +27,4 @@ FoodReminder.lua
 EnhanceQoLDrinkMacro.lua
 Health.lua
 EnhanceQoLHealthMacro.lua
+Settings_DrinkMacro.lua
