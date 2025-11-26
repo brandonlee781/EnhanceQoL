@@ -3115,14 +3115,6 @@ local function CreateUI()
 	-- Top: Combat & Dungeons (children added by sub-addons like Aura, Mythic+, Drink, CombatMeter)
 	addon.functions.addToTree(nil, { value = "combat", text = L["CombatDungeons"] })
 
-	-- Top: Items & Inventory (core pages + Vendors & Economy)
-	addon.functions.addToTree(nil, {
-		value = "items",
-		text = L["ItemsInventory"],
-		children = {
-			{ value = "economy", text = L["VendorsEconomy"] },
-		},
-	})
 	-- Top: UI & Input
 	addon.functions.addToTree(nil, {
 		value = "ui",
@@ -3183,8 +3175,6 @@ local function CreateUI()
 			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.functions and addon.Events.LegionRemix.functions.treeCallback then
 				addon.Events.LegionRemix.functions.treeCallback(container, group)
 			end
-		elseif string.match(group, "^vendor") then
-			addon.Vendor.functions.treeCallback(container, group)
 		elseif string.find(group, "mythicplus", 1, true) then
 			addon.MythicPlus.functions.treeCallback(container, group)
 		elseif string.match(group, "^aura") then
