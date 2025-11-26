@@ -132,7 +132,7 @@ addon.SettingsLayout.vendorCategory = cVendor
 
 addon.functions.SettingsCreateHeadline(cVendor, L["SellingAndShopping"] or "Selling & Shopping")
 
-addon.functions.SettingsCreateCheckboxes(cVendor, {
+local generalCheckboxes = {
 	{
 		var = "vendorSwapAutoSellShift",
 		text = L["vendorSwapAutoSellShift"],
@@ -142,9 +142,7 @@ addon.functions.SettingsCreateCheckboxes(cVendor, {
 		var = "vendorOnly12Items",
 		text = L["vendorOnly12Items"],
 		desc = L["vendorOnly12ItemsDesc"],
-		func = function(value)
-			addon.db["vendorOnly12Items"] = value and true or false
-		end,
+		func = function(value) addon.db["vendorOnly12Items"] = value and true or false end,
 	},
 	{
 		var = "vendorAltClickInclude",
@@ -159,26 +157,29 @@ addon.functions.SettingsCreateCheckboxes(cVendor, {
 			addon.db["vendorShowSellOverlay"] = value and true or false
 			refreshSellMarks()
 		end,
+		children = {
+			{
+				var = "vendorShowSellHighContrast",
+				text = L["vendorShowSellHighContrast"],
+				func = function(value)
+					addon.db["vendorShowSellHighContrast"] = value and true or false
+					refreshSellMarks()
+				end,
+				parentCheck = function() return isChecked("vendorShowSellOverlay") end,
+				parent = true,
+				type = Settings.VarType.Boolean,
+				sType = "checkbox",
+			},
+		},
 	},
 	{
 		var = "vendorShowSellTooltip",
 		text = L["vendorShowSellTooltip"],
 		func = function(value) addon.db["vendorShowSellTooltip"] = value and true or false end,
 	},
-})
-
-local overlayParent = addon.SettingsLayout.elements["vendorShowSellOverlay"]
-addon.functions.SettingsCreateCheckbox(cVendor, {
-	var = "vendorShowSellHighContrast",
-	text = L["vendorShowSellHighContrast"],
-	func = function(value)
-		addon.db["vendorShowSellHighContrast"] = value and true or false
-		refreshSellMarks()
-	end,
-	parent = true,
-	element = overlayParent and overlayParent.element,
-	parentCheck = function() return isChecked("vendorShowSellOverlay") end,
-})
+}
+table.sort(generalCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
+addon.functions.SettingsCreateCheckboxes(cVendor, generalCheckboxes)
 
 addon.functions.SettingsCreateHeadline(cVendor, L["vendorCraftShopperTitle"] or "Craft Shopper")
 addon.functions.SettingsCreateCheckbox(cVendor, {
@@ -384,19 +385,7 @@ addon.functions.SettingsCreateDropdown(cVendor, {
 })
 
 addon.functions.SettingsCreateHeadline(cVendor, L["vendorDestroy"] or "Destroy")
-local destroyEnable = addon.functions.SettingsCreateCheckbox(cVendor, {
-	var = "vendorDestroyEnable",
-	text = L["vendorDestroyEnable"],
-	desc = L["vendorDestroyEnableDesc"],
-	func = function(value)
-		addon.db["vendorDestroyEnable"] = value and true or false
-		refreshSellMarks()
-		refreshDestroyButton()
-	end,
-	default = false,
-})
-
-addon.functions.SettingsCreateCheckboxes(cVendor, {
+local destroyChildren = {
 	{
 		var = "vendorShowDestroyOverlay",
 		text = L["vendorShowDestroyOverlay"],
@@ -405,8 +394,9 @@ addon.functions.SettingsCreateCheckboxes(cVendor, {
 			refreshSellMarks()
 		end,
 		parent = true,
-		element = destroyEnable.element,
 		parentCheck = function() return isChecked("vendorDestroyEnable") end,
+		type = Settings.VarType.Boolean,
+		sType = "checkbox",
 	},
 	{
 		var = "vendorDestroyShowMessages",
@@ -414,30 +404,51 @@ addon.functions.SettingsCreateCheckboxes(cVendor, {
 		desc = L["vendorDestroyShowMessagesDesc"],
 		func = function(value) addon.db["vendorDestroyShowMessages"] = value and true or false end,
 		parent = true,
-		element = destroyEnable.element,
+		parentCheck = function() return isChecked("vendorDestroyEnable") end,
+		type = Settings.VarType.Boolean,
+		sType = "checkbox",
+	},
+	{
+		sType = "hint",
+		text = L["vendorDestroyManualHint"],
+		parent = true,
 		parentCheck = function() return isChecked("vendorDestroyEnable") end,
 	},
-})
-addon.functions.SettingsCreateText(cVendor, L["vendorDestroyManualHint"])
-addon.functions.SettingsCreateButton(cVendor, {
-	var = "vendorDestroyAdd",
-	text = ADD,
-	func = function()
-		if not isChecked("vendorDestroyEnable") then return end
-		showAddPopup("EQOL_VENDOR_DESTROY_ADD", L["vendorDestroyManualHint"], "vendorIncludeDestroyList")
-	end,
-	parent = true,
-	element = destroyEnable.element,
-	parentCheck = function() return isChecked("vendorDestroyEnable") end,
-})
-addon.functions.SettingsCreateDropdown(cVendor, {
-	var = "vendorDestroyRemove",
-	text = L["vendorDestroyRemove"],
-	listFunc = function() return buildList("vendorIncludeDestroyList") end,
-	default = "",
-	get = function() return "" end,
-	set = function(value) removeItemFromList("vendorIncludeDestroyList", value) end,
-	parent = true,
-	element = destroyEnable.element,
-	parentCheck = function() return isChecked("vendorDestroyEnable") end,
+	{
+		var = "vendorDestroyAdd",
+		text = ADD,
+		sType = "button",
+		parent = true,
+		parentCheck = function() return isChecked("vendorDestroyEnable") end,
+		func = function()
+			if not isChecked("vendorDestroyEnable") then return end
+			showAddPopup("EQOL_VENDOR_DESTROY_ADD", L["vendorDestroyManualHint"], "vendorIncludeDestroyList")
+		end,
+	},
+	{
+		var = "vendorDestroyRemove",
+		text = L["vendorDestroyRemove"],
+		sType = "dropdown",
+		parent = true,
+		parentCheck = function() return isChecked("vendorDestroyEnable") end,
+		listFunc = function() return buildList("vendorIncludeDestroyList") end,
+		default = "",
+		get = function() return "" end,
+		set = function(value) removeItemFromList("vendorIncludeDestroyList", value) end,
+	},
+}
+table.sort(destroyChildren, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
+addon.functions.SettingsCreateCheckboxes(cVendor, {
+	{
+		var = "vendorDestroyEnable",
+		text = L["vendorDestroyEnable"],
+		desc = L["vendorDestroyEnableDesc"],
+		func = function(value)
+			addon.db["vendorDestroyEnable"] = value and true or false
+			refreshSellMarks()
+			refreshDestroyButton()
+		end,
+		default = false,
+		children = destroyChildren,
+	},
 })
