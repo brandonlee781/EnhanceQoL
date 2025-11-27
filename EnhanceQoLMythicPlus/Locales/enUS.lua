@@ -42,6 +42,7 @@ L["HealingPotion"] = "Heal"
 L["potionTrackerHealingPotions"] = "Track health pot CD"
 L["potionTrackerOffhealing"] = "Track Offhealing CD usage"
 L["Bar Texture"] = "Bar Texture"
+L["autoMarkMidnightWarning"] = "|cffff7e0aThis auto marker will be removed in WoW Midnight.|r"
 
 -- Automark Frame
 L["AutoMark"] = "Auto marker"

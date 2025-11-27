@@ -370,6 +370,125 @@ if cMythic then
 	})
 end
 
+-- Auto Marker (Combat & Dungeon)
+if addon.SettingsLayout.characterInspectCategory and not addon.variables.isMidnight then
+	local cAuto = addon.SettingsLayout.characterInspectCategory
+	addon.functions.SettingsCreateHeadline(cAuto, L["AutoMark"])
+	if L["autoMarkMidnightWarning"] then addon.functions.SettingsCreateText(cAuto, L["autoMarkMidnightWarning"]) end
+	if L["autoMarkTankExplanation"] then addon.functions.SettingsCreateText(cAuto, "|cffffd700" .. L["autoMarkTankExplanation"]:format(TANK, COMMUNITY_MEMBER_ROLE_NAME_LEADER, TANK) .. "|r") end
+
+	local autoMarkTank = addon.functions.SettingsCreateCheckbox(cAuto, {
+		var = "autoMarkTankInDungeon",
+		text = L["autoMarkTankInDungeon"]:format(TANK),
+		func = function(v) addon.db["autoMarkTankInDungeon"] = v end,
+	})
+	local function isTankEnabled() return autoMarkTank and autoMarkTank.setting and autoMarkTank.setting:GetValue() == true end
+
+	local raidIconList = {
+		[1] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:20|t",
+		[2] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_2:20|t",
+		[3] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_3:20|t",
+		[4] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_4:20|t",
+		[5] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_5:20|t",
+		[6] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_6:20|t",
+		[7] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_7:20|t",
+		[8] = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:20|t",
+	}
+	local iconOrder = { 1, 2, 3, 4, 5, 6, 7, 8 }
+
+	addon.functions.SettingsCreateDropdown(cAuto, {
+		var = "autoMarkTankInDungeonMarker",
+		text = L["autoMarkTankInDungeonMarker"],
+		type = Settings.VarType.Number,
+		list = raidIconList,
+		listOrder = iconOrder,
+		default = addon.db["autoMarkTankInDungeonMarker"],
+		get = function() return addon.db["autoMarkTankInDungeonMarker"] or 1 end,
+		set = function(value)
+			if value == addon.db["autoMarkHealerInDungeonMarker"] then
+				print("|cff00ff98Enhance QoL|r: " .. L["markerAlreadyUsed"]:format(HEALER))
+				return
+			end
+			addon.db["autoMarkTankInDungeonMarker"] = value
+		end,
+		parent = true,
+		element = autoMarkTank.element,
+		parentCheck = isTankEnabled,
+	})
+
+	local autoMarkHealer = addon.functions.SettingsCreateCheckbox(cAuto, {
+		var = "autoMarkHealerInDungeon",
+		text = L["autoMarkHealerInDungeon"]:format(HEALER),
+		func = function(v) addon.db["autoMarkHealerInDungeon"] = v end,
+		notify = "autoMarkTankInDungeon",
+	})
+	local function isHealerEnabled() return autoMarkHealer and autoMarkHealer.setting and autoMarkHealer.setting:GetValue() == true end
+
+	addon.functions.SettingsCreateDropdown(cAuto, {
+		var = "autoMarkHealerInDungeonMarker",
+		text = L["autoMarkHealerInDungeonMarker"],
+		type = Settings.VarType.Number,
+		list = raidIconList,
+		listOrder = iconOrder,
+		default = addon.db["autoMarkHealerInDungeonMarker"],
+		get = function() return addon.db["autoMarkHealerInDungeonMarker"] or 8 end,
+		set = function(value)
+			if value == addon.db["autoMarkTankInDungeonMarker"] then
+				print("|cff00ff98Enhance QoL|r: " .. L["markerAlreadyUsed"]:format(TANK))
+				return
+			end
+			addon.db["autoMarkHealerInDungeonMarker"] = value
+		end,
+		parent = true,
+		element = autoMarkHealer.element,
+		parentCheck = isHealerEnabled,
+	})
+
+	addon.functions.SettingsCreateCheckbox(cAuto, {
+		var = "mythicPlusNoHealerMark",
+		text = L["mythicPlusNoHealerMark"],
+		func = function(v) addon.db["mythicPlusNoHealerMark"] = v end,
+	})
+
+	local excludeOptions = {
+		{ value = "normal", text = PLAYER_DIFFICULTY1, db = "mythicPlusIgnoreNormal" },
+		{ value = "heroic", text = PLAYER_DIFFICULTY2, db = "mythicPlusIgnoreHeroic" },
+		{ value = "mythic", text = PLAYER_DIFFICULTY6, db = "mythicPlusIgnoreMythic" },
+		{ value = "timewalking", text = PLAYER_DIFFICULTY_TIMEWALKER, db = "mythicPlusIgnoreTimewalking" },
+		{ value = "event", text = BATTLE_PET_SOURCE_7, db = "mythicPlusIgnoreEvent" },
+	}
+
+	addon.functions.SettingsCreateMultiDropdown(cAuto, {
+		var = "autoMarkIgnoreDifficulties",
+		text = L["Exclude"] or "Exclude",
+		options = excludeOptions,
+		isSelectedFunc = function(key)
+			for _, opt in ipairs(excludeOptions) do
+				if opt.value == key then return addon.db[opt.db] == true end
+			end
+			return false
+		end,
+		setSelectedFunc = function(key, shouldSelect)
+			for _, opt in ipairs(excludeOptions) do
+				if opt.value == key then
+					addon.db[opt.db] = shouldSelect and true or false
+					break
+				end
+			end
+		end,
+		parent = true,
+		parentCheck = function()
+			return addon.SettingsLayout.elements["autoMarkHealerInDungeon"]
+					and addon.SettingsLayout.elements["autoMarkHealerInDungeon"].setting
+					and addon.SettingsLayout.elements["autoMarkHealerInDungeon"].setting:GetValue() == true
+				or addon.SettingsLayout.elements["autoMarkTankInDungeon"]
+					and addon.SettingsLayout.elements["autoMarkTankInDungeon"].setting
+					and addon.SettingsLayout.elements["autoMarkTankInDungeon"].setting:GetValue() == true
+		end,
+		element = addon.SettingsLayout.elements["autoMarkTankInDungeon"].element,
+	})
+end
+
 ----- REGION END
 
 function addon.functions.initTeleports() end
