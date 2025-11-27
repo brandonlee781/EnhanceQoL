@@ -21,13 +21,11 @@ addon.db.actionBarHiddenHotkeys = type(addon.db.actionBarHiddenHotkeys) == "tabl
 local function collectRuleOptions(kind)
 	local options = {}
 	for key, data in pairs(GetVisibilityRuleMetadata() or {}) do
-		if data.appliesTo and data.appliesTo[kind] then
-			table.insert(options, {
-				value = key,
-				text = data.label or key,
-				order = data.order or 999,
-			})
-		end
+		if data.appliesTo and data.appliesTo[kind] then table.insert(options, {
+			value = key,
+			text = data.label or key,
+			order = data.order or 999,
+		}) end
 	end
 	table.sort(options, function(a, b)
 		if a.order == b.order then return a.text < b.text end
@@ -37,8 +35,6 @@ local function collectRuleOptions(kind)
 end
 
 local ACTIONBAR_RULE_OPTIONS = collectRuleOptions("actionbar")
-local FRAME_RULE_OPTIONS = collectRuleOptions("frame")
-
 local function buildFontDropdown()
 	local map = {
 		[addon.variables.defaultFont] = L["actionBarFontDefault"] or "Blizzard Font",
@@ -60,13 +56,7 @@ local function createActionBarVisibility(category)
 	addon.functions.SettingsCreateHeadline(category, L["VisibilityHubName"] or ACTIONBARS_LABEL)
 	if L["visibilityHubIntro"] then addon.functions.SettingsCreateText(category, L["visibilityHubIntro"]) end
 	if L["ActionbarVisibilityExplain"] and _G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"] and _G["HUD_EDIT_MODE_MENU"] then
-		addon.functions.SettingsCreateText(
-			category,
-			L["ActionbarVisibilityExplain"]:format(
-				_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"],
-				_G["HUD_EDIT_MODE_MENU"]
-			)
-		)
+		addon.functions.SettingsCreateText(category, L["ActionbarVisibilityExplain"]:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"]))
 	end
 
 	local bars, seenVars = {}, {}
@@ -157,9 +147,7 @@ local function createAnchorControls(category)
 			end,
 			parent = true,
 			element = anchorToggle.element,
-			parentCheck = function()
-				return anchorToggle.setting and anchorToggle.setting:GetValue() == true
-			end,
+			parentCheck = function() return anchorToggle.setting and anchorToggle.setting:GetValue() == true end,
 		})
 	end
 end
@@ -195,17 +183,10 @@ local function createLabelControls(category)
 		end,
 		parent = true,
 		element = hideMacro.element,
-		parentCheck = function()
-			return hideMacro.setting and hideMacro.setting:GetValue() ~= true
-		end,
+		parentCheck = function() return hideMacro.setting and hideMacro.setting:GetValue() ~= true end,
 	})
 
-	local function macroParentCheck()
-		return macroOverride.setting
-			and macroOverride.setting:GetValue() == true
-			and hideMacro.setting
-			and hideMacro.setting:GetValue() ~= true
-	end
+	local function macroParentCheck() return macroOverride.setting and macroOverride.setting:GetValue() == true and hideMacro.setting and hideMacro.setting:GetValue() ~= true end
 
 	addon.functions.SettingsCreateDropdown(category, {
 		var = "actionBarMacroFontFace",
@@ -280,9 +261,7 @@ local function createLabelControls(category)
 		end,
 	})
 
-	local function hotkeyParentCheck()
-		return hotkeyOverride.setting and hotkeyOverride.setting:GetValue() == true
-	end
+	local function hotkeyParentCheck() return hotkeyOverride.setting and hotkeyOverride.setting:GetValue() == true end
 
 	addon.functions.SettingsCreateDropdown(category, {
 		var = "actionBarHotkeyFontFace",
@@ -383,9 +362,7 @@ local function createLabelControls(category)
 		end,
 		parent = true,
 		element = rangeToggle.element,
-		parentCheck = function()
-			return rangeToggle.setting and rangeToggle.setting:GetValue() == true
-		end,
+		parentCheck = function() return rangeToggle.setting and rangeToggle.setting:GetValue() == true end,
 	})
 
 	addon.functions.SettingsCreateSlider(category, {
@@ -405,18 +382,14 @@ local function createLabelControls(category)
 		end,
 		parent = true,
 		element = rangeToggle.element,
-		parentCheck = function()
-			return rangeToggle.setting and rangeToggle.setting:GetValue() == true
-		end,
+		parentCheck = function() return rangeToggle.setting and rangeToggle.setting:GetValue() == true end,
 	})
 
 	addon.functions.SettingsCreateMultiDropdown(category, {
 		var = "actionBarHiddenHotkeys",
 		text = L["actionBarHideHotkeysGroup"] or "Hide keybinds per bar",
 		options = barOptions,
-		isSelectedFunc = function(key)
-			return addon.db.actionBarHiddenHotkeys and addon.db.actionBarHiddenHotkeys[key] == true
-		end,
+		isSelectedFunc = function(key) return addon.db.actionBarHiddenHotkeys and addon.db.actionBarHiddenHotkeys[key] == true end,
 		setSelectedFunc = function(key, shouldSelect)
 			if type(addon.db.actionBarHiddenHotkeys) ~= "table" then addon.db.actionBarHiddenHotkeys = {} end
 			if shouldSelect then
@@ -457,6 +430,20 @@ local function setFrameRule(info, key, shouldSelect)
 	UpdateUnitFrameMouseover(info.name, info)
 end
 
+local function getFrameRuleOptions(info)
+	local options = {}
+	for key, data in pairs(GetVisibilityRuleMetadata() or {}) do
+		local allowed = data.appliesTo and data.appliesTo.frame
+		if allowed and data.unitRequirement and data.unitRequirement ~= info.unitToken then allowed = false end
+		if allowed then table.insert(options, { value = key, text = data.label or key, order = data.order or 999 }) end
+	end
+	table.sort(options, function(a, b)
+		if a.order == b.order then return a.text < b.text end
+		return a.order < b.order
+	end)
+	return options
+end
+
 local function createFrameCategory()
 	local category = addon.functions.SettingsCreateCategory(nil, L["visibilityKindFrames"] or UNITFRAME_LABEL, nil, "Frames")
 	addon.SettingsLayout.frameVisibilityCategory = category
@@ -466,8 +453,6 @@ local function createFrameCategory()
 	if L["visibilityFrameExplain"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExplain"]) end
 	if L["visibilityFrameExtrasNote"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExtrasNote"]) end
 
-	if #FRAME_RULE_OPTIONS == 0 then return end
-
 	local frames = {}
 	for _, info in ipairs(addon.variables.unitFrameNames or {}) do
 		table.insert(frames, info)
@@ -476,16 +461,19 @@ local function createFrameCategory()
 
 	for _, info in ipairs(frames) do
 		if info.var and info.name then
-			addon.functions.SettingsCreateMultiDropdown(category, {
-				var = info.var .. "_visibility",
-				text = info.text or info.name or info.var,
-				options = FRAME_RULE_OPTIONS,
-				isSelectedFunc = function(key)
-					local cfg = NormalizeUnitFrameVisibilityConfig(info.var)
-					return cfg and cfg[key] == true
-				end,
-				setSelectedFunc = function(key, shouldSelect) setFrameRule(info, key, shouldSelect) end,
-			})
+			local options = getFrameRuleOptions(info)
+			if #options > 0 then
+				addon.functions.SettingsCreateMultiDropdown(category, {
+					var = info.var .. "_visibility",
+					text = info.text or info.name or info.var,
+					options = options,
+					isSelectedFunc = function(key)
+						local cfg = NormalizeUnitFrameVisibilityConfig(info.var)
+						return cfg and cfg[key] == true
+					end,
+					setSelectedFunc = function(key, shouldSelect) setFrameRule(info, key, shouldSelect) end,
+				})
+			end
 		end
 	end
 end
