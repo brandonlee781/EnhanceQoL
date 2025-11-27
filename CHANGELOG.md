@@ -33,6 +33,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
     - System
     - Tooltip
     - Unit Frames
+    - Visibility Hub
 
 ### ✨ Added
 

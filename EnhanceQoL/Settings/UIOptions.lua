@@ -53,10 +53,13 @@ end
 local function createActionBarVisibility(category)
 	if #ACTIONBAR_RULE_OPTIONS == 0 then return end
 
-	addon.functions.SettingsCreateHeadline(category, L["VisibilityHubName"] or ACTIONBARS_LABEL)
-	if L["visibilityHubIntro"] then addon.functions.SettingsCreateText(category, L["visibilityHubIntro"]) end
-	if L["ActionbarVisibilityExplain"] and _G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"] and _G["HUD_EDIT_MODE_MENU"] then
-		addon.functions.SettingsCreateText(category, L["ActionbarVisibilityExplain"]:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"]))
+	addon.functions.SettingsCreateHeadline(category, L["visibilityScenarioGroupTitle"] or ACTIONBARS_LABEL)
+	local explain = L["ActionbarVisibilityExplain2"]
+	if explain and _G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"] and _G["HUD_EDIT_MODE_MENU"] then
+		addon.functions.SettingsCreateText(
+			category,
+			explain:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"])
+		)
 	end
 
 	local bars, seenVars = {}, {}
@@ -460,9 +463,7 @@ local function createFrameCategory()
 	addon.SettingsLayout.frameVisibilityCategory = category
 
 	addon.functions.SettingsCreateHeadline(category, L["visibilityScenarioGroupTitle"] or (L["ActionBarVisibilityLabel"] or "Visibility"))
-	if L["visibilityHubIntro"] then addon.functions.SettingsCreateText(category, L["visibilityHubIntro"]) end
-	if L["visibilityFrameExplain"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExplain"]) end
-	if L["visibilityFrameExtrasNote"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExtrasNote"]) end
+	if L["visibilityFrameExplain2"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExplain2"]) end
 
 	local frames = {}
 	for _, info in ipairs(addon.variables.unitFrameNames or {}) do

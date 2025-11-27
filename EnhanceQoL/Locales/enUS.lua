@@ -408,17 +408,19 @@ L["PlayerHealthText"] = "Player health text"
 L["TargetHealthText"] = "Target health text"
 L["HealthTextExplain2"] = "%s follows Blizzard 'Status Text'.\nAny other mode shows your chosen format for Player, Target, and Boss frames."
 
-L["ActionbarVisibilityExplain"] = 'Set the action bar to "%s" in %s to use the options below. You can combine mouseover, in-combat, and out-of-combat visibility.'
+L["ActionbarVisibilityExplain2"] =
+	'|cff99e599Set the action bar to "%s" in %s to use the options below.|r\n|cff99e599You can combine mouseover, in-combat, and out-of-combat visibility.|r'
 L["VisibilityHubName"] = "Visibility Hub"
-L["visibilityHubIntro"] = "Mix and match visibility triggers for Blizzard frames and action bars. Pick a category, choose an element, then toggle the scenarios below."
 L["visibilitySelectorsTitle"] = "Selection"
 L["visibilityKindLabel"] = "Category"
 L["visibilityKindActionBars"] = "Action Bars"
 L["visibilityKindFrames"] = "Frames"
 L["visibilityElementLabel"] = "Element"
 L["visibilityScenarioGroupTitle"] = "Visibility rules"
-L["visibilityFrameExplain"] = "Combine the same triggers for Blizzard unit frames. Mouseover can now be layered with combat checks or player-health conditions."
-L["visibilityFrameExtrasNote"] = "Looking for raid frames, name truncation, or health text tweaks? Those options remain under UI >> Unit Frames."
+L["visibilityFrameExplain2"] =
+	"|cff99e599Combine the same triggers for Blizzard unit frames.|r\n|cff99e599Mouseover can be layered with combat or player-health checks.|r"
+L["visibilityFrameExtrasNote2"] =
+	"|cff99e599Looking for raid frames, name truncation, or health text tweaks?|r\n|cff99e599Those options remain under UI >> Unit Frames.|r"
 L["visibilityNoElement"] = "No elements are available for this category."
 L["visibilityNoRules"] = "This element does not expose any visibility rules."
 L["visibilityAlwaysHiddenActive"] = 'Disable "Always hidden" to use additional rules.'
