@@ -425,7 +425,14 @@ local function resetSelection()
 	end
 end
 
-local function onDragStart(self) self.parent:StartMoving() end
+local function isInCombat()
+	return InCombatLockdown and InCombatLockdown()
+end
+
+local function onDragStart(self)
+	if isInCombat() then return end
+	self.parent:StartMoving()
+end
 
 local function normalizePosition(frame)
 	local parent = frame:GetParent()
@@ -473,7 +480,10 @@ local function onDragStop(self)
 	local parent = self.parent
 	parent:StopMovingOrSizing()
 
+	if isInCombat() then return end
+
 	local point, x, y = normalizePosition(parent)
+	if not point then return end
 	parent:ClearAllPoints()
 	parent:SetPoint(point, x, y)
 
@@ -481,6 +491,7 @@ local function onDragStop(self)
 end
 
 local function onMouseDown(self)
+	if isInCombat() then return end
 	resetSelection()
 	if EditModeManagerFrame and EditModeManagerFrame.ClearSelectedSystem then EditModeManagerFrame:ClearSelectedSystem() end
 
@@ -544,6 +555,17 @@ function lib:AddFrame(frame, callback, default)
 	if not internal.dialog then
 		internal.dialog = internal:CreateDialog()
 		internal.dialog:HookScript("OnHide", function() resetSelection() end)
+
+		local combatWatcher = CreateFrame("Frame")
+		combatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+		combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+		combatWatcher:SetScript("OnEvent", function(_, event)
+			if event == "PLAYER_REGEN_DISABLED" then
+				resetSelection()
+			elseif event == "PLAYER_REGEN_ENABLED" and lib.isEditing then
+				resetSelection()
+			end
+		end)
 
 		EventRegistry:RegisterFrameEventAndCallback("EDIT_MODE_LAYOUTS_UPDATED", onEditModeChanged)
 
