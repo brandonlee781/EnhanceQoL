@@ -14,6 +14,9 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 
 -- resource bar defaults
 addon.functions.InitDBValue("enableResourceFrame", false)
+addon.functions.InitDBValue("resourceBarsHideOutOfCombat", false)
+addon.functions.InitDBValue("resourceBarsHideMounted", false)
+addon.functions.InitDBValue("resourceBarsHideVehicle", false)
 
 -- spec specific settings for personal resource bars
 addon.functions.InitDBValue("personalResourceBarSettings", {})

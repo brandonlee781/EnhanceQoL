@@ -255,6 +255,7 @@ requestActiveRefresh = function(specIndex, opts)
 		rb.MaybeRefreshActive(specIndex)
 	end
 end
+addon.Aura.functions.requestActiveRefresh = requestActiveRefresh
 
 local function deactivateRuneTicker(bar)
 	if not bar then return end
@@ -415,6 +416,7 @@ local function importResourceProfile(encoded, scopeKey)
 	tsort(applied)
 	return true, applied, enableState
 end
+addon.Aura.functions.importResourceProfile = importResourceProfile
 
 local function exportErrorMessage(reason)
 	if reason == "NO_DATA" or reason == "EMPTY" then return L["ExportProfileEmpty"] or "Nothing to export for this selection." end
@@ -4787,5 +4789,18 @@ function ResourceBars.ReanchorAll()
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 	ResourceBars._reanchoring = false
 end
+
+ResourceBars.DEFAULT_HEALTH_WIDTH = DEFAULT_HEALTH_WIDTH
+ResourceBars.DEFAULT_HEALTH_HEIGHT = DEFAULT_HEALTH_HEIGHT
+ResourceBars.DEFAULT_POWER_WIDTH = DEFAULT_POWER_WIDTH
+ResourceBars.DEFAULT_POWER_HEIGHT = DEFAULT_POWER_HEIGHT or DEFAULT_HEALTH_HEIGHT
+ResourceBars.MIN_RESOURCE_BAR_WIDTH = MIN_RESOURCE_BAR_WIDTH
+ResourceBars.getBarSettings = getBarSettings
+ResourceBars.getAnchor = getAnchor
+ResourceBars.ExportProfile = exportResourceProfile
+ResourceBars.ImportProfile = importResourceProfile
+ResourceBars.ExportErrorMessage = exportErrorMessage
+ResourceBars.ImportErrorMessage = importErrorMessage
+ResourceBars.SpecNameByIndex = specNameByIndex
 
 return ResourceBars
