@@ -341,22 +341,104 @@ local function registerEditModeBars()
 							queueRefresh()
 						end,
 						default = (cfg and cfg.fontOutline) or "OUTLINE",
-					}
+				}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Font color"] or FONT_COLOR,
-					kind = EditMode.lib.SettingType.Color,
+					kind = settingType.Color,
 					field = "fontColor",
-					default = toUIColor(cfg and cfg.fontColor, { 1, 1, 1, 1 }),
+					default = cfg and cfg.fontColor or { r = 1, g = 1, b = 1, a = 1 },
 					get = function()
 						local c = curSpecCfg()
 						local col = (c and c.fontColor) or (cfg and cfg.fontColor) or { 1, 1, 1, 1 }
-						return toUIColor(col, { 1, 1, 1, 1 })
+						local r, g, b, a = toColorComponents(col, { 1, 1, 1, 1 })
+						return { r = r, g = g, b = b, a = a }
 					end,
 					set = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
 						c.fontColor = toColorArray(value, { 1, 1, 1, 1 })
+						queueRefresh()
+					end,
+					hasOpacity = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Custom bar color"] or "Custom bar color",
+					kind = settingType.CheckboxColor,
+					field = "barColor",
+					default = toUIColor(cfg and cfg.barColor, { 1, 1, 1, 1 }),
+					get = function()
+						local c = curSpecCfg()
+						return c and c.useBarColor == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.useBarColor = value and true or false
+						if c.useBarColor and c.useClassColor then c.useClassColor = false end
+						queueRefresh()
+					end,
+					colorDefault = toUIColor(cfg and cfg.barColor, { 1, 1, 1, 1 }),
+					colorGet = function()
+						local c = curSpecCfg()
+						local col = (c and c.barColor) or (cfg and cfg.barColor) or { 1, 1, 1, 1 }
+						local r, g, b, a = toColorComponents(col, { 1, 1, 1, 1 })
+						return { r = r, g = g, b = b, a = a }
+					end,
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.barColor = toColorArray(value, { 1, 1, 1, 1 })
+						queueRefresh()
+					end,
+					hasOpacity = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Use class color"] or "Use class color",
+					kind = settingType.Checkbox,
+					field = "useClassColor",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.useClassColor == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.useClassColor = value and true or false
+						if c.useClassColor and c.useBarColor then c.useBarColor = false end
+						queueRefresh()
+					end,
+					default = cfg and cfg.useClassColor or false,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Use max color"] or "Use max color",
+					kind = settingType.CheckboxColor,
+					field = "useMaxColor",
+					default = cfg and cfg.useMaxColor or false,
+					get = function()
+						local c = curSpecCfg()
+						return c and c.useMaxColor == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.useMaxColor = value and true or false
+						queueRefresh()
+					end,
+					colorDefault = toUIColor(cfg and cfg.maxColor, { 0, 1, 0, 1 }),
+					colorGet = function()
+						local c = curSpecCfg()
+						local col = (c and c.maxColor) or (cfg and cfg.maxColor) or { 0, 1, 0, 1 }
+						local r, g, b, a = toColorComponents(col, { 0, 1, 0, 1 })
+						return { r = r, g = g, b = b, a = a }
+					end,
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.maxColor = toColorArray(value, { 0, 1, 0, 1 })
 						queueRefresh()
 					end,
 					hasOpacity = true,
