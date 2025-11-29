@@ -476,6 +476,22 @@ local function normalizePosition(frame)
 	return point, x / scale, y / scale
 end
 
+local function adjustPosition(frame, dx, dy)
+	local scale = frame:GetScale() or 1
+	local point, relativeTo, relativePoint, x, y = frame:GetPoint(1)
+	if not point then
+		point, relativePoint, x, y = "CENTER", "CENTER", 0, 0
+	end
+
+	x = (x or 0) + dx / scale
+	y = (y or 0) + dy / scale
+
+	frame:ClearAllPoints()
+	frame:SetPoint(point, relativeTo or UIParent, relativePoint or point, x, y)
+
+	internal:TriggerCallback(frame, point, x, y)
+end
+
 local function onDragStop(self)
 	local parent = self.parent
 	parent:StopMovingOrSizing()
@@ -498,6 +514,7 @@ local function onMouseDown(self)
 	if not self.isSelected then
 		self.parent:SetMovable(true)
 		self:ShowSelected(true)
+		self.isSelected = true
 		if internal.dialog then internal.dialog:Update(self) end
 	end
 end
@@ -539,6 +556,30 @@ function lib:AddFrame(frame, callback, default)
 	selection:SetScript("OnMouseDown", onMouseDown)
 	selection:SetScript("OnDragStart", onDragStart)
 	selection:SetScript("OnDragStop", onDragStop)
+	selection:SetScript("OnKeyDown", function(self, key)
+		if not self.isSelected or isInCombat() then return end
+		local step = IsShiftKeyDown() and 10 or 1
+		if key == "UP" then
+			if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+			adjustPosition(self.parent, 0, step)
+		elseif key == "DOWN" then
+			if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+			adjustPosition(self.parent, 0, -step)
+		elseif key == "LEFT" then
+			if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+			adjustPosition(self.parent, -step, 0)
+		elseif key == "RIGHT" then
+			if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+			adjustPosition(self.parent, step, 0)
+		else
+			if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(true) end
+		end
+	end)
+	selection:SetScript("OnKeyUp", function(self)
+		if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(true) end
+	end)
+	selection:EnableKeyboard(true)
+	if selection.SetPropagateKeyboardInput then selection:SetPropagateKeyboardInput(true) end
 	selection:Hide()
 
 	if select(4, GetBuildInfo()) >= 110200 then

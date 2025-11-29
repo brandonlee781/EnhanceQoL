@@ -15,6 +15,22 @@ if not ResourceBars then return end
 
 local specSettingVars = {}
 
+local function toColorComponents(c, fallback)
+	c = c or fallback or {}
+	if c.r then return c.r or 1, c.g or 1, c.b or 1, c.a or 1 end
+	return c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1
+end
+
+local function toColorArray(value, fallback)
+	local r, g, b, a = toColorComponents(value, fallback)
+	return { r, g, b, a }
+end
+
+local function toUIColor(value, fallback)
+	local r, g, b, a = toColorComponents(value, fallback)
+	return { r = r, g = g, b = b, a = a }
+end
+
 local function notifyResourceBarSettings()
 	if not Settings or not Settings.NotifyUpdate then return end
 	Settings.NotifyUpdate("EQOL_enableResourceFrame")
@@ -242,24 +258,26 @@ local function registerEditModeBars()
 					kind = settingType.Dropdown,
 					field = "fontFace",
 					generator = function(_, root)
-						if LibStub and LibStub("LibSharedMedia-3.0", true) then
-							local media = LibStub("LibSharedMedia-3.0")
-							for _, name in ipairs(media:List("font") or {}) do
-								root:CreateRadio(name, function()
-									local c = curSpecCfg()
-									return (c and c.fontFace) == name
-								end, function()
-									local c = curSpecCfg()
-									if not c then return end
-									c.fontFace = name
-									queueRefresh()
-								end)
-							end
+						if not LibStub then return end
+						local media = LibStub("LibSharedMedia-3.0", true)
+						if not media then return end
+						local hash = media:HashTable("font") or {}
+						for _, name in ipairs(media:List("font") or {}) do
+							local path = hash[name] or name
+							root:CreateRadio(name, function()
+								local c = curSpecCfg()
+								return (c and c.fontFace) == path
+							end, function()
+								local c = curSpecCfg()
+								if not c then return end
+								c.fontFace = path
+								queueRefresh()
+							end)
 						end
 					end,
 					get = function()
 						local c = curSpecCfg()
-						return c and c.fontFace
+						return c and c.fontFace or addon.variables.defaultFont
 					end,
 					set = function(_, value)
 						local c = curSpecCfg()
@@ -275,15 +293,16 @@ local function registerEditModeBars()
 					{ key = "THICKOUTLINE", label = "Thick Outline" },
 					{ key = "MONOCHROMEOUTLINE", label = "Mono Outline" },
 				}
-				settingsList[#settingsList + 1] = {
-					name = L["Outline"],
-					kind = settingType.Dropdown,
-					field = "fontOutline",
-					generator = function(_, root)
+					settingsList[#settingsList + 1] = {
+						name = L["Outline"],
+						kind = settingType.Dropdown,
+						field = "fontOutline",
+						generator = function(_, root)
 						for _, entry in ipairs(outlineOptions) do
 							root:CreateRadio(entry.label, function()
 								local c = curSpecCfg()
-								return (c and c.fontOutline) == entry.key
+								local cur = (c and c.fontOutline) or cfg.fontOutline or "OUTLINE"
+								return cur == entry.key
 							end, function()
 								local c = curSpecCfg()
 								if not c then return end
@@ -291,32 +310,34 @@ local function registerEditModeBars()
 								queueRefresh()
 							end)
 						end
-					end,
-					get = function()
-						local c = curSpecCfg()
-						return c and c.fontOutline
-					end,
-					set = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						c.fontOutline = value
-						queueRefresh()
-					end,
-				}
+						end,
+						get = function()
+							local c = curSpecCfg()
+							return (c and c.fontOutline) or cfg.fontOutline or "OUTLINE"
+						end,
+						set = function(_, value)
+							local c = curSpecCfg()
+							if not c then return end
+							c.fontOutline = value
+							queueRefresh()
+						end,
+						default = (cfg and cfg.fontOutline) or "OUTLINE",
+					}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Font color"] or FONT_COLOR,
 					kind = EditMode.lib.SettingType.Color,
 					field = "fontColor",
-					default = cfg and cfg.fontColor or { r = 1, g = 1, b = 1, a = 1 },
+					default = toUIColor(cfg and cfg.fontColor, { 1, 1, 1, 1 }),
 					get = function()
 						local c = curSpecCfg()
-						return c and c.fontColor or (cfg and cfg.fontColor) or { 1, 1, 1, 1 }
+						local col = (c and c.fontColor) or (cfg and cfg.fontColor) or { 1, 1, 1, 1 }
+						return toUIColor(col, { 1, 1, 1, 1 })
 					end,
 					set = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
-						c.fontColor = value
+						c.fontColor = toColorArray(value, { 1, 1, 1, 1 })
 						queueRefresh()
 					end,
 					hasOpacity = true,
