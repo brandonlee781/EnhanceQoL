@@ -474,6 +474,7 @@ getStatusbarDropdownLists = function(includeDefault)
 	if includeDefault then return cloneMap(textureListCache.fullList), cloneArray(textureListCache.fullOrder) end
 	return cloneMap(textureListCache.noDefaultList), cloneArray(textureListCache.noDefaultOrder)
 end
+addon.Aura.functions.getStatusbarDropdownLists = getStatusbarDropdownLists
 
 -- Detect Atlas: /run local t=PlayerFrame_GetManaBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)
 -- Healthbar: /run local t=PlayerFrame_GetHealthBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)

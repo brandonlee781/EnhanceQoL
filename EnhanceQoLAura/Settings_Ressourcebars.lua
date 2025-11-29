@@ -103,16 +103,16 @@ local function registerEditModeBars()
 		end
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		local settingsList
-			if settingType then
-				settingsList = {
-					{
-						name = HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH,
-						kind = settingType.Slider,
+		if settingType then
+			settingsList = {
+				{
+					name = HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH,
+					kind = settingType.Slider,
 					field = "width",
 					minValue = 50,
 					maxValue = 600,
 					valueStep = 1,
-					default = cfg and cfg.width or widthDefault or 200,
+					default = widthDefault or 200,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.width or widthDefault or 200
@@ -132,7 +132,7 @@ local function registerEditModeBars()
 					minValue = 6,
 					maxValue = 80,
 					valueStep = 1,
-					default = cfg and cfg.height or heightDefault or 20,
+					default = heightDefault or 20,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.height or heightDefault or 20
@@ -186,7 +186,7 @@ local function registerEditModeBars()
 							end)
 						end
 					end,
-					default = cfg and cfg.textStyle or defaultStyle(),
+					default = defaultStyle(),
 				}
 
 				settingsList[#settingsList + 1] = {
@@ -206,7 +206,7 @@ local function registerEditModeBars()
 						c.fontSize = value
 						queueRefresh()
 					end,
-					default = cfg and cfg.fontSize or 16,
+					default = 16,
 				}
 
 				settingsList[#settingsList + 1] = {
@@ -304,7 +304,7 @@ local function registerEditModeBars()
 						c.fontFace = value
 						queueRefresh()
 					end,
-					default = cfg and cfg.fontFace or addon.variables.defaultFont,
+					default = addon.variables.defaultFont,
 				}
 
 				local outlineOptions = {
@@ -341,14 +341,14 @@ local function registerEditModeBars()
 						c.fontOutline = value
 						queueRefresh()
 					end,
-					default = (cfg and cfg.fontOutline) or "OUTLINE",
+					default = "OUTLINE",
 				}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Font color"] or FONT_COLOR,
 					kind = settingType.CheckboxColor,
 					field = "fontColor",
-					default = cfg and cfg.fontColor or { r = 1, g = 1, b = 1, a = 1 },
+					default = { r = 1, g = 1, b = 1, a = 1 },
 					get = function()
 						local c = curSpecCfg()
 						return c and c.fontColorEnabled ~= false
@@ -380,7 +380,7 @@ local function registerEditModeBars()
 					name = L["Custom bar color"] or "Custom bar color",
 					kind = settingType.CheckboxColor,
 					field = "useBarColor",
-					default = cfg and cfg.useBarColor or false,
+					default = false,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.useBarColor == true
@@ -433,14 +433,14 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						return c and c.useBarColor == false
 					end,
-					default = cfg and cfg.useClassColor or false,
+					default = false,
 				}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Use max color"] or "Use max color",
 					kind = settingType.CheckboxColor,
 					field = "useMaxColor",
-					default = cfg and cfg.useMaxColor or false,
+					default = false,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.useMaxColor == true
@@ -467,7 +467,10 @@ local function registerEditModeBars()
 					hasOpacity = true,
 				}
 
-				local listTex, orderTex = getStatusbarDropdownLists and getStatusbarDropdownLists(true)
+				local listTex, orderTex = addon.Aura.functions.getStatusbarDropdownLists and addon.Aura.functions.getStatusbarDropdownLists(true)
+				if not listTex or not orderTex then
+					listTex, orderTex = { DEFAULT = DEFAULT }, { "DEFAULT" }
+				end
 				settingsList[#settingsList + 1] = {
 					name = L["Bar Texture"] or "Bar Texture",
 					kind = settingType.Dropdown,
