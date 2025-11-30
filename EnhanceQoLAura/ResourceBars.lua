@@ -3693,6 +3693,7 @@ end
 			a.x = 0
 			a.y = stackSpacing
 			a.autoSpacing = true
+			if a.matchRelativeWidth == nil then a.matchRelativeWidth = true end
 		else
 			-- No anchor in DB and no previous anchor in code path; default: center on UIParent
 			bar:ClearAllPoints()
@@ -3772,6 +3773,8 @@ end
 			updateBarSeparators(type)
 		end
 	end)
+
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 end
 
 local eventsToRegister = {

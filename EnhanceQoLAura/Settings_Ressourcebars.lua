@@ -878,8 +878,9 @@ local function registerEditModeBars()
 			if ResourceBars.separatorEligible and ResourceBars.separatorEligible[barType] then
 				settingsList[#settingsList + 1] = {
 					name = L["Show separator"] or "Show separator",
-					kind = settingType.Checkbox,
+					kind = settingType.CheckboxColor,
 					field = "showSeparator",
+					default = cfg and cfg.showSeparator == true,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.showSeparator == true
@@ -890,30 +891,20 @@ local function registerEditModeBars()
 						c.showSeparator = value and true or false
 						queueRefresh()
 					end,
-					default = cfg and cfg.showSeparator == true,
-				}
-
-				settingsList[#settingsList + 1] = {
-					name = L["Separator Color"] or "Separator Color",
-					kind = settingType.Color,
-					field = "separatorColor",
-					get = function()
+					colorDefault = toUIColor(cfg and cfg.separatorColor, SEP_DEFAULT),
+					colorGet = function()
 						local c = curSpecCfg()
 						local col = (c and c.separatorColor) or (cfg and cfg.separatorColor) or SEP_DEFAULT
 						local r, g, b, a = toColorComponents(col, SEP_DEFAULT)
 						return { r = r, g = g, b = b, a = a }
 					end,
-					set = function(_, value)
+					colorSet = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
 						c.separatorColor = toColorArray(value, SEP_DEFAULT)
 						queueRefresh()
 					end,
-					default = toUIColor(cfg and cfg.separatorColor, SEP_DEFAULT),
-					isEnabled = function()
-						local c = curSpecCfg()
-						return c and c.showSeparator == true
-					end,
+					hasOpacity = true,
 				}
 
 				settingsList[#settingsList + 1] = {
