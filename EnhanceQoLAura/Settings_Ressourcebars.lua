@@ -52,9 +52,8 @@ end
 
 local function refreshSettingsUI()
 	local lib = addon.EditModeLib
-	if lib and lib.internal and lib.internal.RefreshSettings then
-		lib.internal:RefreshSettings()
-	end
+	if lib and lib.internal and lib.internal.RefreshSettings then lib.internal:RefreshSettings() end
+	if lib and lib.internal and lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
 end
 
 local function setBarEnabled(specIndex, barType, enabled)
@@ -169,6 +168,24 @@ local function registerEditModeBars()
 			if not a.relativeFrame or a.relativeFrame == "" then a.relativeFrame = "UIParent" end
 			return a
 		end
+		local function anchorUsesUIParent()
+			local a = ensureAnchorTable()
+			return not a or (a.relativeFrame or "UIParent") == "UIParent"
+		end
+		local function forceUIParentAnchor()
+			local a = ensureAnchorTable()
+			if not a then return end
+			if (a.relativeFrame or "UIParent") ~= "UIParent" then
+				a.relativeFrame = "UIParent"
+				a.point = "CENTER"
+				a.relativePoint = "CENTER"
+				a.x = 0
+				a.y = 0
+				a.autoSpacing = nil
+				a.matchRelativeWidth = nil
+				refreshSettingsUI()
+			end
+		end
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		local settingsList
 		if settingType then
@@ -222,6 +239,12 @@ local function registerEditModeBars()
 						applyBarSize()
 						queueRefresh()
 					end,
+					isEnabled = function()
+						if anchorUsesUIParent() then return true end
+						local c = curSpecCfg()
+						local a = c and c.anchor
+						return not (a and a.matchRelativeWidth == true)
+					end,
 				},
 				{
 					name = HUD_EDIT_MODE_SETTING_CHAT_FRAME_HEIGHT,
@@ -246,161 +269,171 @@ local function registerEditModeBars()
 				},
 			}
 
-				do -- Anchoring
-					local points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
-					local function displayNameForBarType(pType)
-						if pType == "HEALTH" then return HEALTH or "Health" end
-						local s = _G["POWER_TYPE_" .. pType] or _G[pType]
-						if type(s) == "string" and s ~= "" then return s end
-						return pType
-					end
-					local function frameNameToBarType(fname)
-						if fname == "EQOLHealthBar" then return "HEALTH" end
-						return type(fname) == "string" and fname:match("^EQOL(.+)Bar$") or nil
-					end
-					local function wouldCauseLoop(fromType, candidateName)
-						if candidateName == "UIParent" then return false end
-						local candType = frameNameToBarType(candidateName)
-						if not candType then return false end
-						if candType == fromType then return true end
-						local targetFrameName = (fromType == "HEALTH") and "EQOLHealthBar" or ("EQOL" .. fromType .. "Bar")
-						local seen = {}
-						local name = candidateName
-						local spec = addon.variables.unitSpec
-						local limit = 10
-						while name and name ~= "UIParent" and limit > 0 do
-							if seen[name] then break end
-							seen[name] = true
-							if name == targetFrameName then return true end
-							local bt = frameNameToBarType(name)
-							if not bt then break end
-							local specCfg = ensureSpecCfg(spec)
-							local anch = specCfg and specCfg[bt] and specCfg[bt].anchor
-							name = anch and anch.relativeFrame or "UIParent"
-							limit = limit - 1
-						end
-						return false
-					end
-					local function isBarEnabled(pType)
-						local spec = addon.variables.unitSpec
+			do -- Anchoring
+				local points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }
+				local function displayNameForBarType(pType)
+					if pType == "HEALTH" then return HEALTH or "Health" end
+					local s = _G["POWER_TYPE_" .. pType] or _G[pType]
+					if type(s) == "string" and s ~= "" then return s end
+					return pType
+				end
+				local function frameNameToBarType(fname)
+					if fname == "EQOLHealthBar" then return "HEALTH" end
+					return type(fname) == "string" and fname:match("^EQOL(.+)Bar$") or nil
+				end
+				local function wouldCauseLoop(fromType, candidateName)
+					if candidateName == "UIParent" then return false end
+					local candType = frameNameToBarType(candidateName)
+					if not candType then return false end
+					if candType == fromType then return true end
+					local targetFrameName = (fromType == "HEALTH") and "EQOLHealthBar" or ("EQOL" .. fromType .. "Bar")
+					local seen = {}
+					local name = candidateName
+					local spec = addon.variables.unitSpec
+					local limit = 10
+					while name and name ~= "UIParent" and limit > 0 do
+						if seen[name] then break end
+						seen[name] = true
+						if name == targetFrameName then return true end
+						local bt = frameNameToBarType(name)
+						if not bt then break end
 						local specCfg = ensureSpecCfg(spec)
-						return specCfg and specCfg[pType] and specCfg[pType].enabled == true
+						local anch = specCfg and specCfg[bt] and specCfg[bt].anchor
+						name = anch and anch.relativeFrame or "UIParent"
+						limit = limit - 1
 					end
-					local function relativeFrameEntries()
-						local entries = {}
-						local seen = {}
-						local function add(key, label)
-							if not key or key == "" or seen[key] then return end
-							if wouldCauseLoop(barType, key) then return end
-							seen[key] = true
-							entries[#entries + 1] = { key = key, label = label or key }
-						end
-
-						add("UIParent", "UIParent")
-						add("PlayerFrame", "PlayerFrame")
-						add("TargetFrame", "TargetFrame")
-						add("EssentialCooldownViewer", "EssentialCooldownViewer")
-						add("UtilityCooldownViewer", "UtilityCooldownViewer")
-						add("BuffBarCooldownViewer", "BuffBarCooldownViewer")
-						add("BuffIconCooldownViewer", "BuffIconCooldownViewer")
-
-						if addon.variables and addon.variables.actionBarNames then
-							for _, info in ipairs(addon.variables.actionBarNames) do
-								if info.name then add(info.name, info.text or info.name) end
-							end
-						end
-
-						if isBarEnabled("HEALTH") then add("EQOLHealthBar", displayNameForBarType("HEALTH")) end
-						for _, pType in ipairs(ResourceBars.classPowerTypes or {}) do
-							if isBarEnabled(pType) then
-								local fname = "EQOL" .. pType .. "Bar"
-								add(fname, displayNameForBarType(pType))
-							end
-						end
-
-						local a = ensureAnchorTable()
-						local cur = a and a.relativeFrame
-						if cur and not seen[cur] and not wouldCauseLoop(barType, cur) then
-							add(cur, cur)
-						end
-
-						return entries
+					return false
+				end
+				local function isBarEnabled(pType)
+					local spec = addon.variables.unitSpec
+					local specCfg = ensureSpecCfg(spec)
+					return specCfg and specCfg[pType] and specCfg[pType].enabled == true
+				end
+				local function enforceMinWidth()
+					local c = curSpecCfg()
+					if not c then return end
+					local minWidth = MIN_RESOURCE_BAR_WIDTH or 50
+					c.width = minWidth
+					if barType == "HEALTH" then
+						ResourceBars.SetHealthBarSize(c.width or minWidth, c.height or heightDefault or 20)
+					else
+						ResourceBars.SetPowerBarSize(c.width or minWidth, c.height or heightDefault or 20, barType)
 					end
-					local function validateRelativeFrame(a)
-						if not a then return "UIParent" end
-						local cur = a.relativeFrame or "UIParent"
+				end
+
+				local function relativeFrameEntries()
+					local entries = {}
+					local seen = {}
+					local function add(key, label)
+						if not key or key == "" or seen[key] then return end
+						if wouldCauseLoop(barType, key) then return end
+						seen[key] = true
+						entries[#entries + 1] = { key = key, label = label or key }
+					end
+
+					add("UIParent", "UIParent")
+					add("PlayerFrame", "PlayerFrame")
+					add("TargetFrame", "TargetFrame")
+					add("EssentialCooldownViewer", "EssentialCooldownViewer")
+					add("UtilityCooldownViewer", "UtilityCooldownViewer")
+					add("BuffBarCooldownViewer", "BuffBarCooldownViewer")
+					add("BuffIconCooldownViewer", "BuffIconCooldownViewer")
+
+					if addon.variables and addon.variables.actionBarNames then
+						for _, info in ipairs(addon.variables.actionBarNames) do
+							if info.name then add(info.name, info.text or info.name) end
+						end
+					end
+
+					if isBarEnabled("HEALTH") then add("EQOLHealthBar", displayNameForBarType("HEALTH")) end
+					for _, pType in ipairs(ResourceBars.classPowerTypes or {}) do
+						if isBarEnabled(pType) then
+							local fname = "EQOL" .. pType .. "Bar"
+							add(fname, displayNameForBarType(pType))
+						end
+					end
+
+					local a = ensureAnchorTable()
+					local cur = a and a.relativeFrame
+					if cur and not seen[cur] and not wouldCauseLoop(barType, cur) then add(cur, cur) end
+
+					return entries
+				end
+				local function validateRelativeFrame(a)
+					if not a then return "UIParent" end
+					local cur = a.relativeFrame or "UIParent"
+					local entries = relativeFrameEntries()
+					local ok = false
+					for _, e in ipairs(entries) do
+						if e.key == cur then
+							ok = true
+							break
+						end
+					end
+					if not ok then
+						cur = "UIParent"
+						a.relativeFrame = cur
+					end
+					return cur
+				end
+				local function applyAnchorDefaults(a, target)
+					if not a then return end
+					if target == "UIParent" then
+						a.point = "CENTER"
+						a.relativePoint = "CENTER"
+						a.x = 0
+						a.y = 0
+						a.autoSpacing = nil
+						a.matchRelativeWidth = nil
+					else
+						a.point = "TOPLEFT"
+						a.relativePoint = "BOTTOMLEFT"
+						a.x = 0
+						a.y = 0
+						a.autoSpacing = nil
+					end
+				end
+				settingsList[#settingsList + 1] = {
+					name = "Relative frame",
+					kind = settingType.Dropdown,
+					field = "anchorRelativeFrame",
+					generator = function(_, root)
 						local entries = relativeFrameEntries()
-						local ok = false
-						for _, e in ipairs(entries) do
-							if e.key == cur then
-								ok = true
-								break
-							end
+						for _, entry in ipairs(entries) do
+							root:CreateRadio(entry.label, function()
+								local a = ensureAnchorTable()
+								local cur = validateRelativeFrame(a)
+								return cur == entry.key
+							end, function()
+								local a = ensureAnchorTable()
+								if not a then return end
+								local target = entry.key
+								if wouldCauseLoop(barType, target) then target = "UIParent" end
+								a.relativeFrame = target
+								applyAnchorDefaults(a, target)
+								if target ~= "UIParent" and a.matchRelativeWidth == true then enforceMinWidth() end
+								queueRefresh()
+								refreshSettingsUI()
+							end)
 						end
-						if not ok then
-							cur = "UIParent"
-							a.relativeFrame = cur
-						end
-						return cur
-					end
-					local function applyAnchorDefaults(a, target)
+					end,
+					get = function()
+						local a = ensureAnchorTable()
+						return validateRelativeFrame(a)
+					end,
+					set = function(_, value)
+						local a = ensureAnchorTable()
 						if not a then return end
-						if target == "UIParent" then
-							a.point = "CENTER"
-							a.relativePoint = "CENTER"
-							a.x = 0
-							a.y = 0
-							a.autoSpacing = nil
-						else
-							a.point = "TOP"
-							a.relativePoint = "BOTTOM"
-							a.x = 0
-							a.y = 0
-							a.autoSpacing = nil
-						end
-					end
-
-					settingsList[#settingsList + 1] = {
-						name = "Relative frame",
-						kind = settingType.Dropdown,
-						field = "anchorRelativeFrame",
-						generator = function(_, root)
-							local entries = relativeFrameEntries()
-							for _, entry in ipairs(entries) do
-								root:CreateRadio(entry.label, function()
-									local a = ensureAnchorTable()
-									local cur = validateRelativeFrame(a)
-									return cur == entry.key
-								end, function()
-									local a = ensureAnchorTable()
-									if not a then return end
-									local target = entry.key
-									if wouldCauseLoop(barType, target) then
-										target = "UIParent"
-									end
-									a.relativeFrame = target
-									applyAnchorDefaults(a, target)
-									queueRefresh()
-									refreshSettingsUI()
-								end)
-							end
-						end,
-						get = function()
-							local a = ensureAnchorTable()
-							return validateRelativeFrame(a)
-						end,
-						set = function(_, value)
-							local a = ensureAnchorTable()
-							if not a then return end
-							local target = value or "UIParent"
-							if wouldCauseLoop(barType, target) then target = "UIParent" end
-							a.relativeFrame = target
-							applyAnchorDefaults(a, target)
-							queueRefresh()
-							refreshSettingsUI()
-						end,
-						default = "UIParent",
-					}
+						local target = value or "UIParent"
+						if wouldCauseLoop(barType, target) then target = "UIParent" end
+						a.relativeFrame = target
+						applyAnchorDefaults(a, target)
+						if target ~= "UIParent" and a.matchRelativeWidth == true then enforceMinWidth() end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					default = "UIParent",
+				}
 
 				settingsList[#settingsList + 1] = {
 					name = "Anchor point",
@@ -462,6 +495,26 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 					default = "CENTER",
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["MatchRelativeFrameWidth"] or "Match Relative Frame width",
+					kind = settingType.Checkbox,
+					field = "matchRelativeWidth",
+					get = function()
+						local a = ensureAnchorTable()
+						return a and a.matchRelativeWidth == true
+					end,
+					set = function(_, value)
+						local a = ensureAnchorTable()
+						if not a then return end
+						a.matchRelativeWidth = value and true or nil
+						if a.matchRelativeWidth then enforceMinWidth() end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					isEnabled = function() return not anchorUsesUIParent() end,
+					default = false,
 				}
 
 				settingsList[#settingsList + 1] = {
@@ -740,20 +793,20 @@ local function registerEditModeBars()
 						local r, g, b, a = toColorComponents(col, { 1, 1, 1, 1 })
 						return { r = r, g = g, b = b, a = a }
 					end,
-						colorSet = function(_, value)
-							local c = curSpecCfg()
-							if not c then return end
-							c.barColor = toColorArray(value, { 1, 1, 1, 1 })
-							queueRefresh()
-						end,
-						isEnabled = function()
-							local c = curSpecCfg()
-							return not (c and c.useClassColor == true)
-						end,
-						hasOpacity = true,
-					}
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.barColor = toColorArray(value, { 1, 1, 1, 1 })
+						queueRefresh()
+					end,
+					isShown = function()
+						local c = curSpecCfg()
+						return not (c and c.useClassColor == true)
+					end,
+					hasOpacity = true,
+				}
 
-					settingsList[#settingsList + 1] = {
+				settingsList[#settingsList + 1] = {
 					name = L["Use class color"] or "Use class color",
 					kind = settingType.Checkbox,
 					field = "useClassColor",
@@ -768,13 +821,13 @@ local function registerEditModeBars()
 						if c.useClassColor and c.useBarColor then c.useBarColor = false end
 						queueRefresh()
 						addon.EditModeLib.internal:RefreshSettings()
-						end,
-						isEnabled = function()
-							local c = curSpecCfg()
-							return not (c and c.useBarColor == true)
-						end,
-						default = false,
-					}
+					end,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return not (c and c.useBarColor == true)
+					end,
+					default = false,
+				}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Use max color"] or "Use max color",
@@ -1074,11 +1127,15 @@ local function registerEditModeBars()
 				local bcfg = specCfg[barType]
 				bcfg.anchor = bcfg.anchor or {}
 				if data.point then
-					bcfg.anchor.point = data.point
-					bcfg.anchor.relativePoint = data.relativePoint or data.point
-					bcfg.anchor.x = data.x or 0
-					bcfg.anchor.y = data.y or 0
-					bcfg.anchor.relativeFrame = "UIParent"
+					local relFrame = bcfg.anchor.relativeFrame or "UIParent"
+					-- Nur UIParent-Anker von Edit Mode übernehmen; externe Anker behalten ihre Werte
+					if relFrame == "UIParent" then
+						bcfg.anchor.point = data.point
+						bcfg.anchor.relativePoint = data.relativePoint or data.point
+						bcfg.anchor.x = data.x or 0
+						bcfg.anchor.y = data.y or 0
+					end
+					bcfg.anchor.relativeFrame = relFrame
 				end
 				bcfg.width = data.width or bcfg.width
 				bcfg.height = data.height or bcfg.height
