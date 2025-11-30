@@ -3,7 +3,7 @@ local addonName, addon = ...
 addon.EditMode = addon.EditMode or {}
 local EditMode = addon.EditMode
 
-local LibEditMode = (LibStub and LibStub("LibEditModeImproved-1.0", true)) or addon.EditModeLib
+local LibEditMode = (LibStub and LibStub("LibEQOLEditMode-1.0", true))
 
 local DEFAULT_LAYOUT = "_Global"
 
@@ -29,13 +29,9 @@ EditMode.frames = EditMode.frames or {}
 EditMode.lib = LibEditMode
 EditMode.activeLayout = EditMode.activeLayout
 
-function EditMode:IsAvailable()
-	return self.lib ~= nil
-end
+function EditMode:IsAvailable() return self.lib ~= nil end
 
-function EditMode:IsInEditMode()
-	return self:IsAvailable() and self.lib:IsInEditMode()
-end
+function EditMode:IsInEditMode() return self:IsAvailable() and self.lib:IsInEditMode() end
 
 function EditMode:_ensureDB()
 	if not addon.db then return nil end
@@ -59,9 +55,7 @@ function EditMode:_resolveLayoutName(layoutName)
 	return self:GetActiveLayoutName()
 end
 
-local function isInCombat()
-	return InCombatLockdown and InCombatLockdown()
-end
+local function isInCombat() return InCombatLockdown and InCombatLockdown() end
 
 function EditMode:_ensureCombatWatcher()
 	if self.combatWatcher then return end
@@ -85,9 +79,7 @@ function EditMode:_flushPendingVisibility()
 	if not pending then return end
 	self.pendingVisibility = nil
 	for entry, shouldShow in pairs(pending) do
-		if entry then
-			self:_applyVisibility(entry, nil, entry._lastEnabled, true)
-		end
+		if entry then self:_applyVisibility(entry, nil, entry._lastEnabled, true) end
 	end
 end
 
@@ -96,9 +88,7 @@ function EditMode:_flushPendingLayout()
 	if not pending then return end
 	self.pendingLayout = nil
 	for entry, data in pairs(pending) do
-		if entry and data then
-			self:_applyLayoutPosition(entry, data, true)
-		end
+		if entry and data then self:_applyLayoutPosition(entry, data, true) end
 	end
 end
 
@@ -116,11 +106,11 @@ function EditMode:_setFrameShown(entry, shouldShow, immediate)
 	if not immediate and isProtected and isInCombat() then
 		self.pendingVisibility = self.pendingVisibility or {}
 		self.pendingVisibility[entry] = shouldShow
-	self:_ensureCombatWatcher()
-	return
-end
+		self:_ensureCombatWatcher()
+		return
+	end
 
-if self.pendingVisibility then self.pendingVisibility[entry] = nil end
+	if self.pendingVisibility then self.pendingVisibility[entry] = nil end
 
 	local currentlyShown = frame:IsShown()
 	if shouldShow then
@@ -206,9 +196,7 @@ function EditMode:EnsureLayoutData(id, layoutName)
 	return record
 end
 
-function EditMode:GetLayoutData(id, layoutName)
-	return self:EnsureLayoutData(id, layoutName)
-end
+function EditMode:GetLayoutData(id, layoutName) return self:EnsureLayoutData(id, layoutName) end
 
 function EditMode:SetFramePosition(id, point, x, y, layoutName, skipApply)
 	local data = self:EnsureLayoutData(id, layoutName)
@@ -356,10 +344,7 @@ function EditMode:_prepareSetting(id, setting)
 	local field = setting.field
 	local onChange = setting.onValueChanged
 
-	local requiresField = not copy.generator
-		and copy.kind ~= EditMode.lib.SettingType.Label
-		and copy.kind ~= EditMode.lib.SettingType.Divider
-		and copy.kind ~= EditMode.lib.SettingType.Collapsible
+	local requiresField = not copy.generator and copy.kind ~= EditMode.lib.SettingType.Label and copy.kind ~= EditMode.lib.SettingType.Divider and copy.kind ~= EditMode.lib.SettingType.Collapsible
 
 	if not copy.get and requiresField then
 		assert(field, "setting.field required when getter is omitted")
@@ -479,6 +464,7 @@ function EditMode:RegisterFrame(id, opts)
 			point = self:GetValue(id, "point") or defaults.point,
 			x = self:GetValue(id, "x") or defaults.x,
 			y = self:GetValue(id, "y") or defaults.y,
+			enableOverlayToggle = opts.enableOverlayToggle or false,
 		}
 
 		self.lib:AddFrame(frame, function(_, layoutName, point, x, y)
@@ -505,18 +491,16 @@ function EditMode:UnregisterFrame(id)
 	if self.pendingLayout then self.pendingLayout[entry] = nil end
 	if self.pendingVisibility then self.pendingVisibility[entry] = nil end
 
-		if self:IsAvailable() and entry.frame and self.lib then
-			local frame = entry.frame
-			local lib = self.lib
-			local selection = lib.frameSelections and lib.frameSelections[frame]
-			if selection then
-				if lib.internal and lib.internal.magnetismManager and lib.internal.magnetismManager.UnregisterFrame then
-					lib.internal.magnetismManager:UnregisterFrame(selection)
-				end
-				selection:Hide()
-				selection:SetParent(nil)
-				lib.frameSelections[frame] = nil
-			end
+	if self:IsAvailable() and entry.frame and self.lib then
+		local frame = entry.frame
+		local lib = self.lib
+		local selection = lib.frameSelections and lib.frameSelections[frame]
+		if selection then
+			if lib.internal and lib.internal.magnetismManager and lib.internal.magnetismManager.UnregisterFrame then lib.internal.magnetismManager:UnregisterFrame(selection) end
+			selection:Hide()
+			selection:SetParent(nil)
+			lib.frameSelections[frame] = nil
+		end
 		if lib.frameCallbacks then lib.frameCallbacks[frame] = nil end
 		if lib.frameDefaults then lib.frameDefaults[frame] = nil end
 		if lib.frameSettings then lib.frameSettings[frame] = nil end

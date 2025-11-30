@@ -4,5 +4,5 @@ local _, addon = ...
 local LibStub = _G.LibStub
 assert(LibStub, "EnhanceQoL requires LibStub to load LibEditModeImproved")
 
-local lib = LibStub("LibEditModeImproved-1.0")
+local lib = LibStub("LibEQOLEditMode-1.0")
 addon.EditModeLib = lib

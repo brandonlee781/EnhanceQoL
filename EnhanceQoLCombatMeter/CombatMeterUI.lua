@@ -808,7 +808,9 @@ local function createGroupFrame(groupConfig)
 	end
 
 	function frame:RefreshDragOutline()
-		if dragOutline:IsShown() then refreshDragOutline() end
+		-- Placeholder to refresh a drag outline if one is ever attached
+		local outline = self.dragOutline
+		if outline and outline:IsShown() and outline.Refresh then outline:Refresh() end
 	end
 
 	function frame:Update(groupUnits)
