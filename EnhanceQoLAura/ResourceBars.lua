@@ -869,6 +869,64 @@ local function configureBarBehavior(bar, cfg, pType)
 	if bar._rbBackdropState and bar._rbBackdropState.insets then applyStatusBarInsets(bar, bar._rbBackdropState.insets, true) end
 end
 
+local function behaviorOptionsForType(pType)
+	local opts = {
+		{ value = "reverseFill", text = L["Reverse fill"] or "Reverse fill" },
+	}
+	if pType ~= "RUNES" then
+		opts[#opts + 1] = { value = "verticalFill", text = L["Vertical orientation"] or "Vertical orientation" }
+		opts[#opts + 1] = { value = "smoothFill", text = L["Smooth fill"] or "Smooth fill" }
+	end
+	return opts
+end
+
+local function behaviorSelectionFromConfig(cfg, pType)
+	local selection = {}
+	cfg = cfg or {}
+	if cfg.reverseFill == true then selection.reverseFill = true end
+	if pType ~= "RUNES" then
+		if cfg.verticalFill == true then selection.verticalFill = true end
+		if cfg.smoothFill == true then selection.smoothFill = true end
+	end
+	return selection
+end
+
+local function applyBehaviorSelection(cfg, selection, pType, specIndex)
+	if not cfg then return false end
+	selection = selection or {}
+	local beforeVertical = cfg.verticalFill == true
+
+	cfg.reverseFill = selection.reverseFill == true
+	if pType ~= "RUNES" then
+		cfg.verticalFill = selection.verticalFill == true
+		cfg.smoothFill = selection.smoothFill == true
+	else
+		cfg.verticalFill = nil
+		cfg.smoothFill = nil
+	end
+
+	local afterVertical = cfg.verticalFill == true
+	local dimensionsChanged = beforeVertical ~= afterVertical
+
+	if dimensionsChanged then
+		local defaultW = (pType == "HEALTH") and DEFAULT_HEALTH_WIDTH or DEFAULT_POWER_WIDTH
+		local defaultH = (pType == "HEALTH") and DEFAULT_HEALTH_HEIGHT or DEFAULT_POWER_HEIGHT
+		local curW = cfg.width or defaultW
+		local curH = cfg.height or defaultH
+		cfg.width, cfg.height = curH, curW
+		local activeSpec = specIndex or addon.variables.unitSpec
+		if activeSpec and activeSpec == addon.variables.unitSpec then
+			if pType == "HEALTH" then
+				ResourceBars.SetHealthBarSize(cfg.width or defaultW, cfg.height or defaultH)
+			else
+				ResourceBars.SetPowerBarSize(cfg.width or defaultW, cfg.height or defaultH, pType)
+			end
+		end
+	end
+
+	return dimensionsChanged
+end
+
 local function Snap(bar, off)
 	local s = bar:GetEffectiveScale() or 1
 	return floor(off * s + 0.5) / s
@@ -4759,6 +4817,9 @@ ResourceBars.DEFAULT_POWER_HEIGHT = DEFAULT_POWER_HEIGHT or DEFAULT_HEALTH_HEIGH
 ResourceBars.MIN_RESOURCE_BAR_WIDTH = MIN_RESOURCE_BAR_WIDTH
 ResourceBars.getBarSettings = getBarSettings
 ResourceBars.getAnchor = getAnchor
+ResourceBars.BehaviorOptionsForType = behaviorOptionsForType
+ResourceBars.BehaviorSelectionFromConfig = behaviorSelectionFromConfig
+ResourceBars.ApplyBehaviorSelection = applyBehaviorSelection
 ResourceBars.ExportProfile = exportResourceProfile
 ResourceBars.ImportProfile = importResourceProfile
 ResourceBars.ExportErrorMessage = exportErrorMessage

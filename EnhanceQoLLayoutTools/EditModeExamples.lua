@@ -44,11 +44,16 @@ local function setterFor(id, field)
 	end
 end
 
+local function aliasFuncToSet(copy)
+	if copy.func and not copy.set then copy.set = copy.func end
+end
+
 local function registerExample(example)
 	local id = "EQOL_EditModeExample_" .. example.key
 	local frame = createExampleFrame(id .. "_Frame", example.title, example.color or { 0.7, 0.7, 0.7 })
 
 	local settings = {}
+	local defaultsTable = example.sessionDefaults or {}
 	for i, setting in ipairs(example.settings or {}) do
 		local copy = CopyTable(setting)
 		if copy.colorField then
@@ -56,6 +61,11 @@ local function registerExample(example)
 			copy.colorSet = setterFor(id, copy.colorField)
 			copy.colorField = nil
 		end
+		aliasFuncToSet(copy)
+		-- Attach persistent getters/setters for simple fields if missing
+		if not copy.get and copy.field then copy.get = getterFor(id, copy.field) end
+		if not copy.set and copy.field then copy.set = setterFor(id, copy.field) end
+		if copy.default == nil and defaultsTable[copy.field] ~= nil then copy.default = defaultsTable[copy.field] end
 		settings[i] = copy
 	end
 
@@ -73,19 +83,37 @@ local function registerExample(example)
 	})
 end
 
+local dbdata = {}
 local examples = {
 	{
 		key = "Checkbox",
 		title = "Checkbox",
 		color = { 0.2, 0.6, 1 },
+		sessionDefaults = {
+			checkbox = true,
+			checkbox2 = false,
+		},
 		settings = {
+			{
+				name = "Group",
+				kind = SettingType.Collapsible,
+				id = "CheckboxGroup",
+				defaultCollapsed = true,
+			},
 			{
 				name = "Checkbox",
 				kind = SettingType.Checkbox,
-				field = "checkbox",
 				default = true,
-				get = function() return nil end,
+				get = function() return dbdata.checkbox1 ~= false end,
+				func = function(value) dbdata.checkbox1 = not not value end,
 				tooltip = "Always shown",
+				parentId = "CheckboxGroup",
+			},
+			{
+				name = "Divider",
+				kind = SettingType.Divider,
+				isShown = function() return dbdata.checkbox1 ~= false end,
+				parentId = "CheckboxGroup",
 			},
 			{
 				name = "Checkbox2",
@@ -98,6 +126,20 @@ local examples = {
 					return val ~= false
 				end,
 				tooltip = "Hidden when Checkbox is off",
+				parentId = "CheckboxGroup",
+			},
+		},
+	},
+	{
+		key = "StretchButton",
+		title = "Stretch Button",
+		color = { 0.45, 0.6, 0.9 },
+		settings = {
+			{
+				name = "Show stretch button",
+				kind = SettingType.Checkbox,
+				field = "showStretch",
+				default = true,
 			},
 		},
 	},
@@ -135,6 +177,7 @@ local examples = {
 				name = "Roles",
 				kind = SettingType.MultiDropdown,
 				field = "roles",
+				hideSummary = true,
 				default = { TANK = true, HEALER = true },
 				values = {
 					{ text = "Tank", value = "TANK" },
@@ -257,4 +300,24 @@ local examples = {
 
 for _, example in ipairs(examples) do
 	registerExample(example)
+end
+
+local Lib = EditMode and EditMode.lib or LibStub("LibEditModeImproved-1.0", true)
+if Lib and Lib.RegisterCallback then
+	Lib:RegisterCallback("layoutrenamed", function(oldName, newName, layoutIndex) print("Layout renamed:", oldName, "->", newName, "Index", layoutIndex) end)
+	Lib:RegisterCallback("layout", function(layoutName, layoutIndex) print("Layout:", layoutName, "Index", layoutIndex) end)
+	Lib:RegisterCallback(
+		"layoutadded",
+		function(addedLayoutIndex, activateNewLayout, isLayoutImported, layoutType) print("Layout added:", addedLayoutIndex, "IsActive:", activateNewLayout, "IsImported:", isLayoutImported, "Type:", layoutType) end
+	)
+	Lib:RegisterCallback("layoutdeleted", function(deletedLayoutIndex) print("Layout deleted:", deletedLayoutIndex) end)
+	Lib:RegisterCallback(
+		"layoutduplicate",
+		function(addedLayoutIndex, duplicateIndices, isLayoutImported)
+			local dups = ""
+			for _,v in pairs(duplicateIndices) do dups = dups .. v .. "," end
+			
+			print("Layout duplicated:", "Added:", addedLayoutIndex, "NrOfDuplicates:", dups, "Imported:", isLayoutImported) end
+	)
+	Lib.internal.debugEnabled = true
 end

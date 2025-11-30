@@ -356,7 +356,10 @@ function EditMode:_prepareSetting(id, setting)
 	local field = setting.field
 	local onChange = setting.onValueChanged
 
-	local requiresField = not copy.generator and copy.kind ~= EditMode.lib.SettingType.Label
+	local requiresField = not copy.generator
+		and copy.kind ~= EditMode.lib.SettingType.Label
+		and copy.kind ~= EditMode.lib.SettingType.Divider
+		and copy.kind ~= EditMode.lib.SettingType.Collapsible
 
 	if not copy.get and requiresField then
 		assert(field, "setting.field required when getter is omitted")
@@ -502,15 +505,18 @@ function EditMode:UnregisterFrame(id)
 	if self.pendingLayout then self.pendingLayout[entry] = nil end
 	if self.pendingVisibility then self.pendingVisibility[entry] = nil end
 
-	if self:IsAvailable() and entry.frame and self.lib then
-		local frame = entry.frame
-		local lib = self.lib
-		local selection = lib.frameSelections and lib.frameSelections[frame]
-		if selection then
-			selection:Hide()
-			selection:SetParent(nil)
-			lib.frameSelections[frame] = nil
-		end
+		if self:IsAvailable() and entry.frame and self.lib then
+			local frame = entry.frame
+			local lib = self.lib
+			local selection = lib.frameSelections and lib.frameSelections[frame]
+			if selection then
+				if lib.internal and lib.internal.magnetismManager and lib.internal.magnetismManager.UnregisterFrame then
+					lib.internal.magnetismManager:UnregisterFrame(selection)
+				end
+				selection:Hide()
+				selection:SetParent(nil)
+				lib.frameSelections[frame] = nil
+			end
 		if lib.frameCallbacks then lib.frameCallbacks[frame] = nil end
 		if lib.frameDefaults then lib.frameDefaults[frame] = nil end
 		if lib.frameSettings then lib.frameSettings[frame] = nil end

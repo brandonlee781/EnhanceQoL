@@ -770,6 +770,13 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					name = "Colortest",
+					kind = settingType.Collapsible,
+					id = "Colortest",
+					defaultCollapsed = true,
+				}
+
+				settingsList[#settingsList + 1] = {
 					name = L["Custom bar color"] or "Custom bar color",
 					kind = settingType.CheckboxColor,
 					field = "useBarColor",
@@ -804,6 +811,7 @@ local function registerEditModeBars()
 						return not (c and c.useClassColor == true)
 					end,
 					hasOpacity = true,
+					parentId = "Colortest",
 				}
 
 				settingsList[#settingsList + 1] = {
@@ -827,6 +835,7 @@ local function registerEditModeBars()
 						return not (c and c.useBarColor == true)
 					end,
 					default = false,
+					parentId = "Colortest",
 				}
 
 				settingsList[#settingsList + 1] = {
@@ -898,6 +907,70 @@ local function registerEditModeBars()
 				}
 			end
 
+			do -- Behavior
+				local behaviorValues = ResourceBars.BehaviorOptionsForType and ResourceBars.BehaviorOptionsForType(barType)
+				if not behaviorValues then
+					behaviorValues = {
+						{ value = "reverseFill", text = L["Reverse fill"] or "Reverse fill" },
+					}
+					if barType ~= "RUNES" then
+						behaviorValues[#behaviorValues + 1] = { value = "verticalFill", text = L["Vertical orientation"] or "Vertical orientation" }
+						behaviorValues[#behaviorValues + 1] = { value = "smoothFill", text = L["Smooth fill"] or "Smooth fill" }
+					end
+				end
+
+				local function currentBehaviorSelection()
+					if ResourceBars and ResourceBars.BehaviorSelectionFromConfig then return ResourceBars.BehaviorSelectionFromConfig(curSpecCfg(), barType) end
+					local c = curSpecCfg()
+					local map = {}
+					if c then
+						if c.reverseFill == true then map.reverseFill = true end
+						if barType ~= "RUNES" then
+							if c.verticalFill == true then map.verticalFill = true end
+							if c.smoothFill == true then map.smoothFill = true end
+						end
+					end
+					return map
+				end
+
+				local function applyBehaviorFlag(key, enabled)
+					local cfg = curSpecCfg()
+					if not cfg then return end
+					local selection = currentBehaviorSelection()
+					if key then selection[key] = enabled and true or nil end
+					local swapped = false
+					if ResourceBars and ResourceBars.ApplyBehaviorSelection then
+						swapped = ResourceBars.ApplyBehaviorSelection(cfg, selection, barType, addon.variables.unitSpec) and true or false
+					else
+						cfg.reverseFill = selection.reverseFill == true
+						if barType ~= "RUNES" then
+							cfg.verticalFill = selection.verticalFill == true
+							cfg.smoothFill = selection.smoothFill == true
+						else
+							cfg.verticalFill = nil
+							cfg.smoothFill = nil
+						end
+					end
+					queueRefresh()
+					if swapped then refreshSettingsUI() end
+				end
+
+				if settingType.MultiDropdown and behaviorValues and #behaviorValues > 0 then
+					settingsList[#settingsList + 1] = {
+						name = L["Behavior"] or "Behavior",
+						kind = settingType.MultiDropdown,
+						field = "behavior",
+						default = currentBehaviorSelection(),
+						values = behaviorValues,
+						isSelected = function(_, value)
+							local selection = currentBehaviorSelection()
+							return selection[value] == true
+						end,
+						setSelected = function(_, value, state) applyBehaviorFlag(value, state) end,
+					}
+				end
+			end
+
 			do -- Backdrop
 				local function backdropEnabled()
 					local c = curSpecCfg()
@@ -906,6 +979,14 @@ local function registerEditModeBars()
 				end
 
 				settingsList[#settingsList + 1] = {
+					name = "Backdrop",
+					kind = settingType.Collapsible,
+					id = "CheckboxGroup",
+					defaultCollapsed = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Show backdrop"] or "Show backdrop",
 					kind = settingType.Checkbox,
 					field = "backdropEnabled",
@@ -926,6 +1007,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Background texture"],
 					kind = settingType.DropdownColor,
 					field = "backdropBackground",
@@ -980,6 +1062,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Border texture"],
 					kind = settingType.DropdownColor,
 					field = "backdropBorder",
@@ -1034,6 +1117,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Border size"] or "Border size",
 					kind = settingType.Slider,
 					allowInput = true,
@@ -1058,6 +1142,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Border offset"] or "Border offset",
 					kind = settingType.Slider,
 					field = "backdropOutset",
@@ -1081,6 +1166,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					parentId = "CheckboxGroup",
 					name = L["Background inset"] or "Background inset",
 					kind = settingType.Slider,
 					field = "backdropBackgroundInset",
