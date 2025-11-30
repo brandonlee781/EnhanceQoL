@@ -308,16 +308,18 @@ if Lib and Lib.RegisterCallback then
 	Lib:RegisterCallback("layout", function(layoutName, layoutIndex) print("Layout:", layoutName, "Index", layoutIndex) end)
 	Lib:RegisterCallback(
 		"layoutadded",
-		function(addedLayoutIndex, activateNewLayout, isLayoutImported, layoutType) print("Layout added:", addedLayoutIndex, "IsActive:", activateNewLayout, "IsImported:", isLayoutImported, "Type:", layoutType) end
+		function(addedLayoutIndex, activateNewLayout, isLayoutImported, layoutType)
+			print("Layout added:", addedLayoutIndex, "IsActive:", activateNewLayout, "IsImported:", isLayoutImported, "Type:", layoutType)
+		end
 	)
 	Lib:RegisterCallback("layoutdeleted", function(deletedLayoutIndex) print("Layout deleted:", deletedLayoutIndex) end)
-	Lib:RegisterCallback(
-		"layoutduplicate",
-		function(addedLayoutIndex, duplicateIndices, isLayoutImported)
-			local dups = ""
-			for _,v in pairs(duplicateIndices) do dups = dups .. v .. "," end
-			
-			print("Layout duplicated:", "Added:", addedLayoutIndex, "NrOfDuplicates:", dups, "Imported:", isLayoutImported) end
-	)
+	Lib:RegisterCallback("layoutduplicate", function(addedLayoutIndex, duplicateIndices, isLayoutImported)
+		local dups = ""
+		for _, v in pairs(duplicateIndices) do
+			dups = dups .. v .. ","
+		end
+
+		print("Layout duplicated:", "Added:", addedLayoutIndex, "NrOfDuplicates:", dups, "Imported:", isLayoutImported)
+	end)
 	Lib.internal.debugEnabled = true
 end
