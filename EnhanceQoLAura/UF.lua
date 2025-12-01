@@ -179,6 +179,8 @@ local auraList = {}
 local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
 
+local function defaultsFor(unit) return defaults[unit] or defaults.player or {} end
+
 local function resetTargetAuras()
 	for k in pairs(targetAuras) do
 		targetAuras[k] = nil
@@ -660,17 +662,13 @@ local function updateHealth(cfg, unit)
 		end
 	end
 	if not hr then
-		local color = hc.color or { 0, 0.8, 0, 1 }
+		local def = defaultsFor(unit) or {}
+		local defH = def.health or {}
+		local color = defH.color or { 0, 0.8, 0, 1 }
 		hr, hg, hb, ha = color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1
 	end
 	st.health:SetStatusBarColor(hr or 0, hg or 0.8, hb or 0, ha or 1)
-	if hc.useCustomColor then
-		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
-	elseif hc.useClassColor then
-		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
-	else
-		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
-	end
+	st.health:SetStatusBarDesaturated(true)
 	if st.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
 		if issecretvalue and issecretvalue(maxv) then
