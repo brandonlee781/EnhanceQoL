@@ -128,6 +128,7 @@ end
 local function refreshSettingsUI()
 	local lib = addon.EditModeLib
 	if lib and lib.internal and lib.internal.RefreshSettings then lib.internal:RefreshSettings() end
+	if lib and lib.internal and lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
 end
 
 local function fontOptions()
@@ -181,7 +182,7 @@ local function slider(name, minVal, maxVal, step, getter, setter, default, paren
 	}
 end
 
-local function checkbox(name, getter, setter, default, parentId)
+local function checkbox(name, getter, setter, default, parentId, isEnabled)
 	return {
 		name = name,
 		kind = settingType.Checkbox,
@@ -189,6 +190,7 @@ local function checkbox(name, getter, setter, default, parentId)
 		default = default,
 		get = function() return getter() end,
 		set = function(_, value) setter(value) end,
+		isEnabled = isEnabled,
 	}
 end
 
@@ -325,14 +327,32 @@ local function buildUnitSettings(unit)
 	end, def.healthHeight or 24, "health", true)
 
 	local healthDef = def.health or {}
+	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor ~= false) ~= false end, function(val)
+		setValue(unit, { "health", "useClassColor" }, val and true or false)
+		refreshSelf()
+		refreshSettingsUI()
+	end, healthDef.useClassColor ~= false, "health")
+
+	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function()
+		return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true
+	end, function(val)
+		setValue(unit, { "health", "useClassColor" }, val and true or false)
+		if val then setValue(unit, { "health", "useCustomColor" }, false) end
+		refreshSelf()
+		refreshSettingsUI()
+	end, healthDef.useClassColor == true, "health", function()
+		return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) ~= true
+	end)
+
 	list[#list + 1] = checkboxColor({
 		name = L["UFHealthColor"] or "Custom health color",
 		parentId = "health",
-		defaultChecked = healthDef.useClassColor == false,
-		isChecked = function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor ~= false) == false end,
+		defaultChecked = healthDef.useCustomColor == true,
+		isChecked = function() return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) == true end,
 		onChecked = function(val)
 			local useCustom = val and true or false
-			setValue(unit, { "health", "useClassColor" }, useCustom and false or true)
+			setValue(unit, { "health", "useCustomColor" }, useCustom)
+			if useCustom then setValue(unit, { "health", "useClassColor" }, false) end
 			if useCustom and not getValue(unit, { "health", "color" }) then setValue(unit, { "health", "color" }, healthDef.color or { 0.0, 0.8, 0.0, 1 }) end
 			refreshSelf()
 			refreshSettingsUI()
@@ -340,6 +360,7 @@ local function buildUnitSettings(unit)
 		getColor = function() return toRGBA(getValue(unit, { "health", "color" }, healthDef.color or { 0.0, 0.8, 0.0, 1 }), healthDef.color or { 0.0, 0.8, 0.0, 1 }) end,
 		onColor = function(color)
 			setColor(unit, { "health", "color" }, color.r, color.g, color.b, color.a)
+			setValue(unit, { "health", "useCustomColor" }, true)
 			setValue(unit, { "health", "useClassColor" }, false)
 			refreshSelf()
 		end,
@@ -349,6 +370,7 @@ local function buildUnitSettings(unit)
 			b = (healthDef.color and healthDef.color[3]) or 0.0,
 			a = (healthDef.color and healthDef.color[4]) or 1,
 		},
+		isEnabled = function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) ~= true end,
 	})
 
 	list[#list + 1] = radioDropdown(L["TextLeft"] or "Left text", textOptions, function() return getValue(unit, { "health", "textLeft" }, healthDef.textLeft or "PERCENT") end, function(val)

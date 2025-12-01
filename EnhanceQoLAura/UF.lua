@@ -114,7 +114,8 @@ local defaults = {
 		barGap = 0,
 		border = { enabled = true, color = { 0, 0, 0, 0.8 }, edgeSize = 1, inset = 0 },
 		health = {
-			useClassColor = true,
+			useCustomColor = false,
+			useClassColor = false,
 			color = { 0.0, 0.8, 0.0, 1 },
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
@@ -488,18 +489,30 @@ end
 
 local function hideBlizzardPlayerFrame()
 	if not _G.PlayerFrame then return end
-	if not InCombatLockdown() then _G.PlayerFrame:Hide() end
+	if not InCombatLockdown() and ensureDB("player").enabled then _G.PlayerFrame:Hide() end
 	if not blizzardPlayerHooked then
-		_G.PlayerFrame:HookScript("OnShow", _G.PlayerFrame.Hide)
+		_G.PlayerFrame:HookScript("OnShow", function(frame)
+			if ensureDB("player").enabled then
+				frame:Hide()
+			else
+				frame:Show()
+			end
+		end)
 		blizzardPlayerHooked = true
 	end
 end
 
 local function hideBlizzardTargetFrame()
 	if not _G.TargetFrame then return end
-	if not InCombatLockdown() then _G.TargetFrame:Hide() end
+	if not InCombatLockdown() and ensureDB("target").enabled then _G.TargetFrame:Hide() end
 	if not blizzardTargetHooked then
-		_G.TargetFrame:HookScript("OnShow", _G.TargetFrame.Hide)
+		_G.TargetFrame:HookScript("OnShow", function(frame)
+			if ensureDB("target").enabled then
+				frame:Hide()
+			else
+				frame:Show()
+			end
+		end)
 		blizzardTargetHooked = true
 	end
 end
@@ -637,7 +650,9 @@ local function updateHealth(cfg, unit)
 		end
 	end
 	local hr, hg, hb, ha
-	if hc.useClassColor then
+	if hc.useCustomColor and hc.color then
+		hr, hg, hb, ha = hc.color[1], hc.color[2], hc.color[3], hc.color[4] or 1
+	elseif hc.useClassColor then
 		local class = select(2, UnitClass(unit))
 		local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
 		if c then
@@ -649,10 +664,12 @@ local function updateHealth(cfg, unit)
 		hr, hg, hb, ha = color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1
 	end
 	st.health:SetStatusBarColor(hr or 0, hg or 0.8, hb or 0, ha or 1)
-	if hc.useClassColor then
+	if hc.useCustomColor then
+		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
+	elseif hc.useClassColor then
 		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	else
-		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
+		if st.health.SetStatusBarDesaturated then st.health.SetStatusBarDesaturated(false) end
 	end
 	if st.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
@@ -1213,6 +1230,7 @@ function UF.Enable()
 	local totCfg = ensureDB(TARGET_TARGET_UNIT)
 	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	hideBlizzardPlayerFrame()
+	hideBlizzardTargetFrame()
 end
 
 function UF.Disable()
@@ -1221,6 +1239,7 @@ function UF.Disable()
 	if states.player and states.player.frame then states.player.frame:Hide() end
 	addon.variables.requireReload = true
 	if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
+	if _G.PlayerFrame and not InCombatLockdown() then _G.PlayerFrame:Show() end
 end
 
 function UF.Refresh()
@@ -1860,6 +1879,7 @@ if not addon.Aura.UFInitialized then
 	if tc.enabled then
 		ensureEventHandling()
 		applyConfig("target")
+		hideBlizzardTargetFrame()
 	end
 	local ttc = ensureDB(TARGET_TARGET_UNIT)
 	if ttc.enabled then
