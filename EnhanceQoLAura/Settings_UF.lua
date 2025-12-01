@@ -238,9 +238,7 @@ end
 local function buildUnitSettings(unit)
 	local def = defaultsFor(unit)
 	local list = {}
-	local function refreshSelf()
-		refresh(unit)
-	end
+	local function refreshSelf() refresh(unit) end
 	local refresh = refreshSelf
 
 	list[#list + 1] = { name = L["Frame"] or "Frame", kind = settingType.Collapsible, id = "frame", defaultCollapsed = false }
@@ -333,21 +331,17 @@ local function buildUnitSettings(unit)
 		defaultChecked = healthDef.useClassColor == false,
 		isChecked = function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor ~= false) == false end,
 		onChecked = function(val)
-			debounced(unit .. "_healthColorToggle", function()
-				local useCustom = val and true or false
-				setValue(unit, { "health", "useClassColor" }, useCustom and false or true)
-				if useCustom and not getValue(unit, { "health", "color" }) then setValue(unit, { "health", "color" }, healthDef.color or { 0.0, 0.8, 0.0, 1 }) end
-				refreshSelf()
-				refreshSettingsUI()
-			end)
+			local useCustom = val and true or false
+			setValue(unit, { "health", "useClassColor" }, useCustom and false or true)
+			if useCustom and not getValue(unit, { "health", "color" }) then setValue(unit, { "health", "color" }, healthDef.color or { 0.0, 0.8, 0.0, 1 }) end
+			refreshSelf()
+			refreshSettingsUI()
 		end,
 		getColor = function() return toRGBA(getValue(unit, { "health", "color" }, healthDef.color or { 0.0, 0.8, 0.0, 1 }), healthDef.color or { 0.0, 0.8, 0.0, 1 }) end,
 		onColor = function(color)
-			debounced(unit .. "_healthColor", function()
-				setColor(unit, { "health", "color" }, color.r, color.g, color.b, color.a)
-				setValue(unit, { "health", "useClassColor" }, false)
-				refreshSelf()
-			end)
+			setColor(unit, { "health", "color" }, color.r, color.g, color.b, color.a)
+			setValue(unit, { "health", "useClassColor" }, false)
+			refreshSelf()
 		end,
 		colorDefault = {
 			r = (healthDef.color and healthDef.color[1]) or 0.0,
@@ -740,7 +734,7 @@ local function buildUnitSettings(unit)
 		end)
 	end, statusDef.fontSize or 14, "status", true)
 
-	local fontOpts = fontOptions()
+	fontOpts = fontOptions()
 	if #fontOpts > 0 then
 		list[#list + 1] = radioDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "status", "font" }, statusDef.font or defaultFontPath()) end, function(val)
 			setValue(unit, { "status", "font" }, val)
