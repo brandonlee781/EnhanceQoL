@@ -327,22 +327,13 @@ local function buildUnitSettings(unit)
 	end, def.healthHeight or 24, "health", true)
 
 	local healthDef = def.health or {}
-	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor ~= false) ~= false end, function(val)
-		setValue(unit, { "health", "useClassColor" }, val and true or false)
-		refreshSelf()
-		refreshSettingsUI()
-	end, healthDef.useClassColor ~= false, "health")
 
-	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function()
-		return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true
-	end, function(val)
+	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true end, function(val)
 		setValue(unit, { "health", "useClassColor" }, val and true or false)
 		if val then setValue(unit, { "health", "useCustomColor" }, false) end
 		refreshSelf()
 		refreshSettingsUI()
-	end, healthDef.useClassColor == true, "health", function()
-		return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) ~= true
-	end)
+	end, healthDef.useClassColor == true, "health", function() return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) ~= true end)
 
 	list[#list + 1] = checkboxColor({
 		name = L["UFHealthColor"] or "Custom health color",

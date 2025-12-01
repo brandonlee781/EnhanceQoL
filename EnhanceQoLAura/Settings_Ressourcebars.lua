@@ -1352,7 +1352,6 @@ local function registerEditModeBars()
 					name = L["Border size"] or "Border size",
 					kind = settingType.Slider,
 					allowInput = true,
-					allowInput = true,
 					field = "backdropEdgeSize",
 					minValue = 0,
 					maxValue = 64,

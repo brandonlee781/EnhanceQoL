@@ -669,7 +669,7 @@ local function updateHealth(cfg, unit)
 	elseif hc.useClassColor then
 		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	else
-		if st.health.SetStatusBarDesaturated then st.health.SetStatusBarDesaturated(false) end
+		if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	end
 	if st.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0

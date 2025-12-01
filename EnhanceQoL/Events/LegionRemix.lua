@@ -2936,7 +2936,7 @@ function LegionRemix:ShowCategoryTooltip(row)
 								b = NORMAL_FONT_COLOR.b or b
 							end
 						end
-						local lineText = "    " .. (displayLink and displayLink or displayName)
+						local lineText = "    " .. (displayLink or displayName)
 						GameTooltip:AddLine(lineText, r, g, b)
 					end
 				end
