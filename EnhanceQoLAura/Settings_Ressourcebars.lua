@@ -69,6 +69,12 @@ local function setBarEnabled(specIndex, barType, enabled)
 	local specCfg = ensureSpecCfg(specIndex)
 	if not specCfg then return end
 	specCfg[barType] = specCfg[barType] or {}
+	local cfg = specCfg[barType]
+	if enabled and not cfg._init and ResourceBars and ResourceBars.ApplyGlobalProfile then
+		local ok = ResourceBars.ApplyGlobalProfile(barType, specIndex)
+		if ok then cfg._appliedFromGlobal = true end
+		cfg._init = true
+	end
 	specCfg[barType].enabled = enabled and true or false
 	if barType == "HEALTH" then
 		if enabled then

@@ -373,15 +373,32 @@ local function saveGlobalProfile(barType, specIndex)
 	if not specCfg then return false, "NO_SPEC" end
 	local cfg = specCfg[barType]
 	if not cfg then return false, "NO_CFG" end
+
+	local function normalizeSize(source)
+		local copy = CopyTable(source or {})
+		if not copy.width or not copy.height then
+			local frameName = (barType == "HEALTH") and "EQOLHealthBar" or ("EQOL" .. tostring(barType) .. "Bar")
+			local frame = _G[frameName]
+			if frame and frame.GetWidth and frame.GetHeight then
+				copy.width = copy.width or frame:GetWidth()
+				copy.height = copy.height or frame:GetHeight()
+			end
+		end
+		if not copy.width then copy.width = (barType == "HEALTH") and DEFAULT_HEALTH_WIDTH or DEFAULT_POWER_WIDTH end
+		if not copy.height then copy.height = (barType == "HEALTH") and DEFAULT_HEALTH_HEIGHT or DEFAULT_POWER_HEIGHT end
+		return copy
+	end
+
+	local normalized = normalizeSize(cfg)
 	local store = ensureGlobalStore()
-	store[barType] = CopyTable(cfg)
+	store[barType] = normalized
 
 	-- Also keep generic MAIN/SECONDARY templates for cross-bar reuse
 	local specInfo = getSpecInfo(specIndex)
 	if specInfo then
-		if specInfo.MAIN == barType then store.MAIN = CopyTable(cfg) end
+		if specInfo.MAIN == barType then store.MAIN = CopyTable(normalized) end
 		local secondaries = specSecondaries(specInfo)
-		if secondaries[1] == barType then store.SECONDARY = CopyTable(cfg) end
+		if secondaries[1] == barType then store.SECONDARY = CopyTable(normalized) end
 	end
 	return true
 end
@@ -390,6 +407,16 @@ local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
 	if not barType then return false, "NO_BAR" end
 	local globalCfg, secondaryIdx = resolveGlobalTemplate(barType, specIndex)
 	if not globalCfg then return false, "NO_GLOBAL" end
+	-- Ensure size fields exist even for older saved globals
+	if not globalCfg.width or not globalCfg.height then
+		local frameName = (barType == "HEALTH") and "EQOLHealthBar" or ("EQOL" .. tostring(barType) .. "Bar")
+		local frame = _G[frameName]
+		if frame and frame.GetWidth and frame.GetHeight then
+			globalCfg = CopyTable(globalCfg)
+			globalCfg.width = globalCfg.width or frame:GetWidth() or ((barType == "HEALTH") and DEFAULT_HEALTH_WIDTH or DEFAULT_POWER_WIDTH)
+			globalCfg.height = globalCfg.height or frame:GetHeight() or ((barType == "HEALTH") and DEFAULT_HEALTH_HEIGHT or DEFAULT_POWER_HEIGHT)
+		end
+	end
 	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
 	if not specCfg then return false, "NO_SPEC" end
 	specCfg[barType] = specCfg[barType] or {}
