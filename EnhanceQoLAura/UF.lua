@@ -14,6 +14,8 @@ UF.ui = UF.ui or {}
 addon.variables = addon.variables or {}
 addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
 local sampleAbsorb = addon.variables.ufSampleAbsorb
+addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
+local sampleCast = addon.variables.ufSampleCast
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0")
@@ -38,6 +40,7 @@ local UnitExists = UnitExists
 local InCombatLockdown = InCombatLockdown
 local BreakUpLargeNumbers = BreakUpLargeNumbers
 local AbbreviateNumbers = AbbreviateNumbers
+local CASTING_BAR_TYPES = _G.CASTING_BAR_TYPES
 local EnumPowerType = Enum and Enum.PowerType
 local PowerBarColor = PowerBarColor
 local UnitName, UnitClass, UnitLevel, UnitClassification = UnitName, UnitClass, UnitLevel, UnitClassification
@@ -49,12 +52,16 @@ local C_UnitAuras = C_UnitAuras
 local CopyTable = CopyTable
 local UIParent = UIParent
 local CreateFrame = CreateFrame
+local GetTime = GetTime
 local IsShiftKeyDown = IsShiftKeyDown
 local After = C_Timer and C_Timer.After
 local floor = math.floor
 local max = math.max
 local abs = math.abs
 local wipe = wipe or (table and table.wipe)
+
+local shouldShowSampleCast
+local setSampleCast
 
 local PLAYER_UNIT = "player"
 local TARGET_UNIT = "target"
@@ -164,6 +171,22 @@ local defaults = {
 	target = {
 		enabled = false,
 		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true },
+		cast = {
+			enabled = true,
+			width = 220,
+			height = 16,
+			anchor = "BOTTOM", -- or "TOP"
+			offset = { x = 0, y = -4 },
+			showName = true,
+			nameOffset = { x = 6, y = 0 },
+			showDuration = true,
+			durationOffset = { x = -6, y = 0 },
+			showIcon = true,
+			iconSize = 22,
+			texture = "DEFAULT",
+			color = { 0.9, 0.7, 0.2, 1 },
+			notInterruptibleColor = { 0.6, 0.6, 0.6, 1 },
+		},
 	},
 	targettarget = {
 		enabled = false,
@@ -189,6 +212,7 @@ local targetAuraIndexById = {}
 local auraList = {}
 local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
+local castOnUpdateHandlers = {}
 
 local function defaultsFor(unit) return defaults[unit] or defaults.player or {} end
 
@@ -501,18 +525,18 @@ local function shortValue(val)
 end
 
 local function hideBlizzardPlayerFrame()
-	-- if not _G.PlayerFrame then return end
-	-- if not InCombatLockdown() and ensureDB("player").enabled then _G.PlayerFrame:Hide() end
-	-- if not blizzardPlayerHooked then
-	-- 	_G.PlayerFrame:HookScript("OnShow", function(frame)
-	-- 		if ensureDB("player").enabled then
-	-- 			frame:Hide()
-	-- 		else
-	-- 			frame:Show()
-	-- 		end
-	-- 	end)
-	-- 	blizzardPlayerHooked = true
-	-- end
+	if not _G.PlayerFrame then return end
+	if not InCombatLockdown() and ensureDB("player").enabled then _G.PlayerFrame:Hide() end
+	if not blizzardPlayerHooked then
+		_G.PlayerFrame:HookScript("OnShow", function(frame)
+			if ensureDB("player").enabled then
+				frame:Hide()
+			else
+				frame:Show()
+			end
+		end)
+		blizzardPlayerHooked = true
+	end
 end
 
 local function hideBlizzardTargetFrame()
@@ -599,6 +623,19 @@ local function resolveTexture(key)
 	return key
 end
 
+local function resolveCastTexture(key)
+	if key == "SOLID" then return "Interface\\Buttons\\WHITE8x8" end
+	if not key or key == "DEFAULT" then
+		if CASTING_BAR_TYPES and CASTING_BAR_TYPES.standard and CASTING_BAR_TYPES.standard.full then return CASTING_BAR_TYPES.standard.full end
+		return BLIZZARD_TEX
+	end
+	if LSM then
+		local tex = LSM:Fetch("statusbar", key)
+		if tex then return tex end
+	end
+	return key
+end
+
 local function configureSpecialTexture(bar, pType, texKey, cfg)
 	if not bar or not pType then return end
 	local atlas = atlasByPower[pType]
@@ -651,10 +688,217 @@ local function getAbsorbColor(hc, unit)
 	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
 end
 
-local function shouldShowSampleAbsorb(unit)
-	return sampleAbsorb and sampleAbsorb[unit] == true
+local function shouldShowSampleAbsorb(unit) return sampleAbsorb and sampleAbsorb[unit] == true end
+
+local function stopCast(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	st.castBar:Hide()
+	if st.castName then st.castName:SetText("") end
+	if st.castDuration then st.castDuration:SetText("") end
+	if st.castIcon then st.castIcon:Hide() end
+	st.castInfo = nil
+	if castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", nil)
+		castOnUpdateHandlers[unit] = nil
+	end
 end
 
+local function applyCastLayout(cfg, unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local def = defaultsFor(unit)
+	local ccfg = (cfg and cfg.cast) or {}
+	local defc = (def and def.cast) or {}
+	local width = ccfg.width or (cfg and cfg.width) or defc.width or (def and def.width) or 220
+	local height = ccfg.height or defc.height or 16
+	st.castBar:SetSize(width, height)
+	local anchor = (ccfg.anchor or defc.anchor or "BOTTOM")
+	local off = ccfg.offset or defc.offset or { x = 0, y = -4 }
+	st.castBar:ClearAllPoints()
+	if anchor == "TOP" then
+		st.castBar:SetPoint("BOTTOM", st.frame, "TOP", off.x or 0, off.y or 0)
+	else
+		st.castBar:SetPoint("TOP", st.frame, "BOTTOM", off.x or 0, off.y or 0)
+	end
+	if st.castName then
+		local nameOff = ccfg.nameOffset or defc.nameOffset or { x = 6, y = 0 }
+		st.castName:ClearAllPoints()
+		st.castName:SetPoint("LEFT", st.castBar, "LEFT", nameOff.x or 0, nameOff.y or 0)
+		st.castName:SetShown(ccfg.showName ~= false)
+	end
+	if st.castDuration then
+		local durOff = ccfg.durationOffset or defc.durationOffset or { x = -6, y = 0 }
+		st.castDuration:ClearAllPoints()
+		st.castDuration:SetPoint("RIGHT", st.castBar, "RIGHT", durOff.x or 0, durOff.y or 0)
+		st.castDuration:SetShown(ccfg.showDuration ~= false)
+	end
+	if st.castIcon then
+		local size = ccfg.iconSize or defc.iconSize or height
+		st.castIcon:SetSize(size, size)
+		st.castIcon:ClearAllPoints()
+		st.castIcon:SetPoint("RIGHT", st.castBar, "LEFT", -4, 0)
+		st.castIcon:SetShown(ccfg.showIcon ~= false)
+	end
+	local texKey = ccfg.texture or defc.texture or "DEFAULT"
+	st.castBar:SetStatusBarTexture(resolveCastTexture(texKey))
+	if st.castBar.SetStatusBarDesaturated then st.castBar:SetStatusBarDesaturated(false) end
+end
+
+local function updateCastBar(unit)
+	local st = states[unit]
+	if not st or not st.castBar or not st.castInfo or not st.castInfo.startTime or not st.castInfo.endTime then
+		stopCast(unit)
+		return
+	end
+	if issecretvalue and (issecretvalue(st.castInfo.startTime) or issecretvalue(st.castInfo.endTime)) then
+		stopCast(unit)
+		return
+	end
+	local nowMs = GetTime() * 1000
+	local startMs = st.castInfo.startTime
+	local endMs = st.castInfo.endTime
+	local duration = (endMs or 0) - (startMs or 0)
+	if not duration or duration <= 0 then
+		stopCast(unit)
+		return
+	end
+	local elapsed
+	if st.castInfo.isChannel then
+		elapsed = (endMs or 0) - nowMs
+	else
+		elapsed = nowMs - (startMs or 0)
+	end
+	if elapsed < 0 then elapsed = 0 end
+	local maxValue = duration / 1000
+	local value = elapsed / 1000
+	if nowMs >= (endMs or 0) then
+		if shouldShowSampleCast(unit) then
+			setSampleCast(unit)
+		else
+			stopCast(unit)
+		end
+		return
+	end
+	if st.castBar.SetReverseFill then st.castBar:SetReverseFill(st.castInfo.isChannel == true) end
+	st.castBar:SetMinMaxValues(0, maxValue)
+	st.castBar:SetValue(value)
+	local ccfg = (ensureDB(unit) or {}).cast or {}
+	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	local clr = ccfg.color or defc.color or { 0.9, 0.7, 0.2, 1 }
+	if st.castInfo.notInterruptible then clr = ccfg.notInterruptibleColor or defc.notInterruptibleColor or clr end
+	st.castBar:SetStatusBarColor(clr[1] or 0.9, clr[2] or 0.7, clr[3] or 0.2, clr[4] or 1)
+	if st.castName and st.castInfo.name then
+		if ccfg.showName ~= false then
+			st.castName:SetText(st.castInfo.name or "")
+			st.castName:Show()
+		else
+			st.castName:SetText("")
+			st.castName:Hide()
+		end
+	end
+	if st.castIcon then
+		if ccfg.showIcon ~= false and st.castInfo.texture then
+			st.castIcon:SetTexture(st.castInfo.texture)
+			st.castIcon:Show()
+		else
+			st.castIcon:Hide()
+		end
+	end
+	if st.castDuration then
+		if ccfg.showDuration ~= false then
+			local remaining
+			if st.castInfo.isChannel then
+				remaining = (endMs - nowMs) / 1000
+			else
+				remaining = (endMs - nowMs) / 1000
+			end
+			if remaining and remaining < 0 then remaining = 0 end
+			if remaining then
+				st.castDuration:SetText(("%.1f"):format(remaining))
+				st.castDuration:Show()
+			else
+				st.castDuration:SetText("")
+				st.castDuration:Hide()
+			end
+		else
+			st.castDuration:SetText("")
+			st.castDuration:Hide()
+		end
+	end
+	st.castBar:Show()
+end
+
+shouldShowSampleCast = function(unit) return sampleCast and sampleCast[unit] == true end
+
+setSampleCast = function(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local ccfg = (ensureDB(unit) or {}).cast or {}
+	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	if ccfg.enabled == false then
+		stopCast(unit)
+		return
+	end
+	local nowMs = GetTime() * 1000
+	st.castInfo = {
+		name = L["Sample Cast"] or "Sample Cast",
+		texture = 136235, -- lightning icon as placeholder
+		startTime = nowMs,
+		endTime = nowMs + 3000,
+		notInterruptible = false,
+		isChannel = false,
+	}
+	applyCastLayout(ensureDB(unit), unit)
+	updateCastBar(unit)
+	if not castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", function() updateCastBar(unit) end)
+		castOnUpdateHandlers[unit] = true
+	end
+end
+
+local function setCastInfoFromUnit(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local ccfg = (ensureDB(unit) or {}).cast or {}
+	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	if ccfg.enabled == false then
+		stopCast(unit)
+		return
+	end
+	local name, text, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellId, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
+	local isChannel = true
+	if not name then
+		name, text, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellId = UnitCastingInfo(unit)
+		isChannel = false
+	end
+	if not name then
+		if shouldShowSampleCast(unit) then
+			setSampleCast(unit)
+		else
+			stopCast(unit)
+		end
+		return
+	end
+	if issecretvalue and ((startTimeMS and issecretvalue(startTimeMS)) or (endTimeMS and issecretvalue(endTimeMS))) then
+		stopCast(unit)
+		return
+	end
+	st.castInfo = {
+		name = text or name,
+		texture = texture,
+		startTime = startTimeMS,
+		endTime = endTimeMS,
+		notInterruptible = notInterruptible,
+		isChannel = isChannel,
+	}
+	applyCastLayout(ensureDB(unit), unit)
+	updateCastBar(unit)
+	if not castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", function() updateCastBar(unit) end)
+		castOnUpdateHandlers[unit] = true
+	end
+end
 local function updateHealth(cfg, unit)
 	local st = states[unit]
 	if not st or not st.health or not st.frame then return end
@@ -703,20 +947,18 @@ local function updateHealth(cfg, unit)
 		end
 		st.absorb:SetMinMaxValues(0, maxForValue or 1)
 		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
-		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then
-			abs = (maxForValue or 1) * 0.6
-		end
+		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then abs = (maxForValue or 1) * 0.6 end
 		st.absorb:SetValue(abs or 0)
 		local ar, ag, ab, aa = getAbsorbColor(hc, unit)
 		st.absorb:SetStatusBarColor(ar or 0.85, ag or 0.95, ab or 1, aa or 0.7)
 		if st.overAbsorbGlow then
-			local showGlow = hc.useAbsorbGlow ~= false and ( (C_StringUtil and not C_StringUtil.TruncateWhenZero(abs)) or (not issecretvalue and abs > 0))
+			local showGlow = hc.useAbsorbGlow ~= false and ((C_StringUtil and not C_StringUtil.TruncateWhenZero(abs)) or (not issecretvalue and abs > 0))
 			-- (not (C_StringUtil and C_StringUtil.TruncateWhenZero(abs)) or (not addon.variables.isMidnight and abs))
 			if showGlow then
 				st.overAbsorbGlow:ClearAllPoints()
 				st.overAbsorbGlow:SetPoint("TOPLEFT", st.health, "TOPRIGHT", -7, 0)
 				st.overAbsorbGlow:SetPoint("BOTTOMLEFT", st.health, "BOTTOMRIGHT", -7, 0)
-				
+
 				st.overAbsorbGlow:Show()
 			else
 				st.overAbsorbGlow:Hide()
@@ -806,6 +1048,7 @@ local function syncTextFrameLevels(st)
 	setFrameLevelAbove(st.healthTextLayer, st.health, 2)
 	setFrameLevelAbove(st.powerTextLayer, st.power, 2)
 	setFrameLevelAbove(st.statusTextLayer, st.status, 2)
+	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 2) end
 end
 
 local function hookTextFrameLevels(st)
@@ -926,6 +1169,7 @@ local function layoutFrame(cfg, unit)
 
 	layoutTexts(st.health, st.healthTextLeft, st.healthTextRight, cfg.health, width)
 	layoutTexts(st.power, st.powerTextLeft, st.powerTextRight, cfg.power, width)
+	if st.castBar and unit == TARGET_UNIT then applyCastLayout(cfg, unit) end
 
 	-- Apply border only around the bar region wrapper
 	if st.barGroup then setBackdrop(st.barGroup, cfg.border) end
@@ -964,14 +1208,25 @@ local function ensureFrames(unit)
 	st.absorb:SetStatusBarDesaturated(true)
 	st.overAbsorbGlow = st.overAbsorbGlow or st.health:CreateTexture(nil, "ARTWORK", "OverAbsorbGlowTemplate")
 	st.absorb.overAbsorbGlow = st.overAbsorbGlow
-	if not st.overAbsorbGlow then
-		st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK")
-	end
+	if not st.overAbsorbGlow then st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK") end
 	if st.overAbsorbGlow then
 		st.overAbsorbGlow:SetTexture(798066)
 		st.overAbsorbGlow:SetBlendMode("ADD")
 		st.overAbsorbGlow:SetAlpha(0.8)
 		st.overAbsorbGlow:Hide()
+	end
+	if unit == "target" and not st.castBar then
+		st.castBar = CreateFrame("StatusBar", info.healthName .. "Cast", st.frame, "BackdropTemplate")
+		st.castBar:SetStatusBarDesaturated(true)
+		st.castTextLayer = CreateFrame("Frame", nil, st.castBar)
+		st.castTextLayer:SetAllPoints(st.castBar)
+		st.castName = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		st.castDuration = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		st.castIcon = st.castBar:CreateTexture(nil, "ARTWORK")
+		st.castIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		st.castBar:SetMinMaxValues(0, 1)
+		st.castBar:SetValue(0)
+		st.castBar:Hide()
 	end
 
 	st.healthTextLayer = st.healthTextLayer or CreateFrame("Frame", nil, st.health)
@@ -1035,6 +1290,16 @@ local function applyBars(cfg, unit)
 	st.absorb:SetMinMaxValues(0, 1)
 	st.absorb:SetValue(0)
 	if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
+	if st.castBar and unit == TARGET_UNIT then
+		local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+		local ccfg = cfg.cast or defc
+		st.castBar:SetStatusBarTexture(resolveCastTexture((ccfg.texture or defc.texture or "DEFAULT")))
+		st.castBar:SetMinMaxValues(0, 1)
+		st.castBar:SetValue(0)
+		applyCastLayout(cfg, unit)
+		applyFont(st.castName, hc.font, (ccfg.nameSize or defc.nameSize or hc.fontSize or 12), hc.fontOutline or "OUTLINE")
+		applyFont(st.castDuration, hc.font, (ccfg.nameSize or defc.nameSize or hc.fontSize or 12), hc.fontOutline or "OUTLINE")
+	end
 
 	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14)
 	applyFont(st.healthTextRight, hc.font, hc.fontSize or 14)
@@ -1117,6 +1382,15 @@ local function applyConfig(unit)
 		st.barGroup:Hide()
 		st.status:Hide()
 	end
+	if unit == TARGET_UNIT and st.castBar then
+		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(TARGET_UNIT) then
+			if shouldShowSampleCast(unit) and (not st.castInfo or not UnitCastingInfo or not UnitCastingInfo(unit)) then setSampleCast(unit) end
+			st.castBar:Show()
+		else
+			stopCast(TARGET_UNIT)
+			st.castBar:Hide()
+		end
+	end
 end
 
 local unitEvents = {
@@ -1130,6 +1404,11 @@ local unitEvents = {
 	"UNIT_NAME_UPDATE",
 	"UNIT_AURA",
 	"UNIT_TARGET",
+	"UNIT_SPELLCAST_START",
+	"UNIT_SPELLCAST_STOP",
+	"UNIT_SPELLCAST_CHANNEL_START",
+	"UNIT_SPELLCAST_CHANNEL_STOP",
+	"UNIT_SPELLCAST_CHANNEL_UPDATE",
 }
 local unitEventsMap = {}
 for _, evt in ipairs(unitEvents) do
@@ -1202,6 +1481,7 @@ local function onEvent(self, event, unit, arg1)
 			if states and states["target"] and states["target"].frame then
 				states["target"].barGroup:Show()
 				states["target"].status:Show()
+				setCastInfoFromUnit("target")
 			end
 			if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 		else
@@ -1210,6 +1490,7 @@ local function onEvent(self, event, unit, arg1)
 			if states and states["target"] and states["target"].frame then
 				states["target"].barGroup:Hide()
 				states["target"].status:Hide()
+				stopCast("target")
 			end
 			updateTargetTargetFrame(totCfg)
 		end
@@ -1305,6 +1586,13 @@ local function onEvent(self, event, unit, arg1)
 		if unit == TARGET_TARGET_UNIT then updateNameAndLevel(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_TARGET" and unit == TARGET_UNIT then
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+		if unit == TARGET_UNIT then setCastInfoFromUnit(TARGET_UNIT) end
+	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+		if unit == TARGET_UNIT then
+			stopCast(TARGET_UNIT)
+			if shouldShowSampleCast(unit) then setSampleCast(unit) end
+		end
 	end
 end
 
@@ -1519,6 +1807,192 @@ local function addOptions(container, skipClear, unit)
 		end)
 		cbCD:SetFullWidth(true)
 		auraRow:AddChild(cbCD)
+
+		local castDef = def.cast or {}
+		cfg.cast = cfg.cast or {}
+		local castGroup = addon.functions.createContainer("InlineGroup", "Flow")
+		castGroup:SetTitle(L["CastBar"] or "Cast Bar")
+		castGroup:SetFullWidth(true)
+		parent:AddChild(castGroup)
+
+		local cbCast = addon.functions.createCheckboxAce(L["Show cast bar"] or "Show cast bar", cfg.cast.enabled ~= false, function(_, _, v)
+			cfg.cast.enabled = v and true or false
+			if not v then stopCast("target") end
+			refresh()
+		end)
+		cbCast:SetFullWidth(true)
+		castGroup:AddChild(cbCast)
+
+		local castSizeRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		castSizeRow:SetFullWidth(true)
+		castGroup:AddChild(castSizeRow)
+		local castWidth = addon.functions.createSliderAce(L["UFWidth"] or "Frame width", cfg.cast.width or castDef.width or def.width or 220, 50, 800, 1, function(_, _, val)
+			cfg.cast.width = max(50, val or 50)
+			refresh()
+		end)
+		castWidth:SetRelativeWidth(0.5)
+		castSizeRow:AddChild(castWidth)
+		local castHeight = addon.functions.createSliderAce(L["Cast bar height"] or "Cast bar height", cfg.cast.height or castDef.height or 16, 6, 40, 1, function(_, _, val)
+			cfg.cast.height = val or castDef.height or 16
+			refresh()
+		end)
+		castHeight:SetRelativeWidth(0.5)
+		castSizeRow:AddChild(castHeight)
+
+		local anchorRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		anchorRow:SetFullWidth(true)
+		castGroup:AddChild(anchorRow)
+		local anchorOptions = { TOP = L["Top"] or "Top", BOTTOM = L["Bottom"] or "Bottom" }
+		local anchorOrder = { "TOP", "BOTTOM" }
+		local ddAnchor = addon.functions.createDropdownAce(L["Anchor"] or "Anchor", anchorOptions, anchorOrder, function(_, _, key)
+			cfg.cast.anchor = key
+			refresh()
+		end)
+		ddAnchor:SetValue(cfg.cast.anchor or castDef.anchor or "BOTTOM")
+		ddAnchor:SetRelativeWidth(0.5)
+		anchorRow:AddChild(ddAnchor)
+
+		local offsetX = addon.functions.createSliderAce(
+			L["Offset X"] or "Offset X",
+			(cfg.cast.offset and cfg.cast.offset.x) or (castDef.offset and castDef.offset.x) or 0,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.offset = cfg.cast.offset or {}
+				cfg.cast.offset.x = val or 0
+				refresh()
+			end
+		)
+		offsetX:SetRelativeWidth(0.25)
+		anchorRow:AddChild(offsetX)
+		local offsetY = addon.functions.createSliderAce(
+			L["Offset Y"] or "Offset Y",
+			(cfg.cast.offset and cfg.cast.offset.y) or (castDef.offset and castDef.offset.y) or 0,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.offset = cfg.cast.offset or {}
+				cfg.cast.offset.y = val or 0
+				refresh()
+			end
+		)
+		offsetY:SetRelativeWidth(0.25)
+		anchorRow:AddChild(offsetY)
+
+		local iconRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		iconRow:SetFullWidth(true)
+		castGroup:AddChild(iconRow)
+		local cbIcon = addon.functions.createCheckboxAce(L["Show spell icon"] or "Show spell icon", cfg.cast.showIcon ~= false, function(_, _, v)
+			cfg.cast.showIcon = v and true or false
+			refresh()
+		end)
+		cbIcon:SetRelativeWidth(0.5)
+		iconRow:AddChild(cbIcon)
+		local iconSize = addon.functions.createSliderAce(L["Icon size"] or "Icon size", cfg.cast.iconSize or castDef.iconSize or 22, 8, 64, 1, function(_, _, val)
+			cfg.cast.iconSize = val or castDef.iconSize or 22
+			refresh()
+		end)
+		iconSize:SetRelativeWidth(0.5)
+		iconRow:AddChild(iconSize)
+
+		local nameRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		nameRow:SetFullWidth(true)
+		castGroup:AddChild(nameRow)
+		local cbName = addon.functions.createCheckboxAce(L["Show spell name"] or "Show spell name", cfg.cast.showName ~= false, function(_, _, v)
+			cfg.cast.showName = v and true or false
+			refresh()
+		end)
+		cbName:SetRelativeWidth(0.5)
+		nameRow:AddChild(cbName)
+		local nameX = addon.functions.createSliderAce(
+			L["Name X Offset"] or "Name X Offset",
+			(cfg.cast.nameOffset and cfg.cast.nameOffset.x) or (castDef.nameOffset and castDef.nameOffset.x) or 6,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.nameOffset = cfg.cast.nameOffset or {}
+				cfg.cast.nameOffset.x = val or 0
+				refresh()
+			end
+		)
+		nameX:SetRelativeWidth(0.25)
+		nameRow:AddChild(nameX)
+		local nameY = addon.functions.createSliderAce(
+			L["Name Y Offset"] or "Name Y Offset",
+			(cfg.cast.nameOffset and cfg.cast.nameOffset.y) or (castDef.nameOffset and castDef.nameOffset.y) or 0,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.nameOffset = cfg.cast.nameOffset or {}
+				cfg.cast.nameOffset.y = val or 0
+				refresh()
+			end
+		)
+		nameY:SetRelativeWidth(0.25)
+		nameRow:AddChild(nameY)
+
+		local durRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		durRow:SetFullWidth(true)
+		castGroup:AddChild(durRow)
+		local cbDur = addon.functions.createCheckboxAce(L["Show cast duration"] or "Show cast duration", cfg.cast.showDuration ~= false, function(_, _, v)
+			cfg.cast.showDuration = v and true or false
+			refresh()
+		end)
+		cbDur:SetRelativeWidth(0.5)
+		durRow:AddChild(cbDur)
+		local durX = addon.functions.createSliderAce(
+			L["Duration X Offset"] or "Duration X Offset",
+			(cfg.cast.durationOffset and cfg.cast.durationOffset.x) or (castDef.durationOffset and castDef.durationOffset.x) or -6,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.durationOffset = cfg.cast.durationOffset or {}
+				cfg.cast.durationOffset.x = val or 0
+				refresh()
+			end
+		)
+		durX:SetRelativeWidth(0.25)
+		durRow:AddChild(durX)
+		local durY = addon.functions.createSliderAce(
+			L["Duration Y Offset"] or "Duration Y Offset",
+			(cfg.cast.durationOffset and cfg.cast.durationOffset.y) or (castDef.durationOffset and castDef.durationOffset.y) or 0,
+			-200,
+			200,
+			1,
+			function(_, _, val)
+				cfg.cast.durationOffset = cfg.cast.durationOffset or {}
+				cfg.cast.durationOffset.y = val or 0
+				refresh()
+			end
+		)
+		durY:SetRelativeWidth(0.25)
+		durRow:AddChild(durY)
+
+		local cbSampleCast = addon.functions.createCheckboxAce(L["Show sample cast"] or "Show sample cast", sampleCast[unit] == true, function(_, _, v)
+			sampleCast[unit] = v and true or false
+			if v then
+				setSampleCast(unit)
+			else
+				stopCast(unit)
+			end
+			refresh()
+		end)
+		cbSampleCast:SetFullWidth(true)
+		castGroup:AddChild(cbSampleCast)
+
+		textureDropdown(castGroup, cfg.cast, "texture")
+		addColorPicker(castGroup, L["Cast color"] or "Cast color", cfg.cast.color or castDef.color or { 0.9, 0.7, 0.2, 1 }, function() refresh() end)
+		addColorPicker(
+			castGroup,
+			L["Not interruptible color"] or "Not interruptible color",
+			cfg.cast.notInterruptibleColor or castDef.notInterruptibleColor or { 0.6, 0.6, 0.6, 1 },
+			function() refresh() end
+		)
 	end
 
 	local gapRow = addon.functions.createContainer("SimpleGroup", "Flow")
@@ -1625,9 +2099,7 @@ local function addOptions(container, skipClear, unit)
 	absorbGroup:SetTitle(L["AbsorbBar"] or "Absorb Bar")
 	absorbGroup:SetFullWidth(true)
 	parent:AddChild(absorbGroup)
-	local defaultAbsorbColor = (def.health and def.health.absorbColor)
-		or (defaults.player and defaults.player.health and defaults.player.health.absorbColor)
-		or { 0.85, 0.95, 1, 0.7 }
+	local defaultAbsorbColor = (def.health and def.health.absorbColor) or (defaults.player and defaults.player.health and defaults.player.health.absorbColor) or { 0.85, 0.95, 1, 0.7 }
 	if not cfg.health.absorbColor then cfg.health.absorbColor = { defaultAbsorbColor[1], defaultAbsorbColor[2], defaultAbsorbColor[3], defaultAbsorbColor[4] } end
 	if cfg.health.absorbTexture == nil then cfg.health.absorbTexture = (def.health and def.health.absorbTexture) or "SOLID" end
 	if cfg.health.absorbUseCustomColor == nil then cfg.health.absorbUseCustomColor = def.health and def.health.absorbUseCustomColor end

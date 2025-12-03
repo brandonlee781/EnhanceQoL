@@ -87,6 +87,8 @@ end
 addon.variables = addon.variables or {}
 addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
 local sampleAbsorb = addon.variables.ufSampleAbsorb
+addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
+local sampleCast = addon.variables.ufSampleCast
 
 local function getValue(unit, path, fallback)
 	local cfg = ensureConfig(unit)
@@ -753,6 +755,172 @@ local function buildUnitSettings(unit)
 		end,
 		colorDefault = { r = 0, g = 0, b = 0, a = 0.6 },
 	})
+
+	if unit == "target" then
+		local castDef = def.cast or {}
+		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }
+
+		list[#list + 1] = checkbox(L["Show cast bar"] or "Show cast bar", function()
+			return getValue(unit, { "cast", "enabled" }, castDef.enabled ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "cast", "enabled" }, val and true or false)
+			refresh()
+		end, castDef.enabled ~= false, "cast")
+
+		list[#list + 1] = slider(L["UFWidth"] or "Frame width", 50, 800, 1, function()
+			return getValue(unit, { "cast", "width" }, castDef.width or def.width or 220)
+		end, function(val)
+			setValue(unit, { "cast", "width" }, math.max(50, val or 50))
+			refresh()
+		end, castDef.width or def.width or 220, "cast", true)
+
+		list[#list + 1] = slider(L["Cast bar height"] or "Cast bar height", 6, 40, 1, function()
+			return getValue(unit, { "cast", "height" }, castDef.height or 16)
+		end, function(val)
+			setValue(unit, { "cast", "height" }, val or castDef.height or 16)
+			refresh()
+		end, castDef.height or 16, "cast", true)
+
+		local anchorOpts = {
+			{ value = "TOP", label = L["Top"] or "Top" },
+			{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
+		}
+		list[#list + 1] = radioDropdown(L["Anchor"] or "Anchor", anchorOpts, function()
+			return getValue(unit, { "cast", "anchor" }, castDef.anchor or "BOTTOM")
+		end, function(val)
+			setValue(unit, { "cast", "anchor" }, val or "BOTTOM")
+			refresh()
+		end, castDef.anchor or "BOTTOM", "cast")
+
+		list[#list + 1] = slider(L["Offset X"] or "Offset X", -200, 200, 1, function()
+			return getValue(unit, { "cast", "offset", "x" }, (castDef.offset and castDef.offset.x) or 0)
+		end, function(val)
+			setValue(unit, { "cast", "offset", "x" }, val or 0)
+			refresh()
+		end, (castDef.offset and castDef.offset.x) or 0, "cast", true)
+
+		list[#list + 1] = slider(L["Offset Y"] or "Offset Y", -200, 200, 1, function()
+			return getValue(unit, { "cast", "offset", "y" }, (castDef.offset and castDef.offset.y) or 0)
+		end, function(val)
+			setValue(unit, { "cast", "offset", "y" }, val or 0)
+			refresh()
+		end, (castDef.offset and castDef.offset.y) or 0, "cast", true)
+
+		list[#list + 1] = checkbox(L["Show spell icon"] or "Show spell icon", function()
+			return getValue(unit, { "cast", "showIcon" }, castDef.showIcon ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "cast", "showIcon" }, val and true or false)
+			refresh()
+		end, castDef.showIcon ~= false, "cast")
+
+		list[#list + 1] = slider(L["Icon size"] or "Icon size", 8, 64, 1, function()
+			return getValue(unit, { "cast", "iconSize" }, castDef.iconSize or 22)
+		end, function(val)
+			setValue(unit, { "cast", "iconSize" }, val or castDef.iconSize or 22)
+			refresh()
+		end, castDef.iconSize or 22, "cast", true)
+
+		list[#list + 1] = checkbox(L["Show spell name"] or "Show spell name", function()
+			return getValue(unit, { "cast", "showName" }, castDef.showName ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "cast", "showName" }, val and true or false)
+			refresh()
+		end, castDef.showName ~= false, "cast")
+
+		list[#list + 1] = slider(L["Name X Offset"] or "Name X Offset", -200, 200, 1, function()
+			return getValue(unit, { "cast", "nameOffset", "x" }, (castDef.nameOffset and castDef.nameOffset.x) or 6)
+		end, function(val)
+			setValue(unit, { "cast", "nameOffset", "x" }, val or 0)
+			refresh()
+		end, (castDef.nameOffset and castDef.nameOffset.x) or 6, "cast", true)
+
+		list[#list + 1] = slider(L["Name Y Offset"] or "Name Y Offset", -200, 200, 1, function()
+			return getValue(unit, { "cast", "nameOffset", "y" }, (castDef.nameOffset and castDef.nameOffset.y) or 0)
+		end, function(val)
+			setValue(unit, { "cast", "nameOffset", "y" }, val or 0)
+			refresh()
+		end, (castDef.nameOffset and castDef.nameOffset.y) or 0, "cast", true)
+
+		list[#list + 1] = checkbox(L["Show cast duration"] or "Show cast duration", function()
+			return getValue(unit, { "cast", "showDuration" }, castDef.showDuration ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "cast", "showDuration" }, val and true or false)
+			refresh()
+		end, castDef.showDuration ~= false, "cast")
+
+		list[#list + 1] = slider(L["Duration X Offset"] or "Duration X Offset", -200, 200, 1, function()
+			return getValue(unit, { "cast", "durationOffset", "x" }, (castDef.durationOffset and castDef.durationOffset.x) or -6)
+		end, function(val)
+			setValue(unit, { "cast", "durationOffset", "x" }, val or 0)
+			refresh()
+		end, (castDef.durationOffset and castDef.durationOffset.x) or -6, "cast", true)
+
+		list[#list + 1] = slider(L["Duration Y Offset"] or "Duration Y Offset", -200, 200, 1, function()
+			return getValue(unit, { "cast", "durationOffset", "y" }, (castDef.durationOffset and castDef.durationOffset.y) or 0)
+		end, function(val)
+			setValue(unit, { "cast", "durationOffset", "y" }, val or 0)
+			refresh()
+		end, (castDef.durationOffset and castDef.durationOffset.y) or 0, "cast", true)
+
+		list[#list + 1] = checkbox(L["Show sample cast"] or "Show sample cast", function()
+			return sampleCast[unit] == true
+		end, function(val)
+			sampleCast[unit] = val and true or false
+			refresh()
+		end, false, "cast")
+
+		local textureOpts = textureOptions()
+		list[#list + 1] = radioDropdown(L["Cast texture"] or "Cast texture", textureOpts, function()
+			return getValue(unit, { "cast", "texture" }, castDef.texture or "DEFAULT")
+		end, function(val)
+			setValue(unit, { "cast", "texture" }, val)
+			refresh()
+		end, castDef.texture or "DEFAULT", "cast")
+
+		list[#list + 1] = checkboxColor({
+			name = L["Cast color"] or "Cast color",
+			parentId = "cast",
+			defaultChecked = true,
+			isChecked = function() return true end,
+			onChecked = function() end,
+			getColor = function()
+				local c = getValue(unit, { "cast", "color" }, castDef.color or { 0.9, 0.7, 0.2, 1 })
+				return toRGBA(c, castDef.color or { 0.9, 0.7, 0.2, 1 })
+			end,
+			onColor = function(color)
+				setColor(unit, { "cast", "color" }, color.r, color.g, color.b, color.a)
+				refresh()
+			end,
+			colorDefault = {
+				r = (castDef.color and castDef.color[1]) or 0.9,
+				g = (castDef.color and castDef.color[2]) or 0.7,
+				b = (castDef.color and castDef.color[3]) or 0.2,
+				a = (castDef.color and castDef.color[4]) or 1,
+			},
+		})
+
+		list[#list + 1] = checkboxColor({
+			name = L["Not interruptible color"] or "Not interruptible color",
+			parentId = "cast",
+			defaultChecked = true,
+			isChecked = function() return true end,
+			onChecked = function() end,
+			getColor = function()
+				local c = getValue(unit, { "cast", "notInterruptibleColor" }, castDef.notInterruptibleColor or { 0.6, 0.6, 0.6, 1 })
+				return toRGBA(c, castDef.notInterruptibleColor or { 0.6, 0.6, 0.6, 1 })
+			end,
+			onColor = function(color)
+				setColor(unit, { "cast", "notInterruptibleColor" }, color.r, color.g, color.b, color.a)
+				refresh()
+			end,
+			colorDefault = {
+				r = (castDef.notInterruptibleColor and castDef.notInterruptibleColor[1]) or 0.6,
+				g = (castDef.notInterruptibleColor and castDef.notInterruptibleColor[2]) or 0.6,
+				b = (castDef.notInterruptibleColor and castDef.notInterruptibleColor[3]) or 0.6,
+				a = (castDef.notInterruptibleColor and castDef.notInterruptibleColor[4]) or 1,
+			},
+		})
+	end
 
 	list[#list + 1] = { name = L["UFStatusLine"] or "Status line", kind = settingType.Collapsible, id = "status", defaultCollapsed = true }
 	local statusDef = def.status or {}
