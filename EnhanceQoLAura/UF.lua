@@ -118,6 +118,9 @@ local defaults = {
 			useClassColor = false,
 			color = { 0.0, 0.8, 0.0, 1 },
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
+			absorbUseCustomColor = false,
+			showSampleAbsorb = false,
+			absorbTexture = "DEFAULT",
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
 			textRight = "CURMAX",
@@ -494,18 +497,18 @@ local function shortValue(val)
 end
 
 local function hideBlizzardPlayerFrame()
-	if not _G.PlayerFrame then return end
-	if not InCombatLockdown() and ensureDB("player").enabled then _G.PlayerFrame:Hide() end
-	if not blizzardPlayerHooked then
-		_G.PlayerFrame:HookScript("OnShow", function(frame)
-			if ensureDB("player").enabled then
-				frame:Hide()
-			else
-				frame:Show()
-			end
-		end)
-		blizzardPlayerHooked = true
-	end
+	-- if not _G.PlayerFrame then return end
+	-- if not InCombatLockdown() and ensureDB("player").enabled then _G.PlayerFrame:Hide() end
+	-- if not blizzardPlayerHooked then
+	-- 	_G.PlayerFrame:HookScript("OnShow", function(frame)
+	-- 		if ensureDB("player").enabled then
+	-- 			frame:Hide()
+	-- 		else
+	-- 			frame:Show()
+	-- 		end
+	-- 	end)
+	-- 	blizzardPlayerHooked = true
+	-- end
 end
 
 local function hideBlizzardTargetFrame()
@@ -634,6 +637,15 @@ local function formatText(mode, cur, maxv, useShort, percentValue)
 	return shortValue(cur or 0)
 end
 
+local function getAbsorbColor(hc, unit)
+	local def = defaultsFor(unit)
+	local defaultAbsorb = (def.health and def.health.absorbColor) or { 0.85, 0.95, 1, 0.7 }
+	if hc and hc.absorbUseCustomColor and hc.absorbColor then
+		return hc.absorbColor[1] or defaultAbsorb[1], hc.absorbColor[2] or defaultAbsorb[2], hc.absorbColor[3] or defaultAbsorb[3], hc.absorbColor[4] or defaultAbsorb[4]
+	end
+	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
+end
+
 local function updateHealth(cfg, unit)
 	local st = states[unit]
 	if not st or not st.health or not st.frame then return end
@@ -675,14 +687,20 @@ local function updateHealth(cfg, unit)
 	st.health:SetStatusBarDesaturated(true)
 	if st.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
+		local maxForValue
 		if issecretvalue and issecretvalue(maxv) then
-			st.absorb:SetMinMaxValues(0, maxv or 1)
+			maxForValue = maxv or 1
 		else
-			st.absorb:SetMinMaxValues(0, maxv > 0 and maxv or 1)
+			maxForValue = (maxv and maxv > 0) and maxv or 1
+		end
+		st.absorb:SetMinMaxValues(0, maxForValue or 1)
+		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
+		if hc.showSampleAbsorb and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then
+			abs = (maxForValue or 1) * 0.6
 		end
 		st.absorb:SetValue(abs or 0)
-		local ac = hc.absorbColor or { 0.85, 0.95, 1, 0.7 }
-		st.absorb:SetStatusBarColor(ac[1] or 0.85, ac[2] or 0.95, ac[3] or 1, ac[4] or 0.7)
+		local ar, ag, ab, aa = getAbsorbColor(hc, unit)
+		st.absorb:SetStatusBarColor(ar or 0.85, ag or 0.95, ab or 1, aa or 0.7)
 	end
 	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(hc.textLeft or "PERCENT", cur, maxv, hc.useShortNumbers ~= false, percentVal)) end
 	if st.healthTextRight then st.healthTextRight:SetText(formatText(hc.textRight or "CURMAX", cur, maxv, hc.useShortNumbers ~= false, percentVal)) end
@@ -975,12 +993,13 @@ local function applyBars(cfg, unit)
 	local _, powerToken = getMainPower(unit)
 	configureSpecialTexture(st.power, powerToken, pcfg.texture, pcfg)
 	applyBarBackdrop(st.power, pcfg)
-	st.absorb:SetStatusBarTexture(LSM and LSM:Fetch("statusbar", "Blizzard") or BLIZZARD_TEX)
+	local absorbTextureKey = hc.absorbTexture or hc.texture
+	st.absorb:SetStatusBarTexture(resolveTexture(absorbTextureKey))
+	configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
 	st.absorb:SetAllPoints(st.health)
 	st.absorb:SetFrameLevel(st.health:GetFrameLevel() + 1)
 	st.absorb:SetMinMaxValues(0, 1)
 	st.absorb:SetValue(0)
-	st.absorb:SetStatusBarColor(0.8, 0.8, 0.9, 0.6)
 
 	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14)
 	applyFont(st.healthTextRight, hc.font, hc.fontSize or 14)
@@ -1538,8 +1557,9 @@ local function addOptions(container, skipClear, unit)
 	UF.ui.powerColorPicker:SetRelativeWidth(0.5)
 	if UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useCustomColor ~= true) end
 
-	local function textureDropdown(parent, sec)
+	local function textureDropdown(parent, sec, field)
 		if not parent then return end
+		field = field or "texture"
 		local list = { DEFAULT = "Default (Blizzard)" }
 		local order = { "DEFAULT" }
 		for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
@@ -1550,15 +1570,47 @@ local function addOptions(container, skipClear, unit)
 		end
 		table.sort(order, function(a, b) return tostring(list[a]) < tostring(list[b]) end)
 		local dd = addon.functions.createDropdownAce(L["Bar Texture"] or "Bar Texture", list, order, function(_, _, key)
-			sec.texture = key
+			sec[field] = key
 			refresh()
 		end)
-		local cur = sec.texture or "DEFAULT"
+		local cur = sec[field] or "DEFAULT"
 		if not list[cur] then cur = "DEFAULT" end
 		dd:SetValue(cur)
 		dd:SetFullWidth(true)
 		parent:AddChild(dd)
 	end
+
+	local absorbGroup = addon.functions.createContainer("InlineGroup", "Flow")
+	absorbGroup:SetTitle(L["AbsorbBar"] or "Absorb Bar")
+	absorbGroup:SetFullWidth(true)
+	parent:AddChild(absorbGroup)
+	local defaultAbsorbColor = (def.health and def.health.absorbColor)
+		or (defaults.player and defaults.player.health and defaults.player.health.absorbColor)
+		or { 0.85, 0.95, 1, 0.7 }
+	if not cfg.health.absorbColor then cfg.health.absorbColor = { defaultAbsorbColor[1], defaultAbsorbColor[2], defaultAbsorbColor[3], defaultAbsorbColor[4] } end
+	if cfg.health.absorbTexture == nil then cfg.health.absorbTexture = (def.health and def.health.absorbTexture) or "DEFAULT" end
+	if cfg.health.absorbUseCustomColor == nil then cfg.health.absorbUseCustomColor = def.health and def.health.absorbUseCustomColor end
+	if cfg.health.showSampleAbsorb == nil then cfg.health.showSampleAbsorb = def.health and def.health.showSampleAbsorb end
+	local cbAbsorbColor = addon.functions.createCheckboxAce(L["Use custom absorb color"] or "Use custom absorb color", cfg.health.absorbUseCustomColor == true, function(_, _, val)
+		cfg.health.absorbUseCustomColor = val and true or false
+		if UF.ui and UF.ui.absorbColorPicker then UF.ui.absorbColorPicker:SetDisabled(cfg.health.absorbUseCustomColor ~= true) end
+		refresh()
+	end)
+	cbAbsorbColor:SetRelativeWidth(0.5)
+	absorbGroup:AddChild(cbAbsorbColor)
+
+	UF.ui.absorbColorPicker = addColorPicker(absorbGroup, L["Absorb color"] or "Absorb color", cfg.health.absorbColor, function() refresh() end)
+	UF.ui.absorbColorPicker:SetRelativeWidth(0.5)
+	if UF.ui.absorbColorPicker then UF.ui.absorbColorPicker:SetDisabled(cfg.health.absorbUseCustomColor ~= true) end
+
+	local cbSampleAbsorb = addon.functions.createCheckboxAce(L["Show sample absorb"] or "Show sample absorb", cfg.health.showSampleAbsorb == true, function(_, _, v)
+		cfg.health.showSampleAbsorb = v and true or false
+		refresh()
+	end)
+	cbSampleAbsorb:SetFullWidth(true)
+	absorbGroup:AddChild(cbSampleAbsorb)
+
+	textureDropdown(absorbGroup, cfg.health, "absorbTexture")
 
 	local function addTextControls(label, sectionKey, fsLeft, fsRight)
 		local sec = cfg[sectionKey] or {}

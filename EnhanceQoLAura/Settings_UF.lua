@@ -489,6 +489,50 @@ local function buildUnitSettings(unit)
 		refresh()
 	end, healthDef.texture or "DEFAULT", "health")
 
+	list[#list + 1] = { name = L["AbsorbBar"] or "Absorb Bar", kind = settingType.Collapsible, id = "absorb", defaultCollapsed = true }
+	local absorbColorDef = healthDef.absorbColor or { 0.85, 0.95, 1, 0.7 }
+
+	list[#list + 1] = checkboxColor({
+		name = L["Use custom absorb color"] or "Use custom absorb color",
+		parentId = "absorb",
+		defaultChecked = healthDef.absorbUseCustomColor == true,
+		isChecked = function() return getValue(unit, { "health", "absorbUseCustomColor" }, healthDef.absorbUseCustomColor == true) == true end,
+		onChecked = function(val)
+			debounced(unit .. "_absorbCustomColorToggle", function()
+				setValue(unit, { "health", "absorbUseCustomColor" }, val and true or false)
+				if val and not getValue(unit, { "health", "absorbColor" }) then setValue(unit, { "health", "absorbColor" }, absorbColorDef) end
+				refresh()
+				refreshSettingsUI()
+			end)
+		end,
+		getColor = function() return toRGBA(getValue(unit, { "health", "absorbColor" }, absorbColorDef), absorbColorDef) end,
+		onColor = function(color)
+			setColor(unit, { "health", "absorbColor" }, color.r, color.g, color.b, color.a)
+			setValue(unit, { "health", "absorbUseCustomColor" }, true)
+			refresh()
+		end,
+		colorDefault = {
+			r = absorbColorDef[1] or 0.85,
+			g = absorbColorDef[2] or 0.95,
+			b = absorbColorDef[3] or 1,
+			a = absorbColorDef[4] or 0.7,
+		},
+	})
+
+	list[#list + 1] = checkbox(L["Show sample absorb"] or "Show sample absorb", function()
+		return getValue(unit, { "health", "showSampleAbsorb" }, healthDef.showSampleAbsorb == true)
+	end, function(val)
+		setValue(unit, { "health", "showSampleAbsorb" }, val and true or false)
+		refresh()
+	end, healthDef.showSampleAbsorb == true, "absorb")
+
+	list[#list + 1] = radioDropdown(L["Absorb texture"] or "Absorb texture", textureOpts, function()
+		return getValue(unit, { "health", "absorbTexture" }, healthDef.absorbTexture or healthDef.texture or "DEFAULT")
+	end, function(val)
+		setValue(unit, { "health", "absorbTexture" }, val)
+		refresh()
+	end, healthDef.absorbTexture or healthDef.texture or "DEFAULT", "absorb")
+
 	list[#list + 1] = checkboxColor({
 		name = L["UFBarBackdrop"] or "Show bar backdrop",
 		parentId = "health",

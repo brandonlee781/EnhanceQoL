@@ -7,6 +7,9 @@ externals:
   EnhanceQoL/libs/LibDataBroker-1.1:
     url: https://github.com/tekkub/libdatabroker-1-1
     tag: latest
+  EnhanceQoL/libs/LibEQOL:
+    url: https://github.com/R41z0r/LibEQOL
+    tag: latest
   # EnhanceQoL/libs/LibStub:
   #   url: https://repos.curseforge.com/wow/libstub/trunk
   #   tag: latest
