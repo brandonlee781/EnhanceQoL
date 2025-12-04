@@ -1815,9 +1815,6 @@ local function updateTargetTargetFrame(cfg, forceApply)
 	ensureToTTicker()
 end
 
-local fakeFrame = CreateFrame("Cooldown", "EQOLFakeFrame", UIParent, "CooldownFrameTemplate")
-fakeFrame:Hide()
-
 local function onEvent(self, event, unit, arg1)
 	if unitEventsMap[event] and unit and not allowedEventUnit[unit] then return end
 	local playerCfg = (states[PLAYER_UNIT] and states[PLAYER_UNIT].cfg) or ensureDB("player")
