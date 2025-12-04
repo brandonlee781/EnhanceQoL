@@ -171,7 +171,6 @@ local function textureOptions()
 	if not LSM then return list end
 	local hash = LSM:HashTable("statusbar") or {}
 	for name, path in pairs(hash) do
-		print(name, path)
 		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
 	end
 	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
@@ -185,7 +184,9 @@ local function radioDropdown(name, options, getter, setter, default, parentId)
 		parentId = parentId,
 		default = default,
 		generator = function(_, root)
-			for _, opt in ipairs(options) do
+			local opts = type(options) == "function" and options() or options
+			if type(opts) ~= "table" then return end
+			for _, opt in ipairs(opts) do
 				root:CreateRadio(opt.label, function() return getter() == opt.value end, function() setter(opt.value) end)
 			end
 		end,
@@ -494,7 +495,7 @@ local function buildUnitSettings(unit)
 		refresh()
 	end, healthDef.useShortNumbers ~= false, "health")
 
-	local textureOpts = textureOptions()
+	local textureOpts = textureOptions
 	list[#list + 1] = radioDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "health", "texture" }, healthDef.texture or "DEFAULT") end, function(val)
 		setValue(unit, { "health", "texture" }, val)
 		refresh()
@@ -892,7 +893,6 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, false, "cast")
 
-		local textureOpts = textureOptions()
 		list[#list + 1] = radioDropdown(L["Cast texture"] or "Cast texture", textureOpts, function() return getValue(unit, { "cast", "texture" }, castDef.texture or "DEFAULT") end, function(val)
 			setValue(unit, { "cast", "texture" }, val)
 			refresh()

@@ -51,4 +51,6 @@ function addon.SharedMedia.functions.UpdateSound(key, enabled)
 	end
 end
 
+-- Statusbars
+LSM:Register("statusbar", "EQOL: Holy", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Holy.tga")
 LSM:Register("statusbar", "EQOL: Thunder", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Thunder.tga")
