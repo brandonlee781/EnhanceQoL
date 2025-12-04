@@ -1768,7 +1768,7 @@ local function initMisc()
 					elseif addon.db["confirmSocketReplace"] and self.which == "CONFIRM_ACCEPT_SOCKETS" and self.numButtons > 0 and self.GetButton then
 						self:GetButton(1):Click()
 					elseif addon.db["confirmHighCostItem"] and self.which == "CONFIRM_HIGH_COST_ITEM" and self.numButtons > 0 and self.GetButton then
-						self:GetButton(1):Click()
+						C_Timer.After(0, function() self:GetButton(1):Click() end)
 					end
 				end
 			end)
