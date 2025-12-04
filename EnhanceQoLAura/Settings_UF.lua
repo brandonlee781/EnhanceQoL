@@ -171,6 +171,7 @@ local function textureOptions()
 	if not LSM then return list end
 	local hash = LSM:HashTable("statusbar") or {}
 	for name, path in pairs(hash) do
+		print(name, path)
 		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
 	end
 	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
