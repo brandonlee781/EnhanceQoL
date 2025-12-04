@@ -1114,7 +1114,13 @@ local function setCastInfoFromUnit(unit)
 	end
 
 	if issecretvalue and ((startTimeMS and issecretvalue(startTimeMS)) or (endTimeMS and issecretvalue(endTimeMS))) then
-		stopCast(unit)
+		if type(startTimeMS) ~= "nil" and type(endTimeMS) ~= "nil" then
+			st.castBar:Show()
+			st.castBar:SetMinMaxValues(startTimeMS, endTimeMS)
+			st.castBar:SetScript("OnUpdate", function() st.castBar:SetValue(GetTime() * 1000) end)
+		else
+			stopCast(unit)
+		end
 		return
 	end
 	local duration = (endTimeMS or 0) - (startTimeMS or 0)
@@ -1785,7 +1791,8 @@ local function updateTargetTargetFrame(cfg, forceApply)
 		st = states[TARGET_TARGET_UNIT]
 	end
 	if st then st.cfg = st.cfg or cfg end
-	if UnitExists("target") and UnitExists(TARGET_TARGET_UNIT) and UnitHealth("target") > 0 then
+	local lHealth =  UnitHealth("target") 
+	if UnitExists("target") and UnitExists(TARGET_TARGET_UNIT) and (issecretvalue and issecretvalue(lHealth) or lHealth > 0) then
 		if st then
 			if st.barGroup then st.barGroup:Show() end
 			if st.status then st.status:Show() end
@@ -1807,6 +1814,9 @@ local function updateTargetTargetFrame(cfg, forceApply)
 	end
 	ensureToTTicker()
 end
+
+local fakeFrame = CreateFrame("Cooldown", "EQOLFakeFrame", UIParent, "CooldownFrameTemplate")
+fakeFrame:Hide()
 
 local function onEvent(self, event, unit, arg1)
 	if unitEventsMap[event] and unit and not allowedEventUnit[unit] then return end
