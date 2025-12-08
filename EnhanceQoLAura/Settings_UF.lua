@@ -149,6 +149,21 @@ local function refreshSettingsUI()
 	if lib and lib.internal and lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
 end
 
+local frameIds = {
+	player = "EQOL_UF_Player",
+	target = "EQOL_UF_Target",
+	targettarget = "EQOL_UF_ToT",
+	pet = "EQOL_UF_Pet",
+	focus = "EQOL_UF_Focus",
+	boss = "EQOL_UF_Boss",
+}
+
+local function refreshEditModeFrame(unit)
+	if not (EditMode and EditMode.RefreshFrame) then return end
+	local frameId = frameIds[unit]
+	if frameId then EditMode:RefreshFrame(frameId) end
+end
+
 local copyDialogKey = "EQOL_UF_COPY_SETTINGS"
 local copyFrameLabels = {
 	player = L["UFPlayerFrame"] or PLAYER,
@@ -1563,12 +1578,12 @@ end
 if not UF.EditModeRegistered then
 	UF.EditModeRegistered = true
 	local frames = {
-		player = { frameName = "EQOLUFPlayerFrame", frameId = "EQOL_UF_Player", title = L["UFPlayerFrame"] or PLAYER },
-		target = { frameName = "EQOLUFTargetFrame", frameId = "EQOL_UF_Target", title = L["UFTargetFrame"] or TARGET },
-		targettarget = { frameName = "EQOLUFToTFrame", frameId = "EQOL_UF_ToT", title = L["UFToTFrame"] or "Target of Target" },
-		pet = { frameName = "EQOLUFPetFrame", frameId = "EQOL_UF_Pet", title = L["UFPetFrame"] or PET },
-		focus = { frameName = "EQOLUFFocusFrame", frameId = "EQOL_UF_Focus", title = L["UFFocusFrame"] or FOCUS },
-		boss = { frameName = "EQOLUFBossContainer", frameId = "EQOL_UF_Boss", title = (L["UFBossFrame"] or "Boss Frames") },
+		player = { frameName = "EQOLUFPlayerFrame", frameId = frameIds.player, title = L["UFPlayerFrame"] or PLAYER },
+		target = { frameName = "EQOLUFTargetFrame", frameId = frameIds.target, title = L["UFTargetFrame"] or TARGET },
+		targettarget = { frameName = "EQOLUFToTFrame", frameId = frameIds.targettarget, title = L["UFToTFrame"] or "Target of Target" },
+		pet = { frameName = "EQOLUFPetFrame", frameId = frameIds.pet, title = L["UFPetFrame"] or PET },
+		focus = { frameName = "EQOLUFFocusFrame", frameId = frameIds.focus, title = L["UFFocusFrame"] or FOCUS },
+		boss = { frameName = "EQOLUFBossContainer", frameId = frameIds.boss, title = (L["UFBossFrame"] or "Boss Frames") },
 	}
 	for unit, info in pairs(frames) do
 		registerUnitFrame(unit, info)
@@ -1602,6 +1617,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 					UF.Refresh()
 				end
 				if UF.StopEventsIfInactive then UF.StopEventsIfInactive() end
+				refreshEditModeFrame(unit)
 			end,
 		})
 		return def.enabled or false
@@ -1631,6 +1647,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			end
 			if UF.Refresh then UF.Refresh() end
 			if UF.StopEventsIfInactive then UF.StopEventsIfInactive() end
+			refreshEditModeFrame("boss")
 		end,
 	})
 end

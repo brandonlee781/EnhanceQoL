@@ -1439,6 +1439,18 @@ local function IsActionBarMouseoverEnabled(variable)
 	return cfg and cfg.MOUSEOVER == true
 end
 
+local function GetActionBarFadeStrength()
+	if not addon.db then return 1 end
+	local strength = tonumber(addon.db.actionBarFadeStrength)
+	if not strength then strength = 1 end
+	if strength < 0 then strength = 0 end
+	if strength > 1 then strength = 1 end
+	return strength
+end
+addon.functions.GetActionBarFadeStrength = GetActionBarFadeStrength
+
+local function GetActionBarFadedAlpha() return 1 - GetActionBarFadeStrength() end
+
 local function ApplyActionBarAlpha(bar, variable, config, combatOverride)
 	if not bar then return end
 	local cfg
@@ -1458,10 +1470,10 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride)
 		if MouseIsOver(bar) or EQOL_ShouldKeepVisibleByFlyout() then
 			ApplyAlphaToRegion(bar, 1, true)
 		else
-			ApplyAlphaToRegion(bar, 0, true)
+			ApplyAlphaToRegion(bar, GetActionBarFadedAlpha(), true)
 		end
 	else
-		ApplyAlphaToRegion(bar, 0, true)
+		ApplyAlphaToRegion(bar, GetActionBarFadedAlpha(), true)
 	end
 end
 
@@ -1476,12 +1488,12 @@ local function EQOL_HideBarIfNotHovered(bar, variable)
 			return
 		end
 		if not current.MOUSEOVER then
-			ApplyAlphaToRegion(bar, 0, true)
+			ApplyAlphaToRegion(bar, GetActionBarFadedAlpha(), true)
 			return
 		end
 		-- Only hide if neither the bar nor the spell flyout is under the mouse
 		if not MouseIsOver(bar) and not EQOL_ShouldKeepVisibleByFlyout() then
-			ApplyAlphaToRegion(bar, 0, true)
+			ApplyAlphaToRegion(bar, GetActionBarFadedAlpha(), true)
 		else
 			ApplyAlphaToRegion(bar, 1, true)
 		end
@@ -1645,6 +1657,7 @@ local function RefreshAllActionBarVisibilityAlpha(_, event)
 		if bar then ApplyActionBarAlpha(bar, info.var, nil, combatOverride) end
 	end
 end
+addon.functions.RefreshAllActionBarVisibilityAlpha = RefreshAllActionBarVisibilityAlpha
 
 local function EnsureSkyridingStateDriver()
 	addon.variables = addon.variables or {}
@@ -1819,6 +1832,7 @@ addon.functions.initializePersistentCVars = initializePersistentCVars
 
 local function initActionBars()
 	addon.functions.InitDBValue("actionBarAnchorEnabled", false)
+	addon.functions.InitDBValue("actionBarFadeStrength", 1)
 	addon.functions.InitDBValue("actionBarFullRangeColoring", false)
 	addon.functions.InitDBValue("actionBarFullRangeColor", { r = 1, g = 0.1, b = 0.1 })
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
@@ -1846,6 +1860,7 @@ local function initActionBars()
 	end
 	addon.db.actionBarMacroFontSize = clampFontSize(addon.db.actionBarMacroFontSize)
 	addon.db.actionBarHotkeyFontSize = clampFontSize(addon.db.actionBarHotkeyFontSize)
+	addon.db.actionBarFadeStrength = GetActionBarFadeStrength()
 	for _, cbData in ipairs(addon.variables.actionBarNames) do
 		if cbData.var and cbData.name then
 			local cfg = NormalizeActionBarVisibilityConfig(cbData.var, addon.db[cbData.var])

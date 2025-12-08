@@ -9,6 +9,8 @@ local NormalizeUnitFrameVisibilityConfig = addon.functions.NormalizeUnitFrameVis
 local UpdateActionBarMouseover = addon.functions.UpdateActionBarMouseover or function() end
 local UpdateUnitFrameMouseover = addon.functions.UpdateUnitFrameMouseover or function() end
 local RefreshAllActionBarAnchors = addon.functions.RefreshAllActionBarAnchors or function() end
+local RefreshAllActionBarVisibilityAlpha = addon.functions.RefreshAllActionBarVisibilityAlpha or function() end
+local GetActionBarFadeStrength = addon.functions.GetActionBarFadeStrength or function() return 1 end
 local GetVisibilityRuleMetadata = addon.functions.GetVisibilityRuleMetadata or function() return {} end
 local HasFrameVisibilityOverride = addon.functions.HasFrameVisibilityOverride or function() return false end
 local SetCooldownViewerVisibility = addon.functions.SetCooldownViewerVisibility or function() end
@@ -113,6 +115,31 @@ local function createActionBarVisibility(category)
 			})
 		end
 	end
+
+	local function getFadePercent()
+		local value = GetActionBarFadeStrength()
+		if value < 0 then value = 0 end
+		if value > 1 then value = 1 end
+		return math.floor((value * 100) + 0.5)
+	end
+
+	addon.functions.SettingsCreateSlider(category, {
+		var = "actionBarFadeStrength",
+		text = L["actionBarFadeStrength"] or "Fade amount",
+		desc = L["actionBarFadeStrengthDesc"],
+		min = 0,
+		max = 100,
+		step = 1,
+		default = 100,
+		get = getFadePercent,
+		set = function(val)
+			local pct = tonumber(val) or 0
+			if pct < 0 then pct = 0 end
+			if pct > 100 then pct = 100 end
+			addon.db.actionBarFadeStrength = pct / 100
+			RefreshAllActionBarVisibilityAlpha()
+		end,
+	})
 end
 
 local function createAnchorControls(category)
