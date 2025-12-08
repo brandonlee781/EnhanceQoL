@@ -78,6 +78,7 @@ Changing minimap Button behaviour
 - Resource Bars: The module now fully unregisters its visibility drivers when turned off, and “Hide while mounted” also suppresses bars in Travel/Stag form for Druids
 - BR Tracker working in m+/raid now
 - World Map Dungeon Teleports fixed in m+/raid
+- Resource Bars: Health bar now has absorb configuration (enable/disable, custom color, custom texture, sample preview)
 
 ---
 

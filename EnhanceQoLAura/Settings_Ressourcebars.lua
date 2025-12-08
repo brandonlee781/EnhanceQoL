@@ -996,6 +996,125 @@ local function registerEditModeBars()
 				end
 			end
 
+
+			if barType == "HEALTH" then
+				local absorbDefaultColor = { 0.8, 0.8, 0.8, 0.8 }
+				settingsList[#settingsList + 1] = {
+					name = L["AbsorbBar"] or "Absorb Bar",
+					kind = settingType.Collapsible,
+					id = "absorb",
+					defaultCollapsed = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Enable absorb bar"] or "Enable absorb bar",
+					kind = settingType.Checkbox,
+					field = "absorbEnabled",
+					parentId = "absorb",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.absorbEnabled ~= false
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbEnabled = value and true or false
+						queueRefresh()
+					end,
+					default = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Use custom absorb color"] or "Use custom absorb color",
+					kind = settingType.CheckboxColor,
+					field = "absorbUseCustomColor",
+					parentId = "absorb",
+					default = false,
+					get = function()
+						local c = curSpecCfg()
+						return c and c.absorbUseCustomColor == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbUseCustomColor = value and true or false
+						queueRefresh()
+					end,
+					colorDefault = toUIColor(cfg and cfg.absorbColor, absorbDefaultColor),
+					colorGet = function()
+						local c = curSpecCfg()
+						local col = (c and c.absorbColor) or (cfg and cfg.absorbColor) or absorbDefaultColor
+						local r, g, b, a = toColorComponents(col, absorbDefaultColor)
+						return { r = r, g = g, b = b, a = a }
+					end,
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbColor = toColorArray(value, absorbDefaultColor)
+						c.absorbUseCustomColor = true
+						queueRefresh()
+					end,
+					hasOpacity = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Absorb texture"] or "Absorb texture",
+					kind = settingType.Dropdown,
+					height = 180,
+					field = "absorbTexture",
+					parentId = "absorb",
+					generator = function(_, root)
+						local listTex, orderTex = addon.Aura.functions.getStatusbarDropdownLists(true)
+						if not listTex or not orderTex then
+							listTex, orderTex = { DEFAULT = DEFAULT }, { "DEFAULT" }
+						end
+						if not listTex or not orderTex then return end
+						for _, key in ipairs(orderTex) do
+							local label = listTex[key] or key
+							root:CreateRadio(label, function()
+								local c = curSpecCfg()
+								local cur = c and c.absorbTexture or cfg.absorbTexture or cfg.barTexture or "DEFAULT"
+								return cur == key
+							end, function()
+								local c = curSpecCfg()
+								if not c then return end
+								c.absorbTexture = key
+								queueRefresh()
+							end)
+						end
+					end,
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.absorbTexture) or cfg.absorbTexture or cfg.barTexture or "DEFAULT"
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbTexture = value
+						queueRefresh()
+					end,
+					default = cfg and (cfg.absorbTexture or cfg.barTexture) or "DEFAULT",
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Show sample absorb"] or "Show sample absorb",
+					kind = settingType.Checkbox,
+					field = "absorbSample",
+					parentId = "absorb",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.absorbSample == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbSample = value and true or false
+						queueRefresh()
+					end,
+					default = false,
+				}
+			end
+
 			settingsList[#settingsList + 1] = {
 				name = LOCALE_TEXT_LABEL or L["Text"] or STATUS_TEXT,
 				kind = settingType.Collapsible,

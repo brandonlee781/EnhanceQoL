@@ -1694,7 +1694,9 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				local scopeKey = getScope()
 				local code
 				local reason
-				if UF.ExportProfile then code, reason = UF.ExportProfile(scopeKey) end
+				if UF.ExportProfile then
+					code, reason = UF.ExportProfile(scopeKey)
+				end
 				if not code then
 					local msg = (UF.ExportErrorMessage and UF.ExportErrorMessage(reason)) or (L["UFExportProfileFailed"] or "Export failed.")
 					print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
@@ -1756,7 +1758,10 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 					local editBox = self.editBox or self:GetEditBox()
 					local input = editBox:GetText() or ""
 					local scopeKey = getScope()
-					local ok, applied = UF.ImportProfile and UF.ImportProfile(input, scopeKey)
+					local ok, applied = false, nil
+					if UF.ImportProfile then
+						ok, applied = UF.ImportProfile(input, scopeKey)
+					end
 					if not ok then
 						local msg = UF.ImportErrorMessage and UF.ImportErrorMessage(applied) or (L["UFImportProfileFailed"] or "Import failed.")
 						print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
