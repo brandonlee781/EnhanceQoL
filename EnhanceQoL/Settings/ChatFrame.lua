@@ -341,9 +341,335 @@ data = {
 	end,
 }
 addon.functions.SettingsCreateButton(cChatFrame, data)
+
+addon.functions.SettingsCreateHeadline(cChatFrame, L["CH_TITLE_HISTORY"])
+
+local chatHistoryStrataOptions = {}
+local strataOrder = {
+	"BACKGROUND",
+	"LOW",
+	"MEDIUM",
+	"HIGH",
+	"DIALOG",
+	"FULLSCREEN",
+	"FULLSCREEN_DIALOG",
+	"TOOLTIP",
+}
+for _, strata in ipairs(strataOrder) do
+	chatHistoryStrataOptions[strata] = strata
+end
+
+local categoryOptions = {}
+local function colorizeChannelLabel(key, text)
+	local info = ChatTypeInfo and ChatTypeInfo[key]
+	if not info and key == "GENERAL" then info = ChatTypeInfo and ChatTypeInfo["CHANNEL1"] end
+	if info and info.r and info.g and info.b then
+		local hex = string.format("|cff%02x%02x%02x", (info.r or 1) * 255, (info.g or 1) * 255, (info.b or 1) * 255)
+		return string.format("%s%s|r", hex, text)
+	end
+	return text
+end
+
+local function makeFilterLabel(key, icon, text)
+	local lbl = colorizeChannelLabel(key, text or key)
+	if icon and icon ~= "" then return string.format("|T%s:14:14:0:0|t %s", icon, lbl) end
+	return lbl
+end
+
+local CHAT_FILTER_OPTIONS = {
+	{ key = "SAY", label = makeFilterLabel("SAY", "2056011", SAY) },
+	{ key = "YELL", label = makeFilterLabel("YELL", "892447", YELL) },
+	{ key = "WHISPER", label = makeFilterLabel("WHISPER", "133458", WHISPER) },
+	{ key = "BN_WHISPER", label = makeFilterLabel("BN_WHISPER", "Interface\\FriendsFrame\\UI-Toast-ChatInviteIcon", BN_WHISPER) },
+	{ key = "PARTY", label = makeFilterLabel("PARTY", "134149", PARTY) },
+	{ key = "INSTANCE", label = makeFilterLabel("INSTANCE", "Interface\\AddOns\\EnhanceQoL\\Icons\\Dungeon.tga", INSTANCE) },
+	{ key = "RAID", label = makeFilterLabel("RAID", "Interface\\AddOns\\EnhanceQoL\\Icons\\Raid.tga", RAID) },
+	{ key = "GUILD", label = makeFilterLabel("GUILD", "514261", GUILD) },
+	{ key = "OFFICER", label = makeFilterLabel("OFFICER", "133071", OFFICER) },
+	{ key = "GENERAL", label = makeFilterLabel("GENERAL", nil, GENERAL) },
+	{ key = "LOOT", label = makeFilterLabel("LOOT", "133639", LOOT) },
+	{ key = "MONEY", label = makeFilterLabel("MONEY", "133785", MONEY) },
+	{ key = "CURRENCY", label = makeFilterLabel("CURRENCY", "Interface\\Icons\\inv_misc_coin_01", CURRENCY) },
+	{ key = "ACHIEVEMENT", label = makeFilterLabel("ACHIEVEMENT", "236507", ACHIEVEMENTS) },
+	{ key = "SYSTEM", label = makeFilterLabel("SYSTEM", nil, SYSTEM_MESSAGES or SYSTEM) },
+	{ key = "OPENING", label = makeFilterLabel("OPENING", nil, OPENING) },
+	{ key = "MONSTER", label = makeFilterLabel("MONSTER", nil, EXAMPLE_TARGET_MONSTER or "Monster") },
+}
+
+data = {
+	{
+		var = "enableChatHistory",
+		text = L["CH_OPTION_ENABLE"],
+		desc = L["CH_OPTION_ENABLE_DESC"],
+		func = function(val)
+			addon.db["enableChatHistory"] = val
+			if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.SetEnabled then addon.ChatIM.ChannelHistory:SetEnabled(val) end
+		end,
+		default = false,
+		children = {
+			{
+				var = "chatChannelHistoryMaxLines",
+				text = L["CH_OPTION_MAX_LINES"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatChannelHistoryMaxLines or 500 end,
+				set = function(value)
+					addon.db["chatChannelHistoryMaxLines"] = value
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.SetMaxLines then
+						addon.ChatIM.ChannelHistory:SetMaxLines(value)
+						addon.ChatIM.ChannelHistory:RequestLogRefresh()
+					end
+				end,
+				min = 0,
+				max = 2000,
+				step = 10,
+				parent = true,
+				default = 500,
+				sType = "slider",
+			},
+			{
+				var = "chatChannelHistoryMaxViewLines",
+				text = L["CH_OPTION_MAX_VIEW"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatChannelHistoryMaxViewLines or 1000 end,
+				set = function(value)
+					addon.db["chatChannelHistoryMaxViewLines"] = value
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.SetUILineLimit then addon.ChatIM.ChannelHistory:SetUILineLimit(value) end
+				end,
+				min = 100,
+				max = 2000,
+				step = 50,
+				parent = true,
+				default = 1000,
+				sType = "slider",
+			},
+			{
+				var = "chatChannelHistoryFontSize",
+				text = L["CH_OPTION_FONT"],
+				desc = L["CH_OPTION_FONT_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatChannelHistoryFontSize or 12 end,
+				set = function(value)
+					addon.db["chatChannelHistoryFontSize"] = value
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.UpdateLogFontSize then addon.ChatIM.ChannelHistory:UpdateLogFontSize(value) end
+				end,
+				min = 8,
+				max = 18,
+				step = 0.5,
+				parent = true,
+				default = 12,
+				sType = "slider",
+			},
+			{
+				var = "chatHistoryFrameStrata",
+				text = L["CH_OPTION_FRAME_STRATA"],
+				desc = L["CH_OPTION_FRAME_STRATA_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatHistoryFrameStrata or "MEDIUM" end,
+				set = function(value)
+					addon.db.chatHistoryFrameStrata = value or "MEDIUM"
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.SetFrameStrata then addon.ChatIM.ChannelHistory:SetFrameStrata(value) end
+				end,
+				list = chatHistoryStrataOptions,
+				parent = true,
+				default = "MEDIUM",
+				sType = "dropdown",
+				type = Settings.VarType.String,
+				order = strataOrder,
+			},
+			{
+				var = "chatHistoryFrameLevel",
+				text = L["CH_OPTION_FRAME_LEVEL"],
+				desc = L["CH_OPTION_FRAME_LEVEL_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatHistoryFrameLevel or 600 end,
+				set = function(value)
+					local lvl = tonumber(value) or 600
+					addon.db.chatHistoryFrameLevel = lvl
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.SetFrameLevel then addon.ChatIM.ChannelHistory:SetFrameLevel(lvl) end
+				end,
+				min = 1,
+				max = 1000,
+				step = 1,
+				parent = true,
+				default = 600,
+				sType = "slider",
+			},
+			{
+				var = "chatHistoryButtonOffsetX",
+				text = "History button offset X",
+				desc = "Adjust horizontal offset of the Chat History toggle button relative to Quick Join.",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatHistoryButtonOffsetX or 0 end,
+				set = function(value)
+					addon.db.chatHistoryButtonOffsetX = value or 0
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.UpdateToggleButtonPosition then addon.ChatIM.ChannelHistory:UpdateToggleButtonPosition() end
+				end,
+				min = -200,
+				max = 200,
+				step = 1,
+				parent = true,
+				default = 0,
+				sType = "slider",
+			},
+			{
+				var = "chatHistoryButtonOffsetY",
+				text = "History button offset Y",
+				desc = "Adjust vertical offset of the Chat History toggle button relative to Quick Join.",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.chatHistoryButtonOffsetY or -10 end,
+				set = function(value)
+					addon.db.chatHistoryButtonOffsetY = value or 0
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.UpdateToggleButtonPosition then addon.ChatIM.ChannelHistory:UpdateToggleButtonPosition() end
+				end,
+				min = -200,
+				max = 200,
+				step = 1,
+				parent = true,
+				default = -10,
+				sType = "slider",
+			},
+			{
+				var = "chatHistoryShowButton",
+				text = "Show History toggle icon",
+				desc = "Show a small icon below the Quick Join toast to open/close Chat History.",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				func = function(val)
+					addon.db.chatHistoryShowButton = val and true or false
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.EnsureToggleButton then addon.ChatIM.ChannelHistory:EnsureToggleButton() end
+				end,
+				parent = true,
+				default = true,
+				type = Settings.VarType.Boolean,
+				sType = "checkbox",
+			},
+			{
+				var = "chatHistoryHideUnlogged",
+				text = L["CH_OPTION_HIDE_UNLOGGED"],
+				desc = L["CH_OPTION_HIDE_UNLOGGED_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				func = function(val)
+					addon.db.chatHistoryHideUnlogged = val and true or false
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.CreateFilterUI then addon.ChatIM.ChannelHistory:CreateFilterUI() end
+				end,
+				parent = true,
+				default = false,
+				type = Settings.VarType.Boolean,
+				sType = "checkbox",
+			},
+			{
+				var = "chatChannelHistoryLootQualities",
+				text = L["CH_OPTION_LOOT_MIN_RARITY"],
+				desc = L["CH_OPTION_LOOT_MIN_RARITY_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				isSelectedFunc = function(key)
+					local map = addon.db and addon.db.chatChannelHistoryLootQualities
+					return map and map[key] or false
+				end,
+				setSelectedFunc = function(key, shouldSelect)
+					addon.db.chatChannelHistoryLootQualities = addon.db.chatChannelHistoryLootQualities or {}
+					addon.db.chatChannelHistoryLootQualities[key] = shouldSelect and true or false
+					if addon.ChatIM and addon.ChatIM.ChannelHistory and addon.ChatIM.ChannelHistory.InvalidateLootQualityCache then addon.ChatIM.ChannelHistory:InvalidateLootQualityCache() end
+				end,
+				options = (function()
+					local opts = {}
+					for q = Enum.ItemQuality.Poor, Enum.ItemQuality.WoWToken do
+						local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+						local prefix = color and color.hex or ""
+						local suffix = color and "|r" or ""
+						opts[#opts + 1] = { value = q, text = string.format("%s%s%s", prefix, _G["ITEM_QUALITY" .. q .. "_DESC"], suffix) }
+					end
+					return opts
+				end)(),
+				parent = true,
+				default = {
+					[Enum.ItemQuality.Poor] = true,
+					[Enum.ItemQuality.Common] = true,
+					[Enum.ItemQuality.Uncommon] = true,
+					[Enum.ItemQuality.Rare] = true,
+					[Enum.ItemQuality.Epic] = true,
+					[Enum.ItemQuality.Legendary] = true,
+					[Enum.ItemQuality.Artifact] = true,
+					[Enum.ItemQuality.Heirloom] = true,
+					[Enum.ItemQuality.WoWToken] = true,
+				},
+				sType = "multidropdown",
+			},
+			{
+				var = "chatChannelFiltersEnable",
+				text = L["CH_OPTION_FILTER_SELECTION"],
+				desc = L["CH_OPTION_FILTER_SELECTION_DESC"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableChatHistory"]
+						and addon.SettingsLayout.elements["enableChatHistory"].setting
+						and addon.SettingsLayout.elements["enableChatHistory"].setting:GetValue() == true
+				end,
+				parent = true,
+				sType = "multidropdown",
+				options = categoryOptions,
+				isSelectedFunc = function(key) return addon.db.chatChannelFiltersEnable[key] end,
+				setSelectedFunc = function(key, shouldSelect)
+					addon.db.chatChannelFiltersEnable[key] = shouldSelect and true or false
+					if addon.ChatIM and addon.ChatIM.ChannelHistory then
+						if addon.ChatIM.ChannelHistory.UpdateLoggingFilter then addon.ChatIM.ChannelHistory:UpdateLoggingFilter(key) end
+						if addon.ChatIM.ChannelHistory.CreateFilterUI then addon.ChatIM.ChannelHistory:CreateFilterUI() end
+					end
+				end,
+			},
+		},
+	},
+}
+
+addon.functions.SettingsCreateCheckboxes(cChatFrame, data)
 ----- REGION END
 
-function addon.functions.initChatFrame() end
+function addon.functions.initChatFrame()
+	addon.db.chatChannelFiltersEnable = addon.db.chatChannelFiltersEnable or {}
+	for _, opt in ipairs(CHAT_FILTER_OPTIONS) do
+		table.insert(categoryOptions, { value = opt.key, text = opt.label })
+		if addon.db.chatChannelFiltersEnable[opt.key] == nil then addon.db.chatChannelFiltersEnable[opt.key] = true end
+	end
+	if addon.ChatIM and addon.ChatIM.ChannelHistory then addon.ChatIM.ChannelHistory.filterOptions = addon.ChatIM.ChannelHistory.filterOptions or CHAT_FILTER_OPTIONS end
+end
 
 local eventHandlers = {}
 

@@ -45,6 +45,10 @@ addon.general.variables.autoOpen = {
 	[246937] = true, -- Perfected Epoch Memento
 	[246936] = true, -- Resonant Epoch Memento
 	[249784] = true, -- Legionfall Champions Insignia (2k Rep)
+	[253227] = {
+		minStack = 10,
+		chunk = 10,
+	}, -- Flawless Thread of Time (usable in bundles of 10)
 
 	[253224] = {
 		minStack = 10,
@@ -609,7 +613,13 @@ function addon.functions.PatchTS(y, m, dUS, dEU, h)
 end
 function addon.functions.IsPatchLive(key) return GetServerTime() >= addon.variables.patchInformations[key] end
 
-addon.variables.shouldEnchanted = { [15] = true, [5] = true, [9] = true, [7] = true, [8] = true, [11] = true, [12] = true, [16] = true, [17] = true }
+addon.variables.isMidnight = select(4, GetBuildInfo()) >= 120000
+
+if addon.variables.isMidnight then
+	addon.variables.shouldEnchanted = { [1] = true, [5] = true, [7] = true, [8] = true, [11] = true, [12] = true, [3] = true, [16] = true, [17] = true }
+else
+	addon.variables.shouldEnchanted = { [15] = true, [5] = true, [9] = true, [7] = true, [8] = true, [11] = true, [12] = true, [16] = true, [17] = true }
+end
 addon.variables.patchInformations = {
 	horrificVisions = addon.functions.PatchTS(2025, 5, 20, 21, 6),
 	whispersOfKaresh = addon.functions.PatchTS(2025, 8, 5, 6, 6),
@@ -622,16 +632,16 @@ addon.variables.patchInformations = {
 
 addon.variables.shouldEnchantedChecks = {
 	-- Head
-	[1] = {
-		func = function(ilvl)
-			-- if ilvl >= 350 and addon.functions.IsPatchLive("horrificVisions") and not GetBuildInfo() == "11.2.0" and not addon.functions.IsPatchLive("whispersOfKaresh") then
-			-- 	-- Horrific vision enchant - Only usable during Season 2 of TWW and after Patchday in the Week of 20.05.2025
-			-- 	-- and before the Patchday on 12/13.08.2025
-			-- 	return true
-			-- end
-			return false
-		end,
-	},
+	-- [1] = {
+	-- 	func = function(ilvl)
+	-- 		-- if ilvl >= 350 and addon.functions.IsPatchLive("horrificVisions") and not GetBuildInfo() == "11.2.0" and not addon.functions.IsPatchLive("whispersOfKaresh") then
+	-- 		-- 	-- Horrific vision enchant - Only usable during Season 2 of TWW and after Patchday in the Week of 20.05.2025
+	-- 		-- 	-- and before the Patchday on 12/13.08.2025
+	-- 		-- 	return true
+	-- 		-- end
+	-- 		return false
+	-- 	end,
+	-- },
 }
 addon.variables.shouldSocketed = {
 	[1] = 1,
@@ -808,27 +818,27 @@ do
 	end
 end
 
-	addon.variables.unitFrameNames = {
-		{ name = "PlayerFrame", var = "unitframeSettingPlayerFrame", text = HUD_EDIT_MODE_PLAYER_FRAME_LABEL, unitToken = "player" },
-		{
-			name = "BossTargetFrameContainer",
-			var = "unitframeSettingBossTargetFrame",
+addon.variables.unitFrameNames = {
+	{ name = "PlayerFrame", var = "unitframeSettingPlayerFrame", text = HUD_EDIT_MODE_PLAYER_FRAME_LABEL, unitToken = "player" },
+	{
+		name = "BossTargetFrameContainer",
+		var = "unitframeSettingBossTargetFrame",
 		text = HUD_EDIT_MODE_BOSS_FRAMES_LABEL,
 		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
-			onlyChildren = { "Boss1TargetFrame", "Boss2TargetFrame", "Boss3TargetFrame", "Boss4TargetFrame", "Boss5TargetFrame" },
-		},
-		{ name = "TargetFrame", var = "unitframeSettingTargetFrame", text = HUD_EDIT_MODE_TARGET_FRAME_LABEL },
-		{
-			name = "FocusFrame",
-			var = "unitframeSettingFocusFrame",
-			text = _G.HUD_EDIT_MODE_FOCUS_FRAME_LABEL or "Focus Frame",
-			allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
-		},
-		{
-			name = "PetFrame",
-			var = "unitframeSettingPetFrame",
-			text = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
-			children = petChildren or {},
+		onlyChildren = { "Boss1TargetFrame", "Boss2TargetFrame", "Boss3TargetFrame", "Boss4TargetFrame", "Boss5TargetFrame" },
+	},
+	{ name = "TargetFrame", var = "unitframeSettingTargetFrame", text = HUD_EDIT_MODE_TARGET_FRAME_LABEL },
+	{
+		name = "FocusFrame",
+		var = "unitframeSettingFocusFrame",
+		text = _G.HUD_EDIT_MODE_FOCUS_FRAME_LABEL or "Focus Frame",
+		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
+	},
+	{
+		name = "PetFrame",
+		var = "unitframeSettingPetFrame",
+		text = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+		children = petChildren or {},
 		revealAllChilds = true,
 	},
 	{
@@ -984,5 +994,3 @@ addon.variables.cvarOptions = {
 		category = "cvarCategoryUtility",
 	},
 }
-
-addon.variables.isMidnight = select(4, GetBuildInfo()) >= 120000

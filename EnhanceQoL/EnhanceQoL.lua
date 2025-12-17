@@ -1238,29 +1238,132 @@ local function applyCooldownViewerMode(frameName, cfg)
 	local frame = frameName and _G[frameName]
 	if not frame then return false end
 
-	addon.variables = addon.variables or {}
-	addon.variables.cooldownViewerStates = addon.variables.cooldownViewerStates or {}
-	local state = addon.variables.cooldownViewerStates[frame]
-	if not state then
-		state = { frame = frame, hovered = false }
-		addon.variables.cooldownViewerStates[frame] = state
-		if frame.HookScript then
-			frame:HookScript("OnEnter", function()
-				state.hovered = true
-				if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
-			end)
-			frame:HookScript("OnLeave", function()
-				state.hovered = false
-				if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
-			end)
+	local hasActiveConfig = false
+	if type(cfg) == "table" then
+		for _, v in pairs(cfg) do
+			if v then
+				hasActiveConfig = true
+				break
+			end
 		end
 	end
 
+	local hoverEnabled = hasActiveConfig and cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER] == true
+
+	addon.variables = addon.variables or {}
+	addon.variables.cooldownViewerStates = addon.variables.cooldownViewerStates or {}
+	local states = addon.variables.cooldownViewerStates
+
+	local state = states[frame]
+
+	if not hasActiveConfig and not state then return true end
+
+	if not state then
+		state = {
+			frame = frame,
+			frameName = frameName,
+
+			hovered = false,
+			applied = false,
+
+			hoverEnabled = false,
+			hoverPollInitialized = false,
+			hoverPollRunning = false,
+
+			prevOnUpdate = nil,
+			onUpdateWrapper = nil,
+			hoverHandlers = nil,
+		}
+		states[frame] = state
+	end
+
+	state.hoverEnabled = hoverEnabled
+
+	if hoverEnabled and not state.hoverPollInitialized and frame.HookScript then
+		state.hoverPollInitialized = true
+		state.hoverHooked = false
+
+		local function setHovered(v)
+			if state.hovered == v then return end
+			state.hovered = v
+			if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
+		end
+
+		local function hoverUpdate(self, elapsed)
+			self._eqolHoverElapsed = (self._eqolHoverElapsed or 0) + (elapsed or 0)
+			if self._eqolHoverElapsed < 0.05 then return end -- ~20 Hz
+			self._eqolHoverElapsed = 0
+			setHovered(MouseIsOver(self))
+		end
+
+		local function startHoverPoll(self)
+			if not state.hoverEnabled then return end
+			if state.hoverPollRunning then return end
+			state.hoverPollRunning = true
+
+			self._eqolHoverElapsed = 0
+
+			if not state.hoverHooked then
+				self:HookScript("OnUpdate", hoverUpdate)
+				state.hoverHooked = true
+			end
+		end
+
+		local function stopHoverPoll(self)
+			if not state.hoverPollRunning then return end
+			state.hoverPollRunning = false
+
+			setHovered(false)
+		end
+
+		state.hoverHandlers = { start = startHoverPoll, stop = stopHoverPoll }
+
+		frame:HookScript("OnShow", startHoverPoll)
+		frame:HookScript("OnHide", stopHoverPoll)
+
+		-- Wenn er gerade sichtbar ist: direkt starten
+		if frame.IsShown and frame:IsShown() then startHoverPoll(frame) end
+	end
+
+	-- Sicherstellen: ohne hoverEnabled wird NIE ein OnUpdate gesetzt.
+	if state.hoverHandlers then
+		if hoverEnabled then
+			if frame.IsShown and frame:IsShown() then
+				state.hoverHandlers.start(frame)
+			else
+				state.hoverHandlers.stop(frame)
+			end
+		else
+			state.hoverHandlers.stop(frame)
+			state.hovered = false
+		end
+	end
+
+	-- Wenn nichts aktiv ist: Defaults herstellen, Polling stoppen und ggf. State komplett entfernen.
+	if not hasActiveConfig then
+		if state.hoverHandlers then state.hoverHandlers.stop(frame) end
+
+		if state.applied and frame.GetAlpha and frame.SetAlpha and frame:GetAlpha() ~= 1 then frame:SetAlpha(1) end
+
+		state.applied = false
+		state.hoverEnabled = false
+		state.hovered = false
+
+		-- Wenn wir nie Hooks installiert haben, können wir den State komplett vergessen.
+		-- (WICHTIG: wenn hoverPollInitialized true war, NICHT löschen, sonst hängen die Hook-Closures am alten state.)
+		if not state.hoverPollInitialized then states[frame] = nil end
+
+		return true
+	end
+
+	-- Ab hier: aktive Config -> normales Verhalten
 	local shouldHide = computeCooldownViewerHidden(cfg, state)
 	if IsCooldownViewerInEditMode() then shouldHide = false end
 
 	local targetAlpha = shouldHide and 0 or 1
-	if frame:GetAlpha() ~= targetAlpha then frame:SetAlpha(targetAlpha) end
+	if frame.GetAlpha and frame.SetAlpha and frame:GetAlpha() ~= targetAlpha then frame:SetAlpha(targetAlpha) end
+
+	state.applied = true
 	return true
 end
 
@@ -1616,11 +1719,15 @@ local function EnsureAssistedCombatFrameHidden(button)
 	if not frame.EQOL_AssistedHideHooked then
 		frame.EQOL_AssistedHideHooked = true
 		frame:HookScript("OnShow", function(self)
-			if addon.db and addon.db.actionBarHideAssistedRotation then self:Hide() end
+			if addon.db and addon.db.actionBarHideAssistedRotation then
+				self:SetAlpha(0)
+			elseif self:GetAlpha() ~= 1 then
+				self:SetAlpha(1)
+			end
 		end)
 	end
 
-	if addon.db.actionBarHideAssistedRotation then frame:Hide() end
+	if addon.db.actionBarHideAssistedRotation then frame:SetAlpha(0) end
 end
 
 local function UpdateAssistedCombatFrameHiding()
@@ -1644,6 +1751,55 @@ local function UpdateAssistedCombatFrameHiding()
 	end
 end
 addon.functions.UpdateAssistedCombatFrameHiding = UpdateAssistedCombatFrameHiding
+
+local function ApplyExtraActionArtworkSetting()
+	if not addon.db then return end
+
+	local shouldHide = addon.db.hideExtraActionArtwork == true
+	addon.variables = addon.variables or {}
+	local applied = addon.variables.extraActionArtworkApplied == true
+
+	-- Only act when we need to apply or explicitly undo our own change.
+	if InCombatLockdown and InCombatLockdown() and (shouldHide or applied) then
+		addon.variables.pendingExtraActionArtwork = true
+		return
+	end
+	if not shouldHide and not applied then
+		addon.variables.pendingExtraActionArtwork = nil
+		return
+	end
+
+	local extraActionButton = _G.ExtraActionButton1
+	local extraStyle = extraActionButton and extraActionButton.style
+	if extraStyle then
+		if shouldHide then
+			extraStyle:SetAlpha(0)
+			extraStyle:Hide()
+		else
+			extraStyle:SetAlpha(1)
+			extraStyle:Show()
+		end
+	end
+
+	local zoneAbilityFrame = _G.ZoneAbilityFrame
+	local zoneStyle = zoneAbilityFrame and zoneAbilityFrame.Style
+	if zoneStyle then
+		if shouldHide then
+			zoneStyle:SetAlpha(0)
+			zoneStyle:Hide()
+		else
+			zoneStyle:SetAlpha(1)
+			zoneStyle:Show()
+		end
+	end
+
+	local extraActionBarFrame = _G.ExtraActionBarFrame
+	if extraActionBarFrame and extraActionBarFrame.EnableMouse then extraActionBarFrame:EnableMouse(not shouldHide) end
+
+	addon.variables.extraActionArtworkApplied = shouldHide
+	addon.variables.pendingExtraActionArtwork = nil
+end
+addon.functions.ApplyExtraActionArtworkSetting = ApplyExtraActionArtworkSetting
 
 local function RefreshAllActionBarVisibilityAlpha(_, event)
 	local combatOverride
@@ -1838,6 +1994,7 @@ local function initActionBars()
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
 	addon.functions.InitDBValue("actionBarHideBorders", false)
 	addon.functions.InitDBValue("actionBarHideAssistedRotation", false)
+	addon.functions.InitDBValue("hideExtraActionArtwork", false)
 	addon.functions.InitDBValue("hideMacroNames", false)
 	addon.functions.InitDBValue("actionBarMacroFontOverride", false)
 	addon.functions.InitDBValue("actionBarHotkeyFontOverride", false)
@@ -1888,6 +2045,7 @@ local function initActionBars()
 	if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
 	UpdateAssistedCombatFrameHiding()
 	if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
+	ApplyExtraActionArtworkSetting()
 end
 
 local function initParty()
@@ -2497,6 +2655,29 @@ local function initChatFrame()
 	addon.functions.InitDBValue("chatIMUseCustomSound", false)
 	addon.functions.InitDBValue("chatIMCustomSoundFile", "")
 	addon.functions.InitDBValue("chatIMMaxHistory", 250)
+	addon.functions.InitDBValue("enableChatHistory", false)
+	addon.functions.InitDBValue("chatChannelHistoryMaxLines", 500)
+	addon.functions.InitDBValue("chatChannelHistoryMaxViewLines", 1000)
+	addon.functions.InitDBValue("chatChannelHistoryFontSize", 12)
+	addon.functions.InitDBValue("chatChannelHistoryLootQualities", {
+		[0] = true,
+		[1] = true,
+		[2] = true,
+		[3] = true,
+		[4] = true,
+		[5] = true,
+		[6] = true,
+		[7] = true,
+		[8] = true,
+	})
+	addon.functions.InitDBValue("chatHistoryFrameStrata", "MEDIUM")
+	addon.functions.InitDBValue("chatHistoryFrameLevel", 600)
+	addon.functions.InitDBValue("chatHistoryButtonOffsetX", 0)
+	addon.functions.InitDBValue("chatHistoryButtonOffsetY", -10)
+	addon.functions.InitDBValue("chatHistoryShowButton", true)
+	addon.functions.InitDBValue("chatHistoryFramePos", nil)
+	addon.functions.InitDBValue("chatChannelFilters", {})
+	addon.functions.InitDBValue("chatChannelFiltersEnable", {})
 	addon.functions.InitDBValue("chatIMFrameData", {})
 	addon.functions.InitDBValue("chatIMHideInCombat", false)
 	addon.functions.InitDBValue("chatIMUseAnimation", true)
@@ -3074,7 +3255,8 @@ local function initUI()
 							if pData.point and pData.relativePoint and pData.relativeTo and pData.xOfs and pData.yOfs then
 								button:SetPoint(pData.point, pData.relativeTo, pData.relativePoint, pData.xOfs, pData.yOfs)
 							end
-							if button:GetFrameStrata() == "LOW" then button:SetFrameStrata("MEDIUM") end
+							button:SetFrameStrata(pData.strata or "MEDIUM")
+							if pData.level then button:SetFrameLevel(pData.level) end
 						end
 					elseif addon.variables.bagButtonState[name] then
 						index = index + 1
@@ -3083,6 +3265,8 @@ local function initUI()
 						local row = math.floor((index - 1) / columns)
 
 						button:SetParent(addon.variables.buttonSink)
+						button:SetFrameStrata("DIALOG")
+						button:SetFrameLevel(100)
 						button:SetSize(ICON_SIZE, ICON_SIZE)
 						button:SetPoint("TOPLEFT", addon.variables.buttonSink, "TOPLEFT", col * (ICON_SIZE + PADDING) + PADDING, -row * (ICON_SIZE + PADDING) - PADDING)
 						button:Show()
@@ -3114,7 +3298,8 @@ local function initUI()
 					else
 						LDBIcon:Show(name)
 					end
-					if button:GetFrameStrata() == "LOW" then button:SetFrameStrata("MEDIUM") end
+					button:SetFrameStrata(pData.strata or "MEDIUM")
+					if pData.level then button:SetFrameLevel(pData.level) end
 					addon.variables.bagButtonPoint[name] = nil
 				end
 			end
@@ -3138,16 +3323,18 @@ local function initUI()
 						or btnName == "ZygorGuidesViewerMapIcon"
 					)
 				then
-					if not addon.variables.bagButtonPoint[btnName] or not addon.variables.bagButtonPoint[btnName].point then
+					local pData = addon.variables.bagButtonPoint[btnName] or {}
+					if not pData.point then
 						local point, relativeTo, relativePoint, xOfs, yOfs = child:GetPoint()
-						addon.variables.bagButtonPoint[btnName] = {
-							point = point,
-							relativeTo = relativeTo,
-							relativePoint = relativePoint,
-							xOfs = xOfs,
-							yOfs = yOfs,
-						}
+						pData.point = point
+						pData.relativeTo = relativeTo
+						pData.relativePoint = relativePoint
+						pData.xOfs = xOfs
+						pData.yOfs = yOfs
 					end
+					pData.strata = pData.strata or child:GetFrameStrata()
+					pData.level = pData.level or child:GetFrameLevel()
+					addon.variables.bagButtonPoint[btnName] = pData
 					if (child.db and child.db.hide) or not child:IsVisible() then
 						addon.variables.bagButtonState[btnName] = false
 					else
@@ -3575,6 +3762,13 @@ local function CreateUI()
 		root:CreateTitle(L["DataPanel"])
 		root:CreateButton(L["SettingsDataPanelCreate"], function() local dialog = StaticPopup_Show("EQOL_CREATE_DATAPANEL") end)
 
+		if addon.db["enableChatHistory"] and addon.ChatIM and addon.ChatIM.ChannelHistory then
+			DoDevider()
+			root:CreateButton(L["CH_TITLE_HISTORY"], function()
+				if addon.ChatIM.ChannelHistory.ToggleWindow then addon.ChatIM.ChannelHistory:ToggleWindow() end
+			end)
+		end
+
 		DoDevider()
 		root:CreateButton(LFG_LIST_LEGACY .. " " .. SETTINGS, function()
 			if frame:IsShown() then
@@ -3809,6 +4003,7 @@ local function setAllHooks()
 	addon.functions.initDataPanel()
 	addon.functions.initProfile()
 	addon.functions.initMapNav()
+	addon.functions.initChatFrame()
 	initParty()
 	initActionBars()
 	initUI()
@@ -4288,6 +4483,10 @@ local eventHandlers = {
 				local pending = addon.variables.pendingPartyFrameTitle
 				addon.variables.pendingPartyFrameTitle = nil
 				addon.functions.togglePartyFrameTitle(pending)
+			end
+			if addon.variables.pendingExtraActionArtwork then
+				addon.variables.pendingExtraActionArtwork = nil
+				if addon.functions.ApplyExtraActionArtworkSetting then addon.functions.ApplyExtraActionArtworkSetting() end
 			end
 		end
 	end,

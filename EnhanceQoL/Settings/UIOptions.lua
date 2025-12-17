@@ -222,6 +222,16 @@ local function createButtonAppearanceControls(category)
 			if addon.functions.UpdateAssistedCombatFrameHiding then addon.functions.UpdateAssistedCombatFrameHiding() end
 		end,
 	})
+
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "hideExtraActionArtwork",
+		text = L["hideExtraActionArtwork"] or "Hide Extra Action/Zone Ability artwork",
+		desc = L["hideExtraActionArtworkDesc"] or "Hide the decorative frame on the Extra Action Button and Zone Ability and disable mouse input on the Extra Action bar.",
+		func = function(value)
+			addon.db.hideExtraActionArtwork = value and true or false
+			if addon.functions.ApplyExtraActionArtworkSetting then addon.functions.ApplyExtraActionArtworkSetting() end
+		end,
+	})
 end
 
 local function createLabelControls(category)

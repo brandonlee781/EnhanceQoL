@@ -3,7 +3,7 @@ local addonName, addon = ...
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 
 local cSocial = addon.functions.SettingsCreateCategory(nil, L["Social"], nil, "Social")
-addon.SettingsLayout.chatframeCategory = cSocial
+addon.SettingsLayout.socialCategory = cSocial
 
 local data = {
 	{

@@ -457,6 +457,7 @@ function addon.MythicPlus.functions.removeExistingButton()
 end
 
 -- dumb the map cursor position: /dump WorldMapFrame:GetMapID(), WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
+-- delete name cache: /run EnhanceQoL.db.teleportNameCache = nil
 -- WorldMapFrame:GetMapID()
 addon.MythicPlus.variables.portalCompendium = {
 
@@ -470,10 +471,13 @@ addon.MythicPlus.variables.portalCompendium = {
 		headline = EXPANSION_NAME11 or "Midnight",
 		spells = {
 			[1254559] = { text = "MC", cId = { [560] = true }, mapID = 2501, locID = 2437, x = 0.4368, y = 0.3963, zoneID = 2501 },
-			[1254563] = { text = "NPX", cId = { [559] = true }, mapID = 2556, locID = nil, x = nil, y = nil, zoneID = 2556 }, -- locID, x and y is still wrong - no location available for now
+			[1254563] = { text = "NPX", cId = { [559] = true }, mapID = 2556, locID = 2405, x = 0.6484, y = 0.6158, zoneID = 2556 },
 			[1254572] = { text = "MT", cId = { [558] = true }, mapID = 2511, locID = 2424, x = 0.6329, y = 0.1549, zoneID = 2511 },
-			-- [2222] = { text = "DON", mapID = 2514, locID = 2537, x = 0.3794, y = 0.8938, zoneID = 2537 }, -- no info available just a placeholder
+			-- [1254580] = { text = "DON", mapID = 2514, locID = 2437, x = 0.2969, y = 0.8454, zoneID = 2514 },
 			[1254400] = { text = "WRS", cId = { [557] = true }, mapID = 2494, locID = 2395, x = 0.3543, y = 0.7908, zoneID = 2494 },
+			-- [1254569] = { text = "MR", mapID = 2433, locID = 2393, x = 0.5719, y = 0.6097, zoneID = 2433 },
+			-- [1254577] = { text = "TBV", mapID = 2500, locID = 2413, x = 0.2635, y = 0.7790, zoneID = 2500 },
+			-- [1254567] = { text = "VSA", mapID = 2572, locID = 2405, x = 0.5145, y = 0.1918, zoneID = 2572 },
 		},
 	},
 	[120] = {

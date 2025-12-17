@@ -8,4 +8,12 @@
              category="Enhance QoL"
              >
     </Binding>
+
+    <Binding name="EQOL_TOGGLE_CHATHISTORY"
+             category="Enhance QoL"
+             >
+        if EnhanceQoL and EnhanceQoL.db and EnhanceQoL.db.enableChatHistory and EnhanceQoL.ChatIM and EnhanceQoL.ChatIM.ChannelHistory and EnhanceQoL.ChatIM.ChannelHistory.ToggleWindow then
+            EnhanceQoL.ChatIM.ChannelHistory:ToggleWindow()
+        end
+    </Binding>
 </Bindings>

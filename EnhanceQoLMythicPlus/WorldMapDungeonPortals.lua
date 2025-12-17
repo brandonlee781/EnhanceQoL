@@ -406,22 +406,19 @@ local function CreateSecureSpellButton(parent, entry)
 		end
 	end)
 
-	-- TODO bug in tooltip in midnight beta - remove for now
-	if not addon.variables.isMidnight then
-		b:SetScript("OnEnter", function(self)
-			if not addon.db["portalShowTooltip"] then return end
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			if entry.isToy then
-				GameTooltip:SetToyByItemID(entry.toyID)
-			elseif entry.isItem then
-				GameTooltip:SetItemByID(entry.itemID)
-			else
-				GameTooltip:SetSpellByID(entry.spellID)
-			end
-			GameTooltip:Show()
-		end)
-		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	end
+	b:SetScript("OnEnter", function(self)
+		if not addon.db["portalShowTooltip"] then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		if entry.isToy then
+			GameTooltip:SetToyByItemID(entry.toyID)
+		elseif entry.isItem then
+			GameTooltip:SetItemByID(entry.itemID)
+		else
+			GameTooltip:SetSpellByID(entry.spellID)
+		end
+		GameTooltip:Show()
+	end)
+	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	-- favorite star overlay
 	local fav = b:CreateTexture(nil, "OVERLAY")
 	fav:SetPoint("TOPRIGHT", 5, 5)
@@ -544,35 +541,32 @@ local function CreateLegendRowButton(parent, entry, width, height)
 
 	-- Tooltip + highlight lock on hover (mirrors MapLegend feel)
 
-	-- TODO bug in tooltip in midnight beta - remove for now
-	if not addon.variables.isMidnight then
-		b:SetScript("OnEnter", function(self)
-			if self.SetHighlightLocked then
-				self:SetHighlightLocked(true)
+	b:SetScript("OnEnter", function(self)
+		if self.SetHighlightLocked then
+			self:SetHighlightLocked(true)
+		else
+			self:LockHighlight()
+		end
+		if addon.db["portalShowTooltip"] then
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			if entry.isToy then
+				GameTooltip:SetToyByItemID(entry.toyID)
+			elseif entry.isItem then
+				GameTooltip:SetItemByID(entry.itemID)
 			else
-				self:LockHighlight()
+				GameTooltip:SetSpellByID(entry.spellID)
 			end
-			if addon.db["portalShowTooltip"] then
-				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				if entry.isToy then
-					GameTooltip:SetToyByItemID(entry.toyID)
-				elseif entry.isItem then
-					GameTooltip:SetItemByID(entry.itemID)
-				else
-					GameTooltip:SetSpellByID(entry.spellID)
-				end
-				GameTooltip:Show()
-			end
-		end)
-		b:SetScript("OnLeave", function(self)
-			if self.SetHighlightLocked then
-				self:SetHighlightLocked(false)
-			else
-				self:UnlockHighlight()
-			end
-			GameTooltip:Hide()
-		end)
-	end
+			GameTooltip:Show()
+		end
+	end)
+	b:SetScript("OnLeave", function(self)
+		if self.SetHighlightLocked then
+			self:SetHighlightLocked(false)
+		else
+			self:UnlockHighlight()
+		end
+		GameTooltip:Hide()
+	end)
 	-- Unknown visual state: keep hover for tooltip, but block casting
 	if not entry.isKnown then
 		if b.Icon then

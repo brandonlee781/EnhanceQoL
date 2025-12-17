@@ -152,6 +152,7 @@ addon.Tooltip.variables.challengeMapID = {
 	[234] = "KARA",
 	[164] = "AUCH",
 	[163] = "BSM",
+	[239] = "SOT",
 	[168] = "EB",
 	[166] = "GD",
 	[169] = "ID",
@@ -170,4 +171,9 @@ addon.Tooltip.variables.challengeMapID = {
 	[507] = "GB",
 	[456] = "TOTT",
 	[438] = "VP",
+	[556] = "POS",
+	[557] = "WRS",
+	[558] = "MT",
+	[559] = "NPX",
+	[560] = "MAIS",
 }

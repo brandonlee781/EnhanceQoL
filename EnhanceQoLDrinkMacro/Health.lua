@@ -60,6 +60,10 @@ addon.Health.healthList = {
 	{ key = "Healthstone", id = 5512, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP) end, type = "stone" },
 	{ key = "DemonicHealthstone", id = 224464, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP) end, type = "stone" },
 
+	-- Midnight
+	{ key = "SilvermoonHealingPotion", id = 241305, requiredLevel = 81, heal = 205956, type = "potion" },
+	{ key = "SilvermoonHealingPotion", id = 241304, requiredLevel = 81, heal = 241303, type = "potion" },
+
 	-- The War Within: Cavedweller's Delight (Qualities 1-3)
 	{ key = "CavedwellerDelight1", id = 212242, requiredLevel = 71, heal = 2574750, type = "potion", isCombatPotion = true },
 	{ key = "CavedwellerDelight2", id = 212243, requiredLevel = 71, heal = 2685000, type = "potion", isCombatPotion = true },
@@ -179,26 +183,44 @@ function addon.Health.functions.updateAllowedHealth(force)
 
 	local filtered = {}
 	local bestStone, bestPotion, bestOther
+	local function isBetter(newItem, current)
+		if not current then return true end
+		local newLevel = newItem.requiredLevel or 0
+		local curLevel = current.requiredLevel or 0
+		if newLevel ~= curLevel then return newLevel > curLevel end
+		-- If same level, prefer higher heal, then earlier entries (list order = freshness)
+		local newHeal = newItem.heal or 0
+		local curHeal = current.heal or 0
+		if newHeal ~= curHeal then return newHeal > curHeal end
+		local newOrder = newItem._order or math.huge
+		local curOrder = current._order or math.huge
+		return newOrder < curOrder
+	end
 
 	for i = 1, #addon.Health.healthList do
 		local e = addon.Health.healthList[i]
 		if (e.requiredLevel or 1) <= playerLevel then
 			local w = wrapItem(e, maxHP)
+			w._order = i
 			insert(filtered, w)
 			if w.type == "stone" then
-				if not bestStone or (w.heal > bestStone.heal) then bestStone = w end
+				if isBetter(w, bestStone) then bestStone = w end
 			elseif w.type == "potion" then
-				if not bestPotion or (w.heal > bestPotion.heal) then bestPotion = w end
+				if isBetter(w, bestPotion) then bestPotion = w end
 			else
-				if not bestOther or (w.heal > bestOther.heal) then bestOther = w end
+				if isBetter(w, bestOther) then bestOther = w end
 			end
 		end
 	end
 
 	if #filtered > 1 then
 		sort(filtered, function(a, b)
-			if a.heal == b.heal then return a.requiredLevel > b.requiredLevel end
-			return a.heal > b.heal
+			local aLevel, bLevel = a.requiredLevel or 0, b.requiredLevel or 0
+			if aLevel ~= bLevel then return aLevel > bLevel end
+			local aHeal, bHeal = a.heal or 0, b.heal or 0
+			if aHeal ~= bHeal then return aHeal > bHeal end
+			local aOrder, bOrder = a._order or math.huge, b._order or math.huge
+			return aOrder < bOrder
 		end)
 	end
 

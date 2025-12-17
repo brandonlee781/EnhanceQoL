@@ -356,6 +356,14 @@ end
 
 local function checkAdditionalTooltip(tooltip)
 	local unit = ResolveTooltipUnit(tooltip)
+	local function challengeLabel(mapId)
+		if addon.Tooltip and addon.Tooltip.variables and addon.Tooltip.variables.challengeMapID then
+			local name = addon.Tooltip.variables.challengeMapID[mapId]
+			if name and name ~= "" then return name end
+		end
+		if mapId then return "ID " .. tostring(mapId) end
+		return "UNKNOWN"
+	end
 	if addon.db["TooltipShowNPCID"] and unit and UnitExists(unit) and not UnitPlayerControlled(unit) then
 		local uGuid = UnitGUID(unit)
 		local id = GetNPCIDFromGUID(uGuid)
@@ -515,7 +523,7 @@ local function checkAdditionalTooltip(tooltip)
 					end
 
 					table.insert(dungeonList, {
-						text = addon.Tooltip.variables.challengeMapID[mId] or "UNKNOWN",
+						text = challengeLabel(mId),
 						level = stars,
 						score = score,
 						r = r,
@@ -528,6 +536,7 @@ local function checkAdditionalTooltip(tooltip)
 					r, g, b = 1, 1, 1
 					local stars = ""
 					local hexColor = string.format("|cff%02x%02x%02x", r * 255, g * 255, b * 255)
+					local bestName = challengeLabel(bestDungeon.challengeModeID)
 					if bestDungeon.finishedSuccess then
 						local bestRunDuration = bestDungeon.bestRunDurationMS / 1000
 						local timeForPlus3 = timeLimit * 0.6
@@ -546,7 +555,7 @@ local function checkAdditionalTooltip(tooltip)
 						r, g, b = 0.5, 0.5, 0.5
 					end
 					if not printedAny then tooltip:AddLine(" ") end
-					tooltip:AddDoubleLine(L["BestMythic+run"], hexColor .. stars .. "|r " .. addon.Tooltip.variables.challengeMapID[bestDungeon.challengeModeID], 1, 1, 0, r, g, b)
+					tooltip:AddDoubleLine(L["BestMythic+run"], hexColor .. stars .. "|r " .. bestName, 1, 1, 0, r, g, b)
 					printedAny = true
 				end
 

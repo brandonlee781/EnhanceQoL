@@ -1,5 +1,27 @@
 # Changelog
 
+## [6.4.0] – 2025-12-17
+
+### ✨ Added
+
+- **Chat History**
+  - Saves chat per character and channel (up to 2000 lines per channel/char), with live filters (including Currency), loot-quality multidropdown.
+- Action Bars: optional toggle to hide the Extra Action/Zone Ability artwork and disable mouse input on the Extra Action bar.
+- Profiles: export/import the active profile (full overwrite) via copy/paste with reload after import.
+
+### 🔄 Changed
+
+- Minimap Button Sink frame now uses `DIALOG` strata for its buttons inherit that strata with elevated frame levels so the bin stays above nearby UI elements.
+
+### 🐛 Fixed
+
+- Added missing visibility rule localization (and translations) to eliminate the AceLocale warning when Enhanced Unit Frames locks visibility.
+- Assisted Combat Button Rotation border hide had an error with updating the button
+- Cooldown Viewer visibility now only hooks mouseover/polling when a visibility rule is set, preventing unintended alpha changes.
+- Cooldown Viewer frames no longer lose click-through behavior when using EQOL.
+
+---
+
 ## [6.3.0] – 2025-12-14
 
 ### ✨ Added

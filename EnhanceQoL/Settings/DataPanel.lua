@@ -3,7 +3,7 @@ local addonName, addon = ...
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 
 local cDataPanel = addon.functions.SettingsCreateCategory(nil, L["DataPanel"], nil, "DataPanel")
-addon.SettingsLayout.chatframeCategory = cDataPanel
+addon.SettingsLayout.dataPanelCategory = cDataPanel
 
 addon.functions.SettingsCreateText(cDataPanel, L["DataPanelEditModeHint"])
 
