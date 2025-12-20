@@ -9,6 +9,7 @@
 - Tooltips for Spell/Item/Aura-IDs enabled in Combat with better secret handling for midnight
 - UF Plus now let's you enable/disable and change Raid Icons size/offset
 - UF Plus now let's you show the blizzard class resources and manage it
+- UF Plus optional castbar for boss frames added
 
 ## [6.4.0] – 2025-12-17
 

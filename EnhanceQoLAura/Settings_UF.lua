@@ -1092,7 +1092,7 @@ local function buildUnitSettings(unit)
 	raidIconOffsetY.isEnabled = isRaidIconEnabled
 	list[#list + 1] = raidIconOffsetY
 
-	if unit == "target" or unit == "focus" then
+	if unit == "target" or unit == "focus" or isBoss then
 		local castDef = def.cast or {}
 		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }
 		local function isCastEnabled() return getValue(unit, { "cast", "enabled" }, castDef.enabled ~= false) ~= false end

@@ -1593,12 +1593,16 @@ local function updateCastBar(unit)
 	end
 end
 
-shouldShowSampleCast = function(unit) return sampleCast and sampleCast[unit] == true end
+shouldShowSampleCast = function(unit)
+	local key = isBossUnit(unit) and "boss" or unit
+	return sampleCast and sampleCast[key] == true
+end
 
 setSampleCast = function(unit)
+	local key = isBossUnit(unit) and "boss" or unit
 	local st = states[unit]
 	if not st or not st.castBar then return end
-	local cfg = (st and st.cfg) or ensureDB(unit)
+	local cfg = (st and st.cfg) or ensureDB(key or unit)
 	local ccfg = (cfg or {}).cast or {}
 	local def = defaultsFor(unit)
 	local defc = (def and def.cast) or {}
@@ -1627,9 +1631,10 @@ setSampleCast = function(unit)
 end
 
 local function setCastInfoFromUnit(unit)
+	local key = isBossUnit(unit) and "boss" or unit
 	local st = states[unit]
 	if not st or not st.castBar then return end
-	local cfg = (st and st.cfg) or ensureDB(unit)
+	local cfg = (st and st.cfg) or ensureDB(key or unit)
 	local ccfg = (cfg or {}).cast or {}
 	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
 	if ccfg.enabled == false then
@@ -2117,7 +2122,7 @@ local function ensureFrames(unit)
 		st.absorb = nil
 		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
 	end
-	if (unit == TARGET_UNIT or unit == FOCUS_UNIT) and not st.castBar then
+	if (unit == TARGET_UNIT or unit == FOCUS_UNIT or isBossUnit(unit)) and not st.castBar then
 		st.castBar = CreateFrame("StatusBar", info.healthName .. "Cast", st.frame, "BackdropTemplate")
 		st.castBar:SetStatusBarDesaturated(true)
 		st.castTextLayer = CreateFrame("Frame", nil, st.castBar)
@@ -2207,7 +2212,7 @@ local function applyBars(cfg, unit)
 	elseif st.overAbsorbGlow then
 		st.overAbsorbGlow:Hide()
 	end
-	if st.castBar and (unit == TARGET_UNIT or unit == FOCUS_UNIT) then
+	if st.castBar and (unit == TARGET_UNIT or unit == FOCUS_UNIT or isBossUnit(unit)) then
 		local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
 		local ccfg = cfg.cast or defc
 		st.castBar:SetStatusBarTexture(resolveCastTexture((ccfg.texture or defc.texture or "DEFAULT")))
@@ -2328,6 +2333,14 @@ local function applyConfig(unit)
 			st.castBar:Hide()
 		end
 	end
+	if isBossUnit(unit) and st.castBar then
+		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(unit) then
+			st.castBar:Show()
+		else
+			stopCast(unit)
+			st.castBar:Hide()
+		end
+	end
 	if unit == TARGET_UNIT and states[unit] and states[unit].auraContainer then updateTargetAuraIcons(1) end
 end
 
@@ -2411,6 +2424,7 @@ local function applyBossEditSample(idx, cfg)
 	local def = defaultsFor("boss")
 	local hc = cfg.health or def.health or {}
 	local pcfg = cfg.power or def.power or {}
+	local cdef = cfg.cast or def.cast or {}
 
 	local cur = UnitHealth("player") or 1
 	local maxv = UnitHealthMax("player") or cur or 1
@@ -2451,6 +2465,7 @@ local function applyBossEditSample(idx, cfg)
 		st.levelText:SetText("??")
 		st.levelText:Show()
 	end
+	if st.castBar and cdef.enabled ~= false then setSampleCast(unit) end
 end
 
 local function updateBossFrames(force)
@@ -2501,9 +2516,21 @@ local function updateBossFrames(force)
 					updateHealth(cfg, unit)
 					updatePower(cfg, unit)
 					checkRaidTargetIcon(unit, st)
+					if st.castBar and cfg.cast and cfg.cast.enabled ~= false then
+						setCastInfoFromUnit(unit)
+						if shouldShowSampleCast(unit) and (not st.castInfo or not UnitCastingInfo or (UnitCastingInfo and not UnitCastingInfo(unit))) then setSampleCast(unit) end
+						st.castBar:Show()
+					elseif st.castBar then
+						stopCast(unit)
+						st.castBar:Hide()
+					end
 				else
 					if st.barGroup then st.barGroup:Hide() end
 					if st.status then st.status:Hide() end
+					if st.castBar then
+						stopCast(unit)
+						st.castBar:Hide()
+					end
 				end
 			end
 		end
@@ -2968,6 +2995,7 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
 		if unit == TARGET_UNIT then setCastInfoFromUnit(TARGET_UNIT) end
 		if unit == FOCUS_UNIT then setCastInfoFromUnit(FOCUS_UNIT) end
+		if isBossUnit(unit) then setCastInfoFromUnit(unit) end
 	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
 		if unit == TARGET_UNIT then
 			stopCast(TARGET_UNIT)
@@ -2977,6 +3005,7 @@ local function onEvent(self, event, unit, arg1)
 			stopCast(FOCUS_UNIT)
 			if shouldShowSampleCast(unit) then setSampleCast(unit) end
 		end
+		if isBossUnit(unit) then stopCast(unit) end
 	elseif event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
 		updateBossFrames(true)
 	elseif event == "ENCOUNTER_START" then
