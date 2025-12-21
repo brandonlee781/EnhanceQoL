@@ -6,59 +6,25 @@ else
 	error(parentAddonName .. " is not loaded")
 end
 
-addon.LayoutTools = {}
-addon.LayoutTools.functions = {}
-
-addon.LayoutTools.variables = {}
+addon.LayoutTools = addon.LayoutTools or {}
+addon.LayoutTools.functions = addon.LayoutTools.functions or {}
+addon.LayoutTools.variables = addon.LayoutTools.variables or {}
 
 addon.functions.InitDBValue("eqolLayoutTools", {})
-
-function addon.LayoutTools.functions.InitDBValue(key, defaultValue)
-	if addon.db["eqolLayoutTools"][key] == nil then addon.db["eqolLayoutTools"][key] = defaultValue end
-end
--- General setting: which modifier enables wheel-scaling (SHIFT|CTRL|ALT)
-addon.LayoutTools.functions.InitDBValue("uiScalerWheelModifier", "SHIFT")
--- Global toggles
-addon.LayoutTools.functions.InitDBValue("uiScalerGlobalMoveEnabled", true)
-addon.LayoutTools.functions.InitDBValue("uiScalerGlobalScaleEnabled", true)
-addon.LayoutTools.functions.InitDBValue("uiScalerMoveRequireModifier", false)
--- Per-frame activation map (nil/true means active by default)
-addon.LayoutTools.functions.InitDBValue("uiScalerFramesActive", {})
 local db = addon.db["eqolLayoutTools"]
 
--- Helpers
-addon.LayoutTools.variables.managedFrames = addon.LayoutTools.variables.managedFrames or {}
-addon.LayoutTools.variables.mouseoverFrames = addon.LayoutTools.variables.mouseoverFrames or {}
-addon.LayoutTools.variables.captureInitialized = addon.LayoutTools.variables.captureInitialized or false
-addon.LayoutTools.variables.combatQueue = addon.LayoutTools.variables.combatQueue or {}
+local function initDbValue(key, defaultValue)
+	if db[key] == nil then db[key] = defaultValue end
+end
+
+initDbValue("enabled", true)
+initDbValue("requireModifier", true)
+initDbValue("modifier", "SHIFT")
+initDbValue("frames", {})
+
 local function normalizeDbVarFromId(id)
 	if not id or type(id) ~= "string" then return nil end
 	return string.lower(string.sub(id, 1, 1)) .. string.sub(id, 2)
-end
-
-local function getKeys(id)
-	return {
-		enable = "uiScaler" .. id .. "Enabled",
-		scale = "uiScaler" .. id .. "Frame",
-		move = "uiScaler" .. id .. "Move",
-	}
-end
-
-local function getIdForFrameName(fname)
-	for _, entry in ipairs(addon.LayoutTools.variables.knownFrames or {}) do
-		if entry.names then
-			for _, n in ipairs(entry.names) do
-				if n == fname then return entry.id end
-			end
-		end
-	end
-	return fname
-end
-
-local function findEntryById(id)
-	for _, entry in ipairs(addon.LayoutTools.variables.knownFrames or {}) do
-		if entry.id == id then return entry end
-	end
 end
 
 local function resolveFramePath(path)
@@ -75,454 +41,416 @@ local function resolveFramePath(path)
 	return obj
 end
 
--- Deferred application queue for combat-protected frames
-addon.LayoutTools.variables.pendingApply = addon.LayoutTools.variables.pendingApply or {}
+local registry = addon.LayoutTools.variables.registry or {
+	groups = {},
+	groupList = {},
+	frames = {},
+	frameList = {},
+	byName = {},
+}
+addon.LayoutTools.variables.registry = registry
 
-function addon.LayoutTools.functions.deferApply(frame)
-	if not frame then return end
-	addon.LayoutTools.variables.pendingApply[frame] = true
+local IsAddonLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
+
+local function resolveEntry(entryOrId)
+	if type(entryOrId) == "table" then return entryOrId end
+	if type(entryOrId) == "string" then return registry.frames[entryOrId] end
+	return nil
 end
 
-function addon.LayoutTools.functions.applyFrameSettings(frame)
-	if not frame then return end
-	local fname = frame:GetName() or ""
-	local id = getIdForFrameName(fname)
-	local keys = getKeys(id)
-	local framesActive = db["uiScalerFramesActive"] or {}
-	local active = framesActive[id]
-	if active == nil then active = true end
-	local globalMove = db["uiScalerGlobalMoveEnabled"]
-	local globalScale = db["uiScalerGlobalScaleEnabled"]
-	-- Apply scale
-	if globalScale and active then
-		-- migrate from any legacy per-frame key if group key empty
-		if not db[keys.scale] then
-			for _, entry in ipairs(addon.LayoutTools.variables.knownFrames or {}) do
-				if entry.id == id and entry.names then
-					for _, n in ipairs(entry.names) do
-						local alt = "uiScaler" .. n .. "Frame"
-						if db[alt] then
-							db[keys.scale] = db[alt]
-							break
-						end
-					end
-					break
-				end
-			end
-		end
-		if db[keys.scale] then
-			if InCombatLockdown() and frame:IsProtected() then
-				addon.LayoutTools.functions.deferApply(frame)
-			else
-				frame:SetScale(db[keys.scale])
-			end
-		end
-	end
-	-- Apply position when moving is enabled and we have stored point
-	local dbVar = normalizeDbVarFromId(id)
-	if globalMove and active and dbVar and not db[dbVar] then
-		-- Try migrate old per-frame position into grouped id
-		for _, entry in ipairs(addon.LayoutTools.variables.knownFrames or {}) do
-			if entry.id == id and entry.names then
-				for _, n in ipairs(entry.names) do
-					local oldVar = normalizeDbVarFromId(n)
-					if db[oldVar] then
-						db[dbVar] = db[oldVar]
-						break
-					end
-				end
-				break
-			end
-		end
-	end
-	if globalMove and active and dbVar and db[dbVar] and db[dbVar].point and db[dbVar].x and db[dbVar].y then
-		if InCombatLockdown() and frame:IsProtected() then
-			addon.LayoutTools.functions.deferApply(frame)
-		else
-			frame:ClearAllPoints()
-			frame:SetPoint(db[dbVar].point, UIParent, db[dbVar].point, db[dbVar].x, db[dbVar].y)
-		end
-	end
+local function ensureFrameDb(entry)
+	local resolved = resolveEntry(entry)
+	if not resolved then return nil end
+	local frames = db.frames
+	frames[resolved.id] = frames[resolved.id] or {}
+	local frameDb = frames[resolved.id]
+	if frameDb.enabled == nil then frameDb.enabled = resolved.defaultEnabled ~= false end
+	return frameDb
 end
 
-function addon.LayoutTools.functions.createHooks(frame, dbVar)
-	if frame then
-		if InCombatLockdown() and frame:IsProtected() then
-			addon.LayoutTools.variables.combatQueue[frame] = { dbVar = dbVar }
+local function modifierPressed()
+	if not db.requireModifier then return true end
+	local mod = db.modifier or "SHIFT"
+	return (mod == "SHIFT" and IsShiftKeyDown())
+		or (mod == "CTRL" and IsControlKeyDown())
+		or (mod == "ALT" and IsAltKeyDown())
+end
+
+function addon.LayoutTools.functions.RegisterGroup(id, label, opts)
+	if not id or id == "" then return nil end
+	local group = registry.groups[id]
+	if not group then
+		group = {
+			id = id,
+			label = label or id,
+			order = opts and opts.order or nil,
+			expanded = opts and opts.expanded or false,
+		}
+		registry.groups[id] = group
+		table.insert(registry.groupList, id)
+	else
+		if label then group.label = label end
+		if opts and opts.order ~= nil then group.order = opts.order end
+		if opts and opts.expanded ~= nil then group.expanded = opts.expanded end
+	end
+	return group
+end
+
+local function makeSettingKey(id)
+	return "layoutToolsFrame_" .. tostring(id):gsub("[^%w]", "_")
+end
+
+function addon.LayoutTools.functions.RegisterFrame(def)
+	if not def or not def.id then return nil end
+	if registry.frames[def.id] then return registry.frames[def.id] end
+
+	local names
+	if type(def.names) == "table" then
+		names = def.names
+	elseif type(def.names) == "string" then
+		names = { def.names }
+	elseif type(def.name) == "string" then
+		names = { def.name }
+	elseif type(def.frame) == "string" then
+		names = { def.frame }
+	else
+		names = { def.id }
+	end
+
+	local entry = {
+		id = def.id,
+		label = def.label or def.id,
+		group = def.group or "default",
+		groupLabel = def.groupLabel,
+		groupOrder = def.groupOrder,
+		defaultEnabled = def.defaultEnabled,
+		names = names,
+		handles = def.handles,
+		addon = def.addon,
+		useRootHandle = def.useRootHandle,
+		settingKey = def.settingKey or makeSettingKey(def.id),
+	}
+
+	registry.frames[entry.id] = entry
+	table.insert(registry.frameList, entry)
+
+	addon.LayoutTools.functions.RegisterGroup(entry.group, entry.groupLabel, {
+		order = entry.groupOrder,
+	})
+
+	for _, name in ipairs(entry.names) do
+		registry.byName[name] = entry.id
+	end
+
+	ensureFrameDb(entry)
+	addon.LayoutTools.functions.MigrateLegacyPosition(entry)
+
+	return entry
+end
+
+function addon.LayoutTools.functions.GetGroups()
+	local out = {}
+	for _, id in ipairs(registry.groupList) do
+		local group = registry.groups[id]
+		if group then table.insert(out, group) end
+	end
+	table.sort(out, function(a, b)
+		local ao = a.order or 1000
+		local bo = b.order or 1000
+		if ao ~= bo then return ao < bo end
+		return (a.label or a.id) < (b.label or b.id)
+	end)
+	return out
+end
+
+function addon.LayoutTools.functions.GetEntriesForGroup(groupId)
+	local list = {}
+	for _, entry in ipairs(registry.frameList) do
+		if entry.group == groupId then table.insert(list, entry) end
+	end
+	table.sort(list, function(a, b) return (a.label or a.id) < (b.label or b.id) end)
+	return list
+end
+
+function addon.LayoutTools.functions.GetEntryForFrameName(name)
+	local id = name and registry.byName[name] or nil
+	return id and registry.frames[id] or nil
+end
+
+function addon.LayoutTools.functions.IsFrameEnabled(entry)
+	local resolved = resolveEntry(entry)
+	if not resolved then return false end
+	local frameDb = ensureFrameDb(resolved)
+	return frameDb and frameDb.enabled ~= false
+end
+
+function addon.LayoutTools.functions.SetFrameEnabled(entry, value)
+	local resolved = resolveEntry(entry)
+	if not resolved then return end
+	local frameDb = ensureFrameDb(resolved)
+	if frameDb then frameDb.enabled = value and true or false end
+end
+
+function addon.LayoutTools.functions.MigrateLegacyPosition(entry)
+	local resolved = resolveEntry(entry)
+	if not resolved then return end
+	local frameDb = ensureFrameDb(resolved)
+	if frameDb and frameDb.point then return end
+	for _, name in ipairs(resolved.names or {}) do
+		local legacyKey = normalizeDbVarFromId(name)
+		local legacy = legacyKey and db[legacyKey] or nil
+		if legacy and legacy.point and legacy.x and legacy.y then
+			frameDb.point = legacy.point
+			frameDb.x = legacy.x
+			frameDb.y = legacy.y
 			return
 		end
+	end
+end
 
-		if frame._eqolLayoutHooks then return end -- prevent double-hooking
+addon.LayoutTools.variables.pendingApply = addon.LayoutTools.variables.pendingApply or {}
+addon.LayoutTools.variables.combatQueue = addon.LayoutTools.variables.combatQueue or {}
 
-		local fName = frame:GetName() or ""
-		local id = getIdForFrameName(fName)
-		local keys = getKeys(id)
-		local derivedDbVar = normalizeDbVarFromId(id)
-		dbVar = dbVar or derivedDbVar
-		if dbVar and db[dbVar] == nil then db[dbVar] = {} end
-		local function isActive()
-			local framesActive = db["uiScalerFramesActive"] or {}
-			local v = framesActive[id]
-			if v == nil then return true end
-			return v
+function addon.LayoutTools.functions.deferApply(frame, entry)
+	if not frame then return end
+	addon.LayoutTools.variables.pendingApply[frame] = entry or true
+end
+
+local function isEntryActive(entry)
+	if not db.enabled then return false end
+	return addon.LayoutTools.functions.IsFrameEnabled(entry)
+end
+
+function addon.LayoutTools.functions.applyFrameSettings(frame, entry)
+	if not frame then return end
+	local resolved = resolveEntry(entry) or addon.LayoutTools.functions.GetEntryForFrameName(frame:GetName() or "")
+	if not resolved then return end
+	if not isEntryActive(resolved) then return end
+	local frameDb = ensureFrameDb(resolved)
+	if not frameDb or not frameDb.point or frameDb.x == nil or frameDb.y == nil then return end
+	if InCombatLockdown() and frame:IsProtected() then
+		addon.LayoutTools.functions.deferApply(frame, resolved)
+		return
+	end
+	frame._eqol_isApplying = true
+	frame:ClearAllPoints()
+	frame:SetPoint(frameDb.point, UIParent, frameDb.point, frameDb.x, frameDb.y)
+	frame._eqol_isApplying = nil
+end
+
+function addon.LayoutTools.functions.StoreFramePosition(frame, entry)
+	local resolved = resolveEntry(entry) or addon.LayoutTools.functions.GetEntryForFrameName(frame:GetName() or "")
+	if not resolved then return end
+	local frameDb = ensureFrameDb(resolved)
+	if not frameDb then return end
+	local point, _, _, xOfs, yOfs = frame:GetPoint()
+	if not point then return end
+	frameDb.point = point
+	frameDb.x = xOfs
+	frameDb.y = yOfs
+end
+
+function addon.LayoutTools.functions.createHooks(frame, entry)
+	if not frame then return end
+	if frame.IsForbidden and frame:IsForbidden() then return end
+	if frame._eqolLayoutHooks then return end
+
+	local resolved = resolveEntry(entry) or addon.LayoutTools.functions.GetEntryForFrameName(frame:GetName() or "")
+	if not resolved then return end
+
+	if InCombatLockdown() then
+		addon.LayoutTools.variables.combatQueue[frame] = resolved
+		return
+	end
+
+	frame._eqolLayoutEntryId = resolved.id
+	frame:SetMovable(true)
+	frame:SetClampedToScreen(true)
+	if frame.EnableMouse then frame:EnableMouse(true) end
+
+	local function onStartDrag()
+		if not isEntryActive(resolved) then return end
+		if not modifierPressed() then return end
+		if InCombatLockdown() and frame:IsProtected() then return end
+		frame._eqol_isDragging = true
+		frame:StartMoving()
+	end
+
+	local function onStopDrag()
+		if not isEntryActive(resolved) then return end
+		if InCombatLockdown() and frame:IsProtected() then return end
+		frame:StopMovingOrSizing()
+		frame._eqol_isDragging = nil
+		addon.LayoutTools.functions.StoreFramePosition(frame, resolved)
+	end
+
+	local function attachHandle(anchor)
+		if not anchor then return nil end
+		local handle
+		if pcall(function() handle = CreateFrame("Frame", nil, anchor, "PanelDragBarTemplate") end) and handle then
+			handle.onDragStartCallback = function() return false end
+			handle.target = frame
+		else
+			handle = CreateFrame("Frame", nil, anchor)
 		end
-
-		-- forward declare for wheel handlers used in sub-handles
-		local handleWheel
-
-		-- shared drag start/stop for root and sub-handles
-		local function onStartDrag()
-			if not db["uiScalerGlobalMoveEnabled"] or not isActive() then return end
-			if db["uiScalerMoveRequireModifier"] then
-				local mod = db["uiScalerWheelModifier"] or "SHIFT"
-				local pressed = (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "CTRL" and IsControlKeyDown()) or (mod == "ALT" and IsAltKeyDown())
-				if not pressed then return end
-			end
-			if InCombatLockdown() and frame:IsProtected() then return end
-			frame._eqol_isDragging = true
-			frame:StartMoving()
-		end
-		local function onStopDrag()
-			if not db["uiScalerGlobalMoveEnabled"] or not isActive() then return end
-			if InCombatLockdown() and frame:IsProtected() then return end
-			frame:StopMovingOrSizing()
-			frame._eqol_isDragging = nil
-			local point, _, _, xOfs, yOfs = frame:GetPoint()
-			if dbVar then
-				db[dbVar].point = point
-				db[dbVar].x = xOfs
-				db[dbVar].y = yOfs
-			end
-		end
-
-		frame:SetMovable(true)
-
-		local function attachOverlay(anchor)
-			if not anchor then return nil end
-			local handle
-			if pcall(function() handle = CreateFrame("Frame", nil, anchor, "PanelDragBarTemplate") end) and handle then
-				handle.onDragStartCallback = function() return false end
-				handle.target = frame
-			else
-				handle = CreateFrame("Frame", nil, anchor)
-			end
-			handle:SetAllPoints(anchor)
-			handle:SetFrameLevel(anchor:GetFrameLevel() + 1)
+		handle:SetAllPoints(anchor)
+		handle:SetFrameLevel(anchor:GetFrameLevel() + 1)
+		if not InCombatLockdown() then
 			if handle.SetPropagateMouseMotion then handle:SetPropagateMouseMotion(true) end
 			if handle.SetPropagateMouseClicks then handle:SetPropagateMouseClicks(true) end
-			if handle.EnableMouse then handle:EnableMouse(true) end
-			if handle.RegisterForDrag then handle:RegisterForDrag("LeftButton") end
-			handle:HookScript("OnDragStart", function() onStartDrag() end)
-			handle:HookScript("OnDragStop", function() onStopDrag() end)
-			handle:HookScript("OnMouseDown", function(_, btn)
-				if btn == "LeftButton" then onStartDrag() end
-			end)
-			handle:HookScript("OnMouseUp", function(_, btn)
-				if btn == "LeftButton" then onStopDrag() end
-			end)
-			if handle.EnableMouseWheel then handle:EnableMouseWheel(true) end
-			handle:HookScript("OnMouseWheel", function(_, delta)
-				if handleWheel then handleWheel(handle, delta) end
-			end)
-			handle:HookScript("OnMouseUp", function(_, btn)
-				if btn ~= "RightButton" then return end
-				if not db["uiScalerGlobalScaleEnabled"] or not isActive() then return end
-				local mod = db["uiScalerWheelModifier"] or "SHIFT"
-				local pressed = (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "CTRL" and IsControlKeyDown()) or (mod == "ALT" and IsAltKeyDown())
-				if not pressed then return end
-				db[keys.scale] = 1
-				if InCombatLockdown() and frame:IsProtected() then
-					addon.LayoutTools.functions.deferApply(frame)
-				else
-					frame:SetScale(1)
-				end
-			end)
-			return handle
+		end
+		if handle.EnableMouse then handle:EnableMouse(true) end
+		if handle.RegisterForDrag then handle:RegisterForDrag("LeftButton") end
+		handle:HookScript("OnDragStart", onStartDrag)
+		handle:HookScript("OnDragStop", onStopDrag)
+		handle:HookScript("OnMouseDown", function(_, btn)
+			if btn == "LeftButton" then onStartDrag() end
+		end)
+		handle:HookScript("OnMouseUp", function(_, btn)
+			if btn == "LeftButton" then onStopDrag() end
+		end)
+		return handle
+	end
+
+	if resolved.useRootHandle ~= false then
+		frame._eqolMoveHandle = attachHandle(frame)
+	end
+
+	local createdSubs = frame._eqolMoveSubHandles or {}
+	if resolved.handles then
+		local function attachHandleToPath(path)
+			local anchor = resolveFramePath(path)
+			if not anchor or createdSubs[anchor] then return end
+			if anchor.IsForbidden and anchor:IsForbidden() then return end
+			createdSubs[anchor] = attachHandle(anchor)
 		end
 
-		if not frame._eqolMoveHandle then frame._eqolMoveHandle = attachOverlay(frame) end
-
-		-- Add additional move handles for important subframes (e.g. Talents buttons parent)
-		local entry = findEntryById(id)
-		local createdSubs = frame._eqolMoveSubHandles or {}
-		if entry and entry.handles then
-			local function attachHandleToAnchor(anchor)
-				if not anchor or createdSubs[anchor] then return end
-				if anchor.IsForbidden and anchor:IsForbidden() then return end
-				createdSubs[anchor] = attachOverlay(anchor)
-			end
-			for _, path in ipairs(entry.handles) do
-				local a = resolveFramePath(path)
-				if a then attachHandleToAnchor(a) end
-			end
-			-- also retry on show to catch late-created subframes
-			frame:HookScript("OnShow", function()
-				for _, path in ipairs(entry.handles) do
-					local a = resolveFramePath(path)
-					if a then attachHandleToAnchor(a) end
-				end
-			end)
+		for _, path in ipairs(resolved.handles) do
+			attachHandleToPath(path)
 		end
-		frame._eqolMoveSubHandles = createdSubs
 
-		-- Track for global wheel capture
-		addon.LayoutTools.variables.managedFrames[frame] = true
-		frame:HookScript("OnEnter", function(self) addon.LayoutTools.variables.mouseoverFrames[self] = true end)
-		frame:HookScript("OnLeave", function(self) addon.LayoutTools.variables.mouseoverFrames[self] = nil end)
-
-		-- Re-apply saved position when points change (only if Move enabled)
-		hooksecurefunc(frame, "SetPoint", function(self)
-			if not db["uiScalerGlobalMoveEnabled"] or not isActive() then return end
-			if self._eqol_isDragging then return end
-			if self.isRunningPoint then return end
-			if dbVar and db[dbVar] and db[dbVar].point and db[dbVar].x and db[dbVar].y then
-				if InCombatLockdown() and self:IsProtected() then
-					addon.LayoutTools.functions.deferApply(self)
-					return
-				end
-				self.isRunningPoint = true
-				self:ClearAllPoints()
-				self:SetPoint(db[dbVar].point, UIParent, db[dbVar].point, db[dbVar].x, db[dbVar].y)
-				self.isRunningPoint = nil
+		frame:HookScript("OnShow", function()
+			for _, path in ipairs(resolved.handles) do
+				attachHandleToPath(path)
 			end
 		end)
-
-		-- Enforce saved scale when SetScale is called (only if scaling is enabled)
-		hooksecurefunc(frame, "SetScale", function(self)
-			if not db["uiScalerGlobalScaleEnabled"] or not isActive() then return end
-			if self.isRunningScale then return end
-			local val = db[keys.scale]
-			if val then
-				if InCombatLockdown() and self:IsProtected() then
-					addon.LayoutTools.functions.deferApply(self)
-					return
-				end
-				self.isRunningScale = true
-				self:SetScale(val)
-				self.isRunningScale = nil
-			end
-		end)
-
-		-- Apply on show (with combat deferral for protected frames)
-		frame:HookScript("OnShow", function(self) addon.LayoutTools.functions.applyFrameSettings(self) end)
-
-		-- Wheel-based scaling with modifier on frame and all descendants
-		handleWheel = function(targetFrame, delta)
-			if not db["uiScalerGlobalScaleEnabled"] or not isActive() then return end
-			local mod = db["uiScalerWheelModifier"] or "SHIFT"
-			local pressed = (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "CTRL" and IsControlKeyDown()) or (mod == "ALT" and IsAltKeyDown())
-			if not pressed then return end
-			local cur = db[keys.scale] or 1
-			local step = 0.05
-			local minV, maxV = 0.3, 1.0
-			local newV = cur + (delta > 0 and step or -step)
-			if newV < minV then newV = minV end
-			if newV > maxV then newV = maxV end
-			db[keys.scale] = newV
-			local tgt = frame -- always scale the root frame
-			if InCombatLockdown() and tgt:IsProtected() then
-				addon.LayoutTools.functions.deferApply(tgt)
-			else
-				tgt:SetScale(newV)
-			end
-		end
-
-		local function hookWheelRecursive(parent)
-			if not parent or parent._eqolWheelHook then return end
-			if parent.EnableMouseWheel then parent:EnableMouseWheel(true) end
-			parent:HookScript("OnMouseWheel", function(_, delta) handleWheel(parent, delta) end)
-			parent._eqolWheelHook = true
-			-- Traverse children safely
-			local num = parent.GetChildren and select("#", parent:GetChildren()) or 0
-			if num and num > 0 then
-				for i = 1, num do
-					local child = select(i, parent:GetChildren())
-					if child and not (child.IsForbidden and child:IsForbidden()) then hookWheelRecursive(child) end
-				end
-			end
-		end
-
-		-- initial hook for frame + children (wheel only)
-		hookWheelRecursive(frame)
-		-- root-level right-click reset with modifier (do not hook on children to avoid stealing mouse)
-		frame:HookScript("OnMouseUp", function(_, button)
-			if button ~= "RightButton" then return end
-			if not db["uiScalerGlobalScaleEnabled"] or not isActive() then return end
-			local mod = db["uiScalerWheelModifier"] or "SHIFT"
-			local pressed = (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "CTRL" and IsControlKeyDown()) or (mod == "ALT" and IsAltKeyDown())
-			if not pressed then return end
-			db[keys.scale] = 1
-			local tgt = frame
-			if InCombatLockdown() and tgt:IsProtected() then
-				addon.LayoutTools.functions.deferApply(tgt)
-			else
-				tgt:SetScale(1)
-			end
-		end)
-		-- re-hook possibly new children when frame shows
-		frame:HookScript("OnShow", function(self) hookWheelRecursive(self) end)
-
-		frame._eqolLayoutHooks = true
-		addon.LayoutTools.variables.combatQueue[frame] = nil
 	end
-end
+	frame._eqolMoveSubHandles = createdSubs
 
--- Prepare list of supported frames (can be extended later)
--- Use names; actual frames may load later and will be hooked on demand
-local function isSupported(data) return true end
-
-local function collectHandlesRecursive(name, data, set)
-	if not name then return end
-	if data and not isSupported(data) then return end
-	local skip = data and (data.NonDraggable or data.IgnoreMouse)
-	if not skip or not data then set[name] = true end
-	if data and data.SubFrames then
-		for subName, subData in pairs(data.SubFrames) do
-			collectHandlesRecursive(subName, subData, set)
-		end
-	end
-end
-
-local function buildKnownFrames()
-	local frames = addon.LayoutTools.variables.frameDefinitions or {}
-	local addonFrames = addon.LayoutTools.variables.addonFrameDefinitions or {}
-	local known = {}
-	local seen = {}
-
-	local function addEntry(addOnName, frameName, frameData)
-		if frameData and (frameData.NonDraggable or not isSupported(frameData)) then return end
-		local id = addOnName and (addOnName .. "::" .. frameName) or frameName
-		if seen[id] then return end
-		seen[id] = true
-
-		local handlesSet = {}
-		collectHandlesRecursive(frameName, frameData, handlesSet)
-		local handles = {}
-		for name in pairs(handlesSet) do
-			table.insert(handles, name)
-		end
-		table.sort(handles)
-
-		local entry = {
-			id = id,
-			label = frameName,
-			names = { frameName },
-			handles = handles,
-			addon = addOnName,
-		}
-		table.insert(known, entry)
-	end
-
-	for frameName, frameData in pairs(frames) do
-		addEntry(nil, frameName, frameData)
-	end
-	for addOn, frameTable in pairs(addonFrames) do
-		for frameName, frameData in pairs(frameTable) do
-			addEntry(addOn, frameName, frameData)
-		end
-	end
-
-	table.sort(known, function(a, b) return a.label < b.label end)
-	if #known == 0 then
-		addon.LayoutTools.variables.knownFrames = {
-			{ id = "CharacterFrame", label = CHARACTER_BUTTON, names = { "CharacterFrame" }, handles = { "CharacterFrame", "CharacterFrame.TitleContainer" } },
-			{
-				id = "Blizzard_PlayerSpells::PlayerSpellsFrame",
-				label = PLAYERSPELLS_BUTTON or "PlayerSpellsFrame",
-				names = { "PlayerSpellsFrame" },
-				handles = { "PlayerSpellsFrame" },
-				addon = "Blizzard_PlayerSpells",
-			},
-		}
-	else
-		addon.LayoutTools.variables.knownFrames = known
-	end
-	addon.LayoutTools.variables.knownFramesCount = #addon.LayoutTools.variables.knownFrames
-end
-
-buildKnownFrames()
-
--- Wheel capture overlay (inspired by BlizzMove)
-local captureFrame
-local function modifierPressed()
-	local mod = db["uiScalerWheelModifier"] or "SHIFT"
-	return (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "CTRL" and IsControlKeyDown()) or (mod == "ALT" and IsAltKeyDown())
-end
-
-local function getMouseFoci()
-	if GetMouseFoci then return GetMouseFoci() end
-	return { GetMouseFocus() }
-end
-
-local function isManagedOrAncestor(f)
-	while f do
-		if addon.LayoutTools.variables.managedFrames[f] then return true end
-		f = f.GetParent and f:GetParent() or nil
-	end
-	return false
-end
-
-local function ensureCapture()
-	if captureFrame then return end
-	captureFrame = CreateFrame("Frame")
-	captureFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
-	captureFrame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
-	captureFrame:SetFrameStrata("TOOLTIP")
-	captureFrame:SetFrameLevel(9999)
-	captureFrame:EnableMouseWheel(false)
-	captureFrame:Show()
-	captureFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
-	captureFrame:SetScript("OnEvent", function() captureFrame:EnableMouseWheel(false) end)
-	captureFrame:SetScript("OnUpdate", function()
-		if not db["uiScalerGlobalScaleEnabled"] or not modifierPressed() then
-			captureFrame:EnableMouseWheel(false)
+	hooksecurefunc(frame, "SetPoint", function(self)
+		if not isEntryActive(resolved) then return end
+		if self._eqol_isDragging or self._eqol_isApplying then return end
+		local frameDb = ensureFrameDb(resolved)
+		if not frameDb or not frameDb.point then return end
+		if InCombatLockdown() and self:IsProtected() then
+			addon.LayoutTools.functions.deferApply(self, resolved)
 			return
 		end
-		local anyManagedUnderMouse = false
-		for _, f in ipairs(getMouseFoci() or {}) do
-			if isManagedOrAncestor(f) then
-				anyManagedUnderMouse = true
-				break
-			end
-			if f and (f:IsForbidden() or (f:IsMouseWheelEnabled() or f:IsMouseClickEnabled())) and not isManagedOrAncestor(f) then
-				captureFrame:EnableMouseWheel(false)
-				return
-			end
-		end
-		captureFrame:EnableMouseWheel(anyManagedUnderMouse)
+		self._eqol_isApplying = true
+		self:ClearAllPoints()
+		self:SetPoint(frameDb.point, UIParent, frameDb.point, frameDb.x, frameDb.y)
+		self._eqol_isApplying = nil
 	end)
-	captureFrame:SetScript("OnMouseWheel", function(_, delta)
-		for _, f in ipairs(getMouseFoci() or {}) do
-			if isManagedOrAncestor(f) then
-				-- find managed ancestor/root
-				local anc = f
-				while anc and not addon.LayoutTools.variables.managedFrames[anc] do
-					anc = anc:GetParent()
-				end
-				local root = anc or f
-				local fname = root:GetName() or ""
-				local id = getIdForFrameName(fname)
-				local keys = getKeys(id)
-				local framesActive = db["uiScalerFramesActive"] or {}
-				local active = framesActive[id]
-				if active == nil then active = true end
-				if not active then return end
-				local cur = db[keys.scale] or 1
-				local step = 0.05
-				local minV, maxV = 0.3, 1.0
-				local newV = cur + (delta > 0 and step or -step)
-				if newV < minV then newV = minV end
-				if newV > maxV then newV = maxV end
-				db[keys.scale] = newV
-				if InCombatLockdown() and root:IsProtected() then
-					addon.LayoutTools.functions.deferApply(root)
-				else
-					root:SetScale(newV)
-				end
-				return
-			end
+
+	frame:HookScript("OnShow", function(self) addon.LayoutTools.functions.applyFrameSettings(self, resolved) end)
+
+	frame._eqolLayoutHooks = true
+	addon.LayoutTools.variables.combatQueue[frame] = nil
+
+	local function setHandleEnabled(handle, enabled)
+		if not handle then return end
+		if handle.EnableMouse then handle:EnableMouse(enabled) end
+		if handle.SetShown then handle:SetShown(enabled) end
+	end
+
+	local function updateHandleState()
+		local enabled = isEntryActive(resolved)
+		setHandleEnabled(frame._eqolMoveHandle, enabled)
+		for _, handle in pairs(frame._eqolMoveSubHandles or {}) do
+			setHandleEnabled(handle, enabled)
 		end
-	end)
+	end
+
+	frame._eqolUpdateHandleState = updateHandleState
+	updateHandleState()
 end
 
-function addon.LayoutTools.functions.ensureWheelCaptureOverlay() ensureCapture() end
+function addon.LayoutTools.functions.TryHookEntry(entry)
+	local resolved = resolveEntry(entry)
+	if not resolved then return end
+	if resolved.addon and IsAddonLoaded and not IsAddonLoaded(resolved.addon) then return end
+	for _, name in ipairs(resolved.names or {}) do
+		local frame = resolveFramePath(name)
+		if frame then
+			addon.LayoutTools.functions.createHooks(frame, resolved)
+			addon.LayoutTools.functions.applyFrameSettings(frame, resolved)
+		end
+	end
+end
+
+function addon.LayoutTools.functions.TryHookAll()
+	for _, entry in ipairs(registry.frameList) do
+		addon.LayoutTools.functions.TryHookEntry(entry)
+	end
+end
+
+function addon.LayoutTools.functions.UpdateHandleState(entry)
+	local resolved = resolveEntry(entry)
+	if not resolved then return end
+	for _, name in ipairs(resolved.names or {}) do
+		local frame = resolveFramePath(name)
+		if frame and frame._eqolUpdateHandleState then frame._eqolUpdateHandleState() end
+	end
+end
+
+function addon.LayoutTools.functions.RefreshEntry(entry)
+	addon.LayoutTools.functions.TryHookEntry(entry)
+	addon.LayoutTools.functions.UpdateHandleState(entry)
+end
+
+function addon.LayoutTools.functions.ApplyAll()
+	for _, entry in ipairs(registry.frameList) do
+		addon.LayoutTools.functions.RefreshEntry(entry)
+	end
+end
+
+local eventHandlers = {
+	["ADDON_LOADED"] = function(arg1)
+		if arg1 == addonName then
+			addon.LayoutTools.functions.TryHookAll()
+		end
+		for _, entry in ipairs(registry.frameList) do
+			if entry.addon and arg1 == entry.addon then
+				addon.LayoutTools.functions.TryHookEntry(entry)
+			end
+		end
+	end,
+	["PLAYER_REGEN_ENABLED"] = function()
+		local combatQueue = addon.LayoutTools.variables.combatQueue or {}
+		for frame, entry in pairs(combatQueue) do
+			combatQueue[frame] = nil
+			if frame then addon.LayoutTools.functions.createHooks(frame, entry) end
+		end
+
+		local pending = addon.LayoutTools.variables.pendingApply or {}
+		for frame, entry in pairs(pending) do
+			pending[frame] = nil
+			if frame then addon.LayoutTools.functions.applyFrameSettings(frame, entry) end
+		end
+	end,
+}
+
+local function registerEvents(frame)
+	for event in pairs(eventHandlers) do
+		frame:RegisterEvent(event)
+	end
+end
+
+local function eventHandler(self, event, ...)
+	if eventHandlers[event] then eventHandlers[event](...) end
+end
+
+local frameLoad = CreateFrame("Frame")
+
+registerEvents(frameLoad)
+frameLoad:SetScript("OnEvent", eventHandler)

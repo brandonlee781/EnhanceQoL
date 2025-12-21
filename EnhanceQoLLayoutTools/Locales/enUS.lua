@@ -1,13 +1,16 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_LayoutTools", "enUS", true)
 
--- Tree entry
+-- Category
 L["Move"] = "Layout Tools"
+L["Layout Tools"] = "Layout Tools"
+L["Blizzard"] = "Blizzard"
 
 -- Global section
 L["Global Settings"] = "Global Settings"
-L["Global Move Enabled"] = "Enable Moving (all)"
-L["Global Scale Enabled"] = "Enable Scaling (all)"
+L["Global Move Enabled"] = "Enable moving"
+L["Global Scale Enabled"] = "Enable scaling (all)"
 L["Require Modifier For Move"] = "Require modifier to move"
+L["Move Modifier"] = "Move modifier"
 
 -- Wheel scaling
 L["Wheel Scaling"] = "Wheel Scaling"

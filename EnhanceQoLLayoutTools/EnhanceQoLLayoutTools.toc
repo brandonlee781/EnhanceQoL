@@ -2,7 +2,7 @@
 ## Title: Layout Tools
 ## Author: R41Z0R
 ## Version: @project-version@
-## Notes: Move and scale Blizzard frames
+## Notes: Move Blizzard frames
 ## Notes-deDE: Verschiebt und skaliert Blizzard-Fenster
 ## Notes-esES: Mueve y escala marcos de Blizzard
 ## Notes-esMX: Mueve y escala marcos de Blizzard
@@ -24,4 +24,4 @@ Init.lua
 locales\[TextLocale].lua
 
 EnhanceQoLLayoutTools.lua
-EditModeExamples.lua
+#EditModeExamples.lua
