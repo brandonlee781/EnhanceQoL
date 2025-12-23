@@ -4,7 +4,7 @@
 
 ### ✨ Added
 
-- Mover: position persistence mode (close / lockout / reset).
+- Mover: position persistence mode (close / logout / reset).
 - Mover: reset scale and position to defaults with scale modifier + right-click on a handle.
 - UF Plus: per-frame "Show when" visibility rules for custom unit frames in Edit Mode.
 - UF Plus: per-main-power color overrides for power bars (with optional desaturation).
