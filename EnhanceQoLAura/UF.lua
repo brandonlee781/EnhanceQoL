@@ -215,7 +215,7 @@ local defaults = {
 		strata = nil,
 		frameLevel = nil,
 		barGap = 0,
-		border = { enabled = true, color = { 0, 0, 0, 0.8 }, edgeSize = 1, inset = 0 },
+		border = { enabled = true, texture = "DEFAULT", color = { 0, 0, 0, 0.8 }, edgeSize = 1, inset = 0 },
 		health = {
 			useCustomColor = false,
 			useClassColor = false,
@@ -1399,6 +1399,15 @@ do
 	defaults.boss = bossDefaults
 end
 
+local function resolveBorderTexture(key)
+	if not key or key == "" or key == "DEFAULT" then return "Interface\\Buttons\\WHITE8x8" end
+	if LSM then
+		local tex = LSM:Fetch("border", key)
+		if tex and tex ~= "" then return tex end
+	end
+	return key
+end
+
 local function setBackdrop(frame, borderCfg)
 	if not frame then return end
 	if borderCfg and borderCfg.enabled then
@@ -1407,7 +1416,7 @@ local function setBackdrop(frame, borderCfg)
 		if insetVal == nil then insetVal = borderCfg.edgeSize or 1 end
 		frame:SetBackdrop({
 			bgFile = "Interface\\Buttons\\WHITE8x8",
-			edgeFile = "Interface\\Buttons\\WHITE8x8",
+			edgeFile = resolveBorderTexture(borderCfg.texture),
 			edgeSize = borderCfg.edgeSize or 1,
 			insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
 		})

@@ -351,6 +351,25 @@ local function textureOptions()
 	return list
 end
 
+local function borderOptions()
+	local list = {}
+	local seen = {}
+	local function add(value, label)
+		local lv = tostring(value or ""):lower()
+		if lv == "" or seen[lv] then return end
+		seen[lv] = true
+		list[#list + 1] = { value = value, label = label }
+	end
+	add("DEFAULT", L["Default"] or "Default")
+	if not LSM then return list end
+	local hash = LSM:HashTable("border") or {}
+	for name, path in pairs(hash) do
+		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
+	end
+	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	return list
+end
+
 local function radioDropdown(name, options, getter, setter, default, parentId)
 	return {
 		name = name,
@@ -626,6 +645,18 @@ local function buildUnitSettings(unit)
 			a = (def.border and def.border.color and def.border.color[4]) or 0.8,
 		},
 	})
+
+	local borderTexture = checkboxDropdown(L["Border texture"] or "Border texture", borderOptions, function()
+		local border = getValue(unit, { "border" }, def.border or {})
+		return border.texture or (def.border and def.border.texture) or "DEFAULT"
+	end, function(val)
+		local border = getValue(unit, { "border" }, def.border or {})
+		border.texture = val or "DEFAULT"
+		setValue(unit, { "border" }, border)
+		refresh()
+	end, (def.border and def.border.texture) or "DEFAULT", "frame")
+	borderTexture.isEnabled = function() return getValue(unit, { "border", "enabled" }, (def.border and def.border.enabled) ~= false) ~= false end
+	list[#list + 1] = borderTexture
 
 	list[#list + 1] = slider(L["UFBorderSize"] or "Border size", 1, 8, 1, function()
 		local border = getValue(unit, { "border" }, def.border or {})
