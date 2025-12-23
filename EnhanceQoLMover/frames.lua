@@ -543,13 +543,6 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
-		id = "GossipFrame",
-		label = L["Gossip"] or "Gossip",
-		group = "world",
-		names = { "GossipFrame" },
-		defaultEnabled = true,
-	},
-	{
 		id = "ClassTrainerFrame",
 		label = MINIMAP_TRACKING_TRAINER_CLASS,
 		group = "world",
@@ -600,7 +593,7 @@ local frames = {
 		id = "QuestFrame",
 		label = L["Quest"] or "Quest",
 		group = "world",
-		names = { "QuestFrame" },
+		names = { "QuestFrame", "GossipFrame" },
 		defaultEnabled = true,
 	},
 	{

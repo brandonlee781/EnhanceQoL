@@ -12,6 +12,7 @@
 
 - Moved the "Hide Minimap Button" setting to Map Navigation.
 - UF/Resource Bars: texture/font/outline dropdowns now stay open on click so you can browse SharedMedia options faster.
+- Mover: Merged Quest and Gossip Frame
 
 ### 🐛 Fixed
 
