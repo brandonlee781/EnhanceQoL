@@ -20,6 +20,8 @@
 ### 🐛 Fixed
 
 - Resource Bars: anchor changes made via dropdowns/sliders now sync to Edit Mode layouts so positions persist after reload.
+- UF Plus defaults were not used as fallback
+- UF Plus not interruptible casts had wrong saturation setting
 
 ---
 
