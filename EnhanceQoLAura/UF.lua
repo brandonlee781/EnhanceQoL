@@ -2334,6 +2334,8 @@ local function ensureFrames(unit)
 	local parent = UIParent
 	if isBossUnit(unit) then parent = ensureBossContainer() or UIParent end
 	st.frame = _G[info.frameName] or CreateFrame("Button", info.frameName, parent, "BackdropTemplate,SecureUnitButtonTemplate")
+	_G.ClickCastFrames = _G.ClickCastFrames or {}
+	_G.ClickCastFrames[st.frame] = true
 	if st.frame.SetParent then st.frame:SetParent(parent) end
 	st.frame:SetAttribute("unit", info.unit)
 	st.frame:SetAttribute("type1", "target")

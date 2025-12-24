@@ -10,6 +10,7 @@
 - UF Plus: per-main-power color overrides for power bars (with optional desaturation).
 - UF Plus: portrait options for unit frames (size/side/offset).
 - Data Panels: difficulty stream now opens a difficulty selection menu on click.
+- UF Plus now supports Click Casting Addons (like clique)
 
 ### 🔄 Changed
 
