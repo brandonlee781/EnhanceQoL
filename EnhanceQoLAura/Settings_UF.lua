@@ -204,6 +204,8 @@ local function ensureConfig(unit)
 end
 
 addon.variables = addon.variables or {}
+addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+local sampleAbsorb = addon.variables.ufSampleAbsorb
 
 local function getValue(unit, path, fallback)
 	local cfg = ensureConfig(unit)
@@ -1147,7 +1149,12 @@ local function buildUnitSettings(unit)
 			"absorb"
 		)
 
-		list[#list + 1] = checkboxDropdown(
+		list[#list + 1] = checkbox(L["Show sample absorb"] or "Show sample absorb", function() return sampleAbsorb[unit] == true end, function(val)
+			sampleAbsorb[unit] = val and true or false
+			refresh()
+		end, false, "absorb")
+
+		local absorbTextureSetting = checkboxDropdown(
 			L["Absorb texture"] or "Absorb texture",
 			textureOpts,
 			function() return getValue(unit, { "health", "absorbTexture" }, healthDef.absorbTexture or healthDef.texture or "SOLID") end,
@@ -1158,6 +1165,7 @@ local function buildUnitSettings(unit)
 			healthDef.absorbTexture or healthDef.texture or "SOLID",
 			"absorb"
 		)
+		list[#list + 1] = absorbTextureSetting
 	end
 
 	list[#list + 1] = { name = L["PowerBar"] or "Power Bar", kind = settingType.Collapsible, id = "power", defaultCollapsed = true }

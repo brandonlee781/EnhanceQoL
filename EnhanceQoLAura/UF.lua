@@ -12,6 +12,7 @@ local UF = {}
 addon.Aura.UF = UF
 UF.ui = UF.ui or {}
 addon.variables = addon.variables or {}
+addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
 local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 
@@ -218,6 +219,7 @@ local defaults = {
 			useClassColor = false,
 			color = { 0.0, 0.8, 0.0, 1 },
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
+			absorbEnabled = true,
 			absorbUseCustomColor = false,
 			showSampleAbsorb = false,
 			absorbTexture = "SOLID",
@@ -1848,7 +1850,7 @@ local function getAbsorbColor(hc, unit)
 	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
 end
 
-local function shouldShowSampleAbsorb(unit) return addon.EditModeLib and addon.EditModeLib:IsInEditMode() end
+local function shouldShowSampleAbsorb(unit) return addon.variables.ufSampleAbsorb and addon.variables.ufSampleAbsorb[unit] == true end
 
 local function stopCast(unit)
 	local st = states[unit]
@@ -2999,7 +3001,16 @@ local function applyBars(cfg, unit)
 		if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
 		configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
 		st.absorb:SetAllPoints(st.health)
-		st.absorb:SetFrameLevel(st.health:GetFrameLevel() + 1)
+		local healthLevel = st.health:GetFrameLevel() or 0
+		local borderFrame = st.barGroup and st.barGroup._ufBorder
+		local borderLevel = borderFrame and borderFrame.GetFrameLevel and borderFrame:GetFrameLevel() or nil
+		if borderLevel then
+			local targetLevel = borderLevel - 1
+			if targetLevel < healthLevel then targetLevel = healthLevel end
+			st.absorb:SetFrameLevel(targetLevel)
+		else
+			st.absorb:SetFrameLevel(healthLevel + 1)
+		end
 		st.absorb:SetMinMaxValues(0, 1)
 		st.absorb:SetValue(0)
 		if st.overAbsorbGlow then

@@ -34,7 +34,7 @@
 ### 🔄 Changed
 
 - UF Plus: Resting indicator settings merged into the Unit status section.
-- UF Plus: Sample cast/absorb previews now auto-show in Edit Mode.
+- UF Plus: Sample cast previews now auto-show in Edit Mode.
 - Moved the "Hide Minimap Button" setting to Map Navigation.
 - UF/Resource Bars: texture/font/outline dropdowns now stay open on click so you can browse SharedMedia options faster.
 - Mover: Merged Quest and Gossip Frame
