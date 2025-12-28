@@ -4,6 +4,9 @@
 
 ### ✨ Added
 
+- Social: Community chat privacy toggle with modes (Always / Session) plus quick eye reveal and overlay hint.
+- UF Plus: new text modes (Max, Max/Percent) and optional percent symbol hiding.
+- UF Plus: target aura anchor supports LEFT/RIGHT and growth direction combinations.
 - Mover: position persistence mode (close / logout / reset).
 - Mover: reset scale and position to defaults with scale modifier + right-click on a handle.
 - UF Plus: per-frame "Show when" visibility rules for custom unit frames in Edit Mode.
@@ -25,9 +28,12 @@
 - UF Plus now supports Click Casting Addons (like clique)
 - Chat: optional item level (and equip slot) appended to item links.
 - Black border for square minimap in housing
+- Upgrade arrow outline for better visibility on bright icons
 
 ### 🔄 Changed
 
+- UF Plus: Resting indicator settings merged into the Unit status section.
+- UF Plus: Sample cast/absorb previews now auto-show in Edit Mode.
 - Moved the "Hide Minimap Button" setting to Map Navigation.
 - UF/Resource Bars: texture/font/outline dropdowns now stay open on click so you can browse SharedMedia options faster.
 - Mover: Merged Quest and Gossip Frame
@@ -36,6 +42,8 @@
 - Data Panels: Durability stream tooltip expanded with per-item details and repair info.
 - Chat: item/currency icon option now applies to all item links.
 - Option to add "DELETE" into the _delete item dialog_ now also removed focus of the editbox for use with addons like dialogKey
+- Upgrade arrow color in inventory changed to green
+- Upgrade arrow size increased
 
 ### 🐛 Fixed
 
@@ -68,6 +76,7 @@
 
 ### ❌ Removed
 
+- UF Plus: removed "Show sample cast" and "Show sample absorb" toggles (auto in Edit Mode).
 - Removed the option to show party frames in solo content
 - Removed the cloak upgrade button feature
 

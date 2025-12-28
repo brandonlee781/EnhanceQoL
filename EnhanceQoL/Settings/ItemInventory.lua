@@ -685,6 +685,7 @@ local function updateFlyoutButtonInfo(button)
 		-- Reset stale overlays on recycled flyout buttons
 		if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
 		if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
+		if button.ItemUpgradeIconGlow then button.ItemUpgradeIconGlow:Hide() end
 		local location = button.location
 		if not location then return end
 
@@ -793,25 +794,15 @@ local function updateFlyoutButtonInfo(button)
 						end
 						local isUpgrade = baseline ~= nil and itemLevel and itemLevel > baseline
 						if isUpgrade then
-							if not button.ItemUpgradeIcon then
-								button.ItemUpgradeIcon = button:CreateTexture(nil, "OVERLAY")
-								button.ItemUpgradeIcon:SetSize(14, 14)
-							end
-							button.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-							button.ItemUpgradeIcon:ClearAllPoints()
+							addon.functions.EnsureBagUpgradeIcon(button)
 							local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
-							if posUp == "TOPRIGHT" then
-								button.ItemUpgradeIcon:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
-							elseif posUp == "TOPLEFT" then
-								button.ItemUpgradeIcon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-							elseif posUp == "BOTTOMLEFT" then
-								button.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-							else
-								button.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
-							end
+							addon.functions.ApplyBagUpgradeIconPosition(button.ItemUpgradeIcon, button, posUp)
+							addon.functions.AlignUpgradeIconGlow(button.ItemUpgradeIconGlow, button.ItemUpgradeIcon)
+							button.ItemUpgradeIconGlow:Show()
 							button.ItemUpgradeIcon:Show()
 						elseif button.ItemUpgradeIcon then
 							button.ItemUpgradeIcon:Hide()
+							if button.ItemUpgradeIconGlow then button.ItemUpgradeIconGlow:Hide() end
 						end
 					end
 
@@ -853,12 +844,14 @@ local function updateFlyoutButtonInfo(button)
 			if button.ItemBoundType then button.ItemBoundType:Hide() end
 			if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
 			if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
+			if button.ItemUpgradeIconGlow then button.ItemUpgradeIconGlow:Hide() end
 			button.ItemLevelText:Hide()
 		end
 	elseif button.ItemLevelText then
 		if button.ItemBoundType then button.ItemBoundType:Hide() end
 		if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
 		if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
+		if button.ItemUpgradeIconGlow then button.ItemUpgradeIconGlow:Hide() end
 		button.ItemLevelText:Hide()
 	end
 end
@@ -1073,6 +1066,7 @@ local function applyMerchantButtonInfo()
 			if itemButton then
 				setMerchantKnownIcon(itemButton, false)
 				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+				if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 				if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
 				if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
 				if itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
@@ -1092,6 +1086,7 @@ local function applyMerchantButtonInfo()
 				setMerchantKnownIcon(itemButton, false)
 				if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
 				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+				if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 				if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
 				if itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
 			else
@@ -1120,7 +1115,7 @@ local function applyMerchantButtonInfo()
 				-- Clear any stale overlays from recycled buttons
 				if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
 				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
-				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+				if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 				if showIlvl and itemLink and itemLink:find("item:") then
 					local eItem = Item:CreateFromItemLink(itemLink)
 					eItem:ContinueOnItemLoad(function()
@@ -1206,25 +1201,15 @@ local function applyMerchantButtonInfo()
 								end
 								local isUpgrade = baseline ~= nil and candidateIlvl and candidateIlvl > baseline
 								if isUpgrade then
-									if not itemButton.ItemUpgradeIcon then
-										itemButton.ItemUpgradeIcon = itemButton:CreateTexture(nil, "OVERLAY")
-										itemButton.ItemUpgradeIcon:SetSize(14, 14)
-									end
-									itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-									itemButton.ItemUpgradeIcon:ClearAllPoints()
+									addon.functions.EnsureBagUpgradeIcon(itemButton)
 									local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
-									if posUp == "TOPRIGHT" then
-										itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-									elseif posUp == "TOPLEFT" then
-										itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-									elseif posUp == "BOTTOMLEFT" then
-										itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-									else
-										itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-									end
+									addon.functions.ApplyBagUpgradeIconPosition(itemButton.ItemUpgradeIcon, itemButton, posUp)
+									addon.functions.AlignUpgradeIconGlow(itemButton.ItemUpgradeIconGlow, itemButton.ItemUpgradeIcon)
+									itemButton.ItemUpgradeIconGlow:Show()
 									itemButton.ItemUpgradeIcon:Show()
 								elseif itemButton.ItemUpgradeIcon then
 									itemButton.ItemUpgradeIcon:Hide()
+									if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 								end
 							end
 
@@ -1507,9 +1492,7 @@ function addon.functions.initItemInventory()
 		end
 	end
 
-	PaperDollFrame:HookScript("OnShow", function(self)
-		addon.functions.setCharFrame()
-	end)
+	PaperDollFrame:HookScript("OnShow", function(self) addon.functions.setCharFrame() end)
 end
 
 ---- END REGION

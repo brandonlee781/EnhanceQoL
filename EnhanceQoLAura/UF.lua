@@ -12,10 +12,6 @@ local UF = {}
 addon.Aura.UF = UF
 UF.ui = UF.ui or {}
 addon.variables = addon.variables or {}
-addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
-local sampleAbsorb = addon.variables.ufSampleAbsorb
-addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
-local sampleCast = addon.variables.ufSampleCast
 local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 
@@ -236,6 +232,7 @@ local defaults = {
 			offsetLeft = { x = 6, y = 0 },
 			offsetRight = { x = -6, y = 0 },
 			useShortNumbers = true,
+			hidePercentSymbol = false,
 			texture = "DEFAULT",
 		},
 		power = {
@@ -251,6 +248,7 @@ local defaults = {
 			offsetLeft = { x = 6, y = 0 },
 			offsetRight = { x = -6, y = 0 },
 			useShortNumbers = true,
+			hidePercentSymbol = false,
 			texture = "DEFAULT",
 		},
 		status = {
@@ -310,6 +308,7 @@ local defaults = {
 			size = 24,
 			padding = 2,
 			max = 16,
+			perRow = 0,
 			showCooldown = true,
 			showTooltip = true,
 			hidePermanentAuras = false,
@@ -951,23 +950,118 @@ local function applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	btn:Show()
 end
 
-local function anchorAuraButton(btn, container, index, ac, perRow, anchor)
-	if not btn or not container then return end
-	local row = math.floor((index - 1) / perRow)
-	local col = (index - 1) % perRow
-	btn:ClearAllPoints()
+UF._auraLayout = UF._auraLayout or {}
+
+function UF._auraLayout.parseGrowth(growth)
+	if not growth or growth == "" then return end
+	local raw = tostring(growth):upper()
+	local first, second = raw:match("^(%a+)[_%s]+(%a+)$")
+	if not first then
+		local dirs = { "UP", "DOWN", "LEFT", "RIGHT" }
+		for i = 1, #dirs do
+			local dir = dirs[i]
+			if raw:sub(1, #dir) == dir then
+				local rest = raw:sub(#dir + 1)
+				if rest == "UP" or rest == "DOWN" or rest == "LEFT" or rest == "RIGHT" then
+					first, second = dir, rest
+					break
+				end
+			end
+		end
+	end
+	if not first or not second then return end
+	local firstVertical = first == "UP" or first == "DOWN"
+	local secondVertical = second == "UP" or second == "DOWN"
+	if firstVertical == secondVertical then return end
+	return first, second
+end
+
+function UF._auraLayout.resolveGrowth(ac, fallbackAnchor)
+	local anchor = fallbackAnchor or (ac and ac.anchor) or "BOTTOM"
+	local fallback
 	if anchor == "TOP" then
-		btn:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", col * (ac.size + ac.padding), row * (ac.size + ac.padding))
+		fallback = "RIGHTUP"
+	elseif anchor == "LEFT" then
+		fallback = "LEFTDOWN"
 	else
-		btn:SetPoint("TOPLEFT", container, "TOPLEFT", col * (ac.size + ac.padding), -row * (ac.size + ac.padding))
+		fallback = "RIGHTDOWN"
+	end
+	local primary, secondary = UF._auraLayout.parseGrowth(ac and ac.growth)
+	if not primary then
+		primary, secondary = UF._auraLayout.parseGrowth(fallback)
+	end
+	return primary, secondary
+end
+
+function UF._auraLayout.defaultOffset(anchor)
+	if anchor == "TOP" then return 0, 5 end
+	if anchor == "LEFT" then return -5, 0 end
+	if anchor == "RIGHT" then return 5, 0 end
+	return 0, -5
+end
+
+function UF._auraLayout.positionContainer(container, anchor, barGroup, ax, ay, barAreaOffsetLeft, barAreaOffsetRight)
+	if not container or not barGroup then return end
+	if anchor == "TOP" then
+		container:SetPoint("BOTTOMLEFT", barGroup, "TOPLEFT", (ax or 0) + (barAreaOffsetLeft or 0), ay or 0)
+	elseif anchor == "LEFT" then
+		container:SetPoint("TOPRIGHT", barGroup, "TOPLEFT", (ax or 0) + (barAreaOffsetLeft or 0), ay or 0)
+	elseif anchor == "RIGHT" then
+		container:SetPoint("TOPLEFT", barGroup, "TOPRIGHT", (ax or 0) - (barAreaOffsetRight or 0), ay or 0)
+	else
+		container:SetPoint("TOPLEFT", barGroup, "BOTTOMLEFT", (ax or 0) + (barAreaOffsetLeft or 0), ay or 0)
 	end
 end
 
-local function updateAuraContainerSize(container, shown, ac, perRow)
+local function anchorAuraButton(btn, container, index, ac, perRow, primary, secondary)
+	if not btn or not container then return end
+	perRow = perRow or 1
+	if perRow < 1 then perRow = 1 end
+	local primaryHorizontal = primary == "LEFT" or primary == "RIGHT"
+	local row, col
+	if primaryHorizontal then
+		row = math.floor((index - 1) / perRow)
+		col = (index - 1) % perRow
+	else
+		row = (index - 1) % perRow
+		col = math.floor((index - 1) / perRow)
+	end
+	local horizontalDir = primaryHorizontal and primary or secondary
+	local verticalDir = primaryHorizontal and secondary or primary
+	local xSign = horizontalDir == "RIGHT" and 1 or -1
+	local ySign = verticalDir == "UP" and 1 or -1
+	local basePoint = (ySign == 1 and "BOTTOM" or "TOP") .. (xSign == 1 and "LEFT" or "RIGHT")
+	btn:ClearAllPoints()
+	btn:SetPoint(basePoint, container, basePoint, col * (ac.size + ac.padding) * xSign, row * (ac.size + ac.padding) * ySign)
+end
+
+local function updateAuraContainerSize(container, shown, ac, perRow, primary)
 	if not container then return end
-	local rows = math.ceil(shown / perRow)
+	perRow = perRow or 1
+	if perRow < 1 then perRow = 1 end
+	local primaryVertical = primary == "UP" or primary == "DOWN"
+	local rows
+	if primaryVertical then
+		rows = math.min(shown, perRow)
+	else
+		rows = math.ceil(shown / perRow)
+	end
 	container:SetHeight(rows > 0 and (rows * (ac.size + ac.padding) - ac.padding) or 0.001)
 	container:SetShown(shown > 0)
+end
+
+function UF._auraLayout.calcPerRow(st, ac, width, primary)
+	local size = (ac.size or 24) + (ac.padding or 0)
+	if size <= 0 then return 1 end
+	local override = ac and tonumber(ac.perRow)
+	if override and override > 0 then return math.max(1, math.floor(override + 0.5)) end
+	local available = width or 0
+	if primary == "UP" or primary == "DOWN" then
+		local height = (st and st.barGroup and st.barGroup:GetHeight()) or (st and st.frame and st.frame:GetHeight()) or 0
+		if height and height > 0 then available = height end
+	end
+	if available <= 0 then return 1 end
+	return math.max(1, math.floor((available + (ac.padding or 0)) / size))
 end
 
 local function updateTargetAuraIcons(startIndex)
@@ -982,9 +1076,11 @@ local function updateTargetAuraIcons(startIndex)
 	if ac.max < 1 then ac.max = 1 end
 
 	local width = (st.auraContainer and st.auraContainer:GetWidth()) or (st.barGroup and st.barGroup:GetWidth()) or (st.frame and st.frame:GetWidth()) or 0
-	local perRow = math.max(1, math.floor((width + ac.padding) / (ac.size + ac.padding)))
 	local useSeparateDebuffs = ac.separateDebuffAnchor == true
 	if useSeparateDebuffs and not st.debuffContainer then useSeparateDebuffs = false end
+	local auraLayout = UF._auraLayout
+	local buffPrimary, buffSecondary = auraLayout.resolveGrowth(ac, ac.anchor)
+	local perRow = auraLayout.calcPerRow(st, ac, width, buffPrimary)
 
 	-- Combined layout (default, backward compatible)
 	if not useSeparateDebuffs then
@@ -1006,7 +1102,7 @@ local function updateTargetAuraIcons(startIndex)
 				local btn
 				btn, st.auraButtons = ensureAuraButton(st.auraContainer, st.auraButtons, i, ac)
 				applyAuraToButton(btn, aura, ac, aura.isHarmful, "target")
-				anchorAuraButton(btn, st.auraContainer, i, ac, perRow, ac.anchor or "BOTTOM")
+				anchorAuraButton(btn, st.auraContainer, i, ac, perRow, buffPrimary, buffSecondary)
 				targetAuraIndexById[auraId] = i
 				i = i + 1
 			end
@@ -1023,7 +1119,7 @@ local function updateTargetAuraIcons(startIndex)
 			st.debuffContainer:SetHeight(0.001)
 			st.debuffContainer:SetShown(false)
 		end
-		updateAuraContainerSize(st.auraContainer, shown, ac, perRow)
+		updateAuraContainerSize(st.auraContainer, shown, ac, perRow, buffPrimary)
 		return
 	end
 
@@ -1034,7 +1130,8 @@ local function updateTargetAuraIcons(startIndex)
 	local debuffCount = 0
 	local shownTotal = 0
 	local debAnchor = ac.debuffAnchor or ac.anchor or "BOTTOM"
-	local perRowDebuff = perRow
+	local debPrimary, debSecondary = auraLayout.resolveGrowth(ac, debAnchor)
+	local perRowDebuff = auraLayout.calcPerRow(st, ac, width, debPrimary)
 	local i = 1
 	while i <= #targetAuraOrder do
 		local auraId = targetAuraOrder[i]
@@ -1057,13 +1154,13 @@ local function updateTargetAuraIcons(startIndex)
 					local btn
 					btn, debuffButtons = ensureAuraButton(st.debuffContainer, debuffButtons, debuffCount, ac)
 					applyAuraToButton(btn, aura, ac, true, "target")
-					anchorAuraButton(btn, st.debuffContainer, debuffCount, ac, perRowDebuff, debAnchor)
+					anchorAuraButton(btn, st.debuffContainer, debuffCount, ac, perRowDebuff, debPrimary, debSecondary)
 				else
 					buffCount = buffCount + 1
 					local btn
 					btn, buffButtons = ensureAuraButton(st.auraContainer, buffButtons, buffCount, ac)
 					applyAuraToButton(btn, aura, ac, false, "target")
-					anchorAuraButton(btn, st.auraContainer, buffCount, ac, perRow, ac.anchor or "BOTTOM")
+					anchorAuraButton(btn, st.auraContainer, buffCount, ac, perRow, buffPrimary, buffSecondary)
 				end
 			end
 			targetAuraIndexById[auraId] = i
@@ -1081,8 +1178,8 @@ local function updateTargetAuraIcons(startIndex)
 		if debuffButtons[idx] then debuffButtons[idx]:Hide() end
 	end
 
-	updateAuraContainerSize(st.auraContainer, math.min(buffCount, ac.max), ac, perRow)
-	updateAuraContainerSize(st.debuffContainer, math.min(debuffCount, ac.max), ac, perRowDebuff)
+	updateAuraContainerSize(st.auraContainer, math.min(buffCount, ac.max), ac, perRow, buffPrimary)
+	updateAuraContainerSize(st.debuffContainer, math.min(debuffCount, ac.max), ac, perRowDebuff, debPrimary)
 end
 
 local function fullScanTargetAuras()
@@ -1609,35 +1706,42 @@ local function resolveTextDelimiter(delimiter)
 	return " " .. tostring(delimiter) .. " "
 end
 
-local function formatText(mode, cur, maxv, useShort, percentValue, delimiter)
+local function formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePercentSymbol)
 	if mode == "NONE" then return "" end
 	local join = resolveTextDelimiter(delimiter)
+	local percentSuffix = hidePercentSymbol and "" or "%"
 	if addon.variables and addon.variables.isMidnight and issecretvalue then
 		if (cur and issecretvalue(cur)) or (maxv and issecretvalue(maxv)) then
 			local scur = useShort and shortValue(cur) or BreakUpLargeNumbers(cur)
 			local smax = useShort and shortValue(maxv) or BreakUpLargeNumbers(maxv)
 			local percentText
-			if percentValue ~= nil then percentText = ("%s%%"):format(tostring(AbbreviateLargeNumbers(percentValue))) end
+			if percentValue ~= nil then percentText = ("%s%s"):format(tostring(AbbreviateLargeNumbers(percentValue)), percentSuffix) end
 
 			if mode == "CURRENT" then return tostring(scur) end
+			if mode == "MAX" then return tostring(smax) end
 			if mode == "CURMAX" then return ("%s/%s"):format(tostring(scur), tostring(smax)) end
 			if mode == "PERCENT" then return percentText or "" end
 			if mode == "CURPERCENT" or mode == "CURPERCENTDASH" then return percentText and ("%s%s%s"):format(tostring(scur), join, percentText) or "" end
 			if mode == "CURMAXPERCENT" then return percentText and ("%s/%s%s%s"):format(tostring(scur), tostring(smax), join, percentText) or "" end
+			if mode == "MAXPERCENT" then return percentText and ("%s%s%s"):format(tostring(smax), join, percentText) or "" end
 			return ""
 		end
 	end
 	local percentText
-	if mode == "PERCENT" or mode == "CURPERCENT" or mode == "CURPERCENTDASH" or mode == "CURMAXPERCENT" then
+	if mode == "PERCENT" or mode == "CURPERCENT" or mode == "CURPERCENTDASH" or mode == "CURMAXPERCENT" or mode == "MAXPERCENT" then
 		if percentValue ~= nil then
-			percentText = ("%d%%"):format(floor(percentValue + 0.5))
+			percentText = ("%d%s"):format(floor(percentValue + 0.5), percentSuffix)
 		elseif not maxv or maxv == 0 then
-			percentText = "0%"
+			percentText = "0" .. percentSuffix
 		else
-			percentText = ("%d%%"):format(floor((cur or 0) / maxv * 100 + 0.5))
+			percentText = ("%d%s"):format(floor((cur or 0) / maxv * 100 + 0.5), percentSuffix)
 		end
 	end
 	if mode == "PERCENT" then return percentText end
+	if mode == "MAX" then
+		local maxText = useShort == false and tostring(maxv or 0) or shortValue(maxv or 0)
+		return maxText
+	end
 	if mode == "CURMAX" then
 		local curText = useShort == false and tostring(cur or 0) or shortValue(cur or 0)
 		local maxText = useShort == false and tostring(maxv or 0) or shortValue(maxv or 0)
@@ -1653,6 +1757,11 @@ local function formatText(mode, cur, maxv, useShort, percentValue, delimiter)
 		local curText = useShort == false and tostring(cur or 0) or shortValue(cur or 0)
 		local maxText = useShort == false and tostring(maxv or 0) or shortValue(maxv or 0)
 		return ("%s/%s%s%s"):format(curText, maxText, join, percentText)
+	end
+	if mode == "MAXPERCENT" then
+		if not percentText then return "" end
+		local maxText = useShort == false and tostring(maxv or 0) or shortValue(maxv or 0)
+		return ("%s%s%s"):format(maxText, join, percentText)
 	end
 	if useShort == false then return tostring(cur or 0) end
 	return shortValue(cur or 0)
@@ -1713,7 +1822,7 @@ local function getAbsorbColor(hc, unit)
 	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
 end
 
-local function shouldShowSampleAbsorb(unit) return sampleAbsorb and sampleAbsorb[unit] == true end
+local function shouldShowSampleAbsorb(unit) return addon.EditModeLib and addon.EditModeLib:IsInEditMode() end
 
 local function stopCast(unit)
 	local st = states[unit]
@@ -1885,11 +1994,7 @@ local function updateCastBar(unit)
 	end
 end
 
-shouldShowSampleCast = function(unit)
-	if not (addon.EditModeLib and addon.EditModeLib:IsInEditMode()) then return false end
-	local key = isBossUnit(unit) and "boss" or unit
-	return sampleCast and sampleCast[key] == true
-end
+shouldShowSampleCast = function(unit) return addon.EditModeLib and addon.EditModeLib:IsInEditMode() end
 
 setSampleCast = function(unit)
 	local key = isBossUnit(unit) and "boss" or unit
@@ -2087,8 +2192,9 @@ local function updateHealth(cfg, unit)
 	local rightMode = hc.textRight or "CURMAX"
 	local leftDelimiter = getTextDelimiter(hc, defH)
 	local rightDelimiter = getTextDelimiter(hc, defH)
-	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, leftDelimiter)) end
-	if st.healthTextRight then st.healthTextRight:SetText(formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, rightDelimiter)) end
+	local hidePercentSymbol = hc.hidePercentSymbol == true
+	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, leftDelimiter, hidePercentSymbol)) end
+	if st.healthTextRight then st.healthTextRight:SetText(formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, rightDelimiter, hidePercentSymbol)) end
 end
 
 local function updatePower(cfg, unit)
@@ -2100,6 +2206,7 @@ local function updatePower(cfg, unit)
 	local def = defaultsFor(unit) or {}
 	local defP = def.power or {}
 	local pcfg = cfg.power or {}
+	local hidePercentSymbol = pcfg.hidePercentSymbol == true
 	if pcfg.enabled == false then
 		bar:Hide()
 		bar:SetValue(0)
@@ -2133,7 +2240,7 @@ local function updatePower(cfg, unit)
 		else
 			local leftMode = pcfg.textLeft or "PERCENT"
 			local leftDelimiter = getTextDelimiter(pcfg, defP)
-			st.powerTextLeft:SetText(formatText(leftMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, leftDelimiter))
+			st.powerTextLeft:SetText(formatText(leftMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, leftDelimiter, hidePercentSymbol))
 		end
 	end
 	if (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0) then
@@ -2142,7 +2249,7 @@ local function updatePower(cfg, unit)
 		if st.powerTextRight then
 			local rightMode = pcfg.textRight or "CURMAX"
 			local rightDelimiter = getTextDelimiter(pcfg, defP)
-			st.powerTextRight:SetText(formatText(rightMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, rightDelimiter))
+			st.powerTextRight:SetText(formatText(rightMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, rightDelimiter, hidePercentSymbol))
 		end
 	end
 end
@@ -2634,31 +2741,27 @@ local function layoutFrame(cfg, unit)
 	if unit == "target" and st.auraContainer then
 		st.auraContainer:ClearAllPoints()
 		local acfg = cfg.auraIcons or def.auraIcons or defaults.target.auraIcons or {}
-		local baseAx = (acfg.offset and acfg.offset.x) or 0
-		local ax = baseAx + barAreaOffsetLeft
-		local ay = (acfg.offset and acfg.offset.y) or (acfg.anchor == "TOP" and 5 or -5)
 		local anchor = acfg.anchor or "BOTTOM"
-		if anchor == "TOP" then
-			st.auraContainer:SetPoint("BOTTOMLEFT", st.barGroup, "TOPLEFT", ax, ay)
-		else
-			st.auraContainer:SetPoint("TOPLEFT", st.barGroup, "BOTTOMLEFT", ax, ay)
-		end
+		local defAx, defAy = UF._auraLayout.defaultOffset(anchor)
+		local baseAx = (acfg.offset and acfg.offset.x)
+		if baseAx == nil then baseAx = defAx end
+		local baseAy = (acfg.offset and acfg.offset.y)
+		if baseAy == nil then baseAy = defAy end
+		UF._auraLayout.positionContainer(st.auraContainer, anchor, st.barGroup, baseAx, baseAy, barAreaOffsetLeft, barAreaOffsetRight)
 		st.auraContainer:SetWidth(width + borderOffset * 2)
 
 		if st.debuffContainer then
 			st.debuffContainer:ClearAllPoints()
 			local useSeparateDebuffs = acfg.separateDebuffAnchor == true
-			local baseDax = (acfg.debuffOffset and acfg.debuffOffset.x) or baseAx
-			local dax = baseDax + barAreaOffsetLeft
-			local day = (acfg.debuffOffset and acfg.debuffOffset.y)
 			local danchor = acfg.debuffAnchor or anchor
-			if day == nil then day = (danchor == "TOP" and 5 or -5) end
+			local defDax, defDay = UF._auraLayout.defaultOffset(danchor)
+			local baseDax = (acfg.debuffOffset and acfg.debuffOffset.x)
+			if baseDax == nil then baseDax = baseAx end
+			if baseDax == nil then baseDax = defDax end
+			local baseDay = (acfg.debuffOffset and acfg.debuffOffset.y)
+			if baseDay == nil then baseDay = defDay end
 			if useSeparateDebuffs then
-				if danchor == "TOP" then
-					st.debuffContainer:SetPoint("BOTTOMLEFT", st.barGroup, "TOPLEFT", dax, day)
-				else
-					st.debuffContainer:SetPoint("TOPLEFT", st.barGroup, "BOTTOMLEFT", dax, day)
-				end
+				UF._auraLayout.positionContainer(st.debuffContainer, danchor, st.barGroup, baseDax, baseDay, barAreaOffsetLeft, barAreaOffsetRight)
 				st.debuffContainer:SetWidth(width + borderOffset * 2)
 			else
 				-- If not separating, keep the debuff container collapsed
@@ -3087,8 +3190,9 @@ local function applyBossEditSample(idx, cfg)
 	local rightMode = hc.textRight or "CURMAX"
 	local leftDelimiter = getTextDelimiter(hc, defH)
 	local rightDelimiter = getTextDelimiter(hc, defH)
-	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, nil, leftDelimiter)) end
-	if st.healthTextRight then st.healthTextRight:SetText(formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, nil, rightDelimiter)) end
+	local hidePercentSymbol = hc.hidePercentSymbol == true
+	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, nil, leftDelimiter, hidePercentSymbol)) end
+	if st.healthTextRight then st.healthTextRight:SetText(formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, nil, rightDelimiter, hidePercentSymbol)) end
 
 	local powerEnabled = pcfg.enabled ~= false
 	if st.power then
@@ -3105,8 +3209,9 @@ local function applyBossEditSample(idx, cfg)
 			local pRightMode = pcfg.textRight or "CURMAX"
 			local pLeftDelimiter = getTextDelimiter(pcfg, defP)
 			local pRightDelimiter = getTextDelimiter(pcfg, defP)
-			if st.powerTextLeft then st.powerTextLeft:SetText(formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pLeftDelimiter)) end
-			if st.powerTextRight then st.powerTextRight:SetText(formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pRightDelimiter)) end
+			local pHidePercentSymbol = pcfg.hidePercentSymbol == true
+			if st.powerTextLeft then st.powerTextLeft:SetText(formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pLeftDelimiter, pHidePercentSymbol)) end
+			if st.powerTextRight then st.powerTextRight:SetText(formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pRightDelimiter, pHidePercentSymbol)) end
 			st.power:Show()
 		else
 			st.power:SetValue(0)
@@ -3860,6 +3965,9 @@ local function ensureEventHandling()
 				updateBossFrames(true)
 				updateAllRaidTargetIcons()
 				applyVisibilityRulesAll()
+				if UF.Refresh then UF.Refresh() end
+				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
+				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			end)
 
 			addon.EditModeLib:RegisterCallback("exit", function()
@@ -3868,6 +3976,9 @@ local function ensureEventHandling()
 				if ensureDB("boss").enabled then updateBossFrames(true) end
 				updateAllRaidTargetIcons()
 				applyVisibilityRulesAll()
+				if UF.Refresh then UF.Refresh() end
+				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
+				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			end)
 		end
 	end

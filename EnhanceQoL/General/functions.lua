@@ -508,6 +508,17 @@ local bagIlvlAnchors = {
 	BOTTOMRIGHT = { point = "BOTTOMRIGHT", x = 0, y = 2 },
 }
 
+local bagUpgradeAnchors = {
+	TOPLEFT = { point = "TOPLEFT", x = 1, y = -1 },
+	TOPRIGHT = { point = "TOPRIGHT", x = -1, y = -1 },
+	BOTTOMLEFT = { point = "BOTTOMLEFT", x = 1, y = 1 },
+	BOTTOMRIGHT = { point = "BOTTOMRIGHT", x = -1, y = 1 },
+}
+
+local UPGRADE_ICON_PATH = "Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga"
+local UPGRADE_ICON_SIZE = 22
+local UPGRADE_ICON_GLOW_SIZE = 24
+
 function addon.functions.ApplyBagItemLevelPosition(target, anchorFrame, position)
 	if not target or not anchorFrame then return end
 	local anchor = bagIlvlAnchors[position] or bagIlvlAnchors.TOPRIGHT
@@ -538,6 +549,37 @@ function addon.functions.ApplyBagBoundPosition(target, anchorFrame, position)
 	local anchor = bagIlvlAnchors[resolveBoundAnchor(position)] or bagIlvlAnchors.BOTTOMLEFT
 	target:ClearAllPoints()
 	target:SetPoint(anchor.point, anchorFrame, anchor.point, anchor.x, anchor.y)
+end
+
+function addon.functions.ApplyBagUpgradeIconPosition(target, anchorFrame, position)
+	if not target or not anchorFrame then return end
+	local anchor = bagUpgradeAnchors[position] or bagUpgradeAnchors.BOTTOMRIGHT
+	target:ClearAllPoints()
+	target:SetPoint(anchor.point, anchorFrame, anchor.point, anchor.x, anchor.y)
+end
+
+function addon.functions.AlignUpgradeIconGlow(glow, icon)
+	if not glow or not icon then return end
+	glow:ClearAllPoints()
+	glow:SetPoint("CENTER", icon, "CENTER", 0, 0)
+end
+
+function addon.functions.EnsureBagUpgradeIcon(button)
+	if not button then return end
+	if not button.ItemUpgradeIcon then
+		button.ItemUpgradeIcon = button:CreateTexture(nil, "ARTWORK")
+		button.ItemUpgradeIcon:SetDrawLayer("ARTWORK", 2)
+	end
+	if not button.ItemUpgradeIconGlow then
+		button.ItemUpgradeIconGlow = button:CreateTexture(nil, "ARTWORK")
+		button.ItemUpgradeIconGlow:SetDrawLayer("ARTWORK", 1)
+	end
+	button.ItemUpgradeIcon:SetTexture(UPGRADE_ICON_PATH)
+	button.ItemUpgradeIcon:SetSize(UPGRADE_ICON_SIZE, UPGRADE_ICON_SIZE)
+	button.ItemUpgradeIcon:SetVertexColor(0, 1, 0, 1)
+	button.ItemUpgradeIconGlow:SetTexture(UPGRADE_ICON_PATH)
+	button.ItemUpgradeIconGlow:SetSize(UPGRADE_ICON_GLOW_SIZE, UPGRADE_ICON_GLOW_SIZE)
+	button.ItemUpgradeIconGlow:SetVertexColor(0, 0, 0, 0.9)
 end
 
 local function getEquipSlotsFor(equipLoc)
@@ -624,6 +666,10 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 	if itemButton.ItemUpgradeIcon then
 		itemButton.ItemUpgradeIcon:SetAlpha(1)
 		itemButton.ItemUpgradeIcon:Hide()
+	end
+	if itemButton.ItemUpgradeIconGlow then
+		itemButton.ItemUpgradeIconGlow:SetAlpha(1)
+		itemButton.ItemUpgradeIconGlow:Hide()
 	end
 	local itemLink = C_Container.GetContainerItemLink(bag, slot)
 	if itemLink then
@@ -718,29 +764,19 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				if addon.db["showUpgradeArrowOnBagItems"] then
 					if isUpgrade == nil then isUpgrade = isBagItemUpgrade(itemLink, itemEquipLoc, itemLevelText) end
 					if isUpgrade then
-						if not itemButton.ItemUpgradeIcon then
-							itemButton.ItemUpgradeIcon = itemButton:CreateTexture(nil, "ARTWORK")
-							itemButton.ItemUpgradeIcon:SetDrawLayer("ARTWORK", 2)
-							itemButton.ItemUpgradeIcon:SetSize(14, 14)
-						end
-						itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-						itemButton.ItemUpgradeIcon:ClearAllPoints()
+						addon.functions.EnsureBagUpgradeIcon(itemButton)
 						local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
-						if posUp == "TOPRIGHT" then
-							itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-						elseif posUp == "TOPLEFT" then
-							itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-						elseif posUp == "BOTTOMLEFT" then
-							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-						else -- BOTTOMRIGHT
-							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-						end
+						addon.functions.ApplyBagUpgradeIconPosition(itemButton.ItemUpgradeIcon, itemButton, posUp)
+						addon.functions.AlignUpgradeIconGlow(itemButton.ItemUpgradeIconGlow, itemButton.ItemUpgradeIcon)
+						itemButton.ItemUpgradeIconGlow:Show()
 						itemButton.ItemUpgradeIcon:Show()
 					else
 						if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+						if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 					end
 				else
 					if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+					if itemButton.ItemUpgradeIconGlow then itemButton.ItemUpgradeIconGlow:Hide() end
 				end
 
 				if addon.db["showBindOnBagItems"] and bType then

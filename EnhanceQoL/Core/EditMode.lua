@@ -462,6 +462,12 @@ function EditMode:RegisterFrame(id, opts)
 			enableOverlayToggle = opts.enableOverlayToggle or false,
 			collapseExclusive = opts.collapseExclusive or false,
 			allowDrag = opts.allowDrag,
+			settingsSpacing = opts.settingsSpacing,
+			sliderHeight = opts.sliderHeight,
+			dropdownHeight = opts.dropdownHeight,
+			checkboxColorHeight = opts.checkboxColorHeight,
+			multiDropdownSummaryHeight = opts.multiDropdownSummaryHeight,
+			dividerHeight = opts.dividerHeight,
 		}
 
 		self.lib:AddFrame(frame, function(_, layoutName, point, x, y)
