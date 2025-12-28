@@ -383,6 +383,8 @@ local states = {}
 local targetAuras = {}
 local targetAuraOrder = {}
 local targetAuraIndexById = {}
+local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
+local AURA_FILTER_HARMFUL = "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY"
 local auraList = {}
 local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
@@ -917,7 +919,7 @@ local function applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	local issecretAura = false
 	if issecretvalue and issecretvalue(isDebuff) then
 		issecretAura = true
-		isDebuff = not C_UnitAuras.IsAuraFilteredOutByInstanceID("target", aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY")
+		isDebuff = not C_UnitAuras.IsAuraFilteredOutByInstanceID("target", aura.auraInstanceID, AURA_FILTER_HARMFUL)
 	end
 	unitToken = unitToken or "target"
 	btn.spellId = aura.spellId
@@ -1167,7 +1169,7 @@ local function updateTargetAuraIcons(startIndex)
 			if shownTotal < ac.max then
 				local isDebuff
 				if issecretvalue and issecretvalue(aura.isHarmful) then
-					isDebuff = not C_UnitAuras.IsAuraFilteredOutByInstanceID("target", aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY")
+					isDebuff = not C_UnitAuras.IsAuraFilteredOutByInstanceID("target", aura.auraInstanceID, AURA_FILTER_HARMFUL)
 				else
 					isDebuff = aura.isHarmful == true
 				end
@@ -1213,7 +1215,7 @@ local function fullScanTargetAuras()
 	local ac = cfg.auraIcons or defaults.target.auraIcons or {}
 	local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
 	if C_UnitAuras and C_UnitAuras.GetUnitAuras then
-		local helpful = C_UnitAuras.GetUnitAuras("target", "HELPFUL|INCLUDE_NAME_PLATE_ONLY")
+		local helpful = C_UnitAuras.GetUnitAuras("target", AURA_FILTER_HELPFUL)
 		for i = 1, #helpful do
 			local aura = helpful[i]
 			if aura and (not hidePermanent or not isPermanentAura(aura, "target")) then
@@ -1221,7 +1223,7 @@ local function fullScanTargetAuras()
 				addTargetAuraToOrder(aura.auraInstanceID)
 			end
 		end
-		local harmful = C_UnitAuras.GetUnitAuras("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY")
+		local harmful = C_UnitAuras.GetUnitAuras("target", AURA_FILTER_HARMFUL)
 		for i = 1, #harmful do
 			local aura = harmful[i]
 			if aura and (not hidePermanent or not isPermanentAura(aura, "target")) then
@@ -1230,7 +1232,7 @@ local function fullScanTargetAuras()
 			end
 		end
 	elseif C_UnitAuras and C_UnitAuras.GetAuraSlots then
-		local helpful = { C_UnitAuras.GetAuraSlots("target", "HELPFUL|CANCELABLE") }
+		local helpful = { C_UnitAuras.GetAuraSlots("target", AURA_FILTER_HELPFUL) }
 		for i = 2, #helpful do
 			local slot = helpful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
@@ -1239,7 +1241,7 @@ local function fullScanTargetAuras()
 				addTargetAuraToOrder(aura.auraInstanceID)
 			end
 		end
-		local harmful = { C_UnitAuras.GetAuraSlots("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") }
+		local harmful = { C_UnitAuras.GetAuraSlots("target", AURA_FILTER_HARMFUL) }
 		for i = 2, #harmful do
 			local slot = harmful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
@@ -3778,13 +3780,13 @@ local function onEvent(self, event, unit, arg1)
 							if not firstChanged or idx < firstChanged then firstChanged = idx end
 						end
 					end
-				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") then
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, AURA_FILTER_HARMFUL) then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
 						if not firstChanged or idx < firstChanged then firstChanged = idx end
 					end
-				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HELPFUL|CANCELABLE") then
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, AURA_FILTER_HELPFUL) then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
