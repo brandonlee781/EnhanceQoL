@@ -58,6 +58,7 @@ Submodules\ChatIM\UI.lua
 Submodules\ChatIM\Core.lua
 Submodules\LootToast.lua
 Submodules\ChatIcons.lua
+Submodules\CommunityChatPrivacy.lua
 Submodules\FriendsListDecor.lua
 Submodules\Ignore\Ignore.lua
 Submodules\Ignore\Ignore.xml

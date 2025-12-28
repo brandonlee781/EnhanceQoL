@@ -234,6 +234,55 @@ local data = {
 			},
 		},
 	},
+	{
+		var = "communityChatPrivacyEnabled",
+		text = L["communityChatPrivacy"],
+		desc = L["communityChatPrivacyDesc"],
+		type = "CheckBox",
+		func = function(value)
+			addon.db["communityChatPrivacyEnabled"] = value
+			if addon.CommunityChatPrivacy then
+				if addon.CommunityChatPrivacy.SetMode then
+					addon.CommunityChatPrivacy:SetMode(addon.db["communityChatPrivacyMode"])
+				end
+				if addon.CommunityChatPrivacy.SetEnabled then
+					addon.CommunityChatPrivacy:SetEnabled(value)
+				end
+			end
+		end,
+		children = {
+			{
+				var = "communityChatPrivacyMode",
+				text = L["communityChatPrivacyMode"],
+				list = {
+					[1] = {
+						label = L["communityChatPrivacyModeAlways"],
+						tooltip = L["communityChatPrivacyModeAlwaysDesc"],
+					},
+					[2] = {
+						label = L["communityChatPrivacyModeSession"],
+						tooltip = L["communityChatPrivacyModeSessionDesc"],
+					},
+				},
+				get = function() return addon.db and addon.db.communityChatPrivacyMode or 1 end,
+				set = function(value)
+					addon.db["communityChatPrivacyMode"] = value
+					if addon.CommunityChatPrivacy and addon.CommunityChatPrivacy.SetMode then
+						addon.CommunityChatPrivacy:SetMode(value)
+					end
+				end,
+				parentCheck = function()
+					return addon.SettingsLayout.elements["communityChatPrivacyEnabled"]
+						and addon.SettingsLayout.elements["communityChatPrivacyEnabled"].setting
+						and addon.SettingsLayout.elements["communityChatPrivacyEnabled"].setting:GetValue() == true
+				end,
+				parent = true,
+				default = 1,
+				type = Settings.VarType.Number,
+				sType = "dropdown",
+			},
+		},
+	},
 }
 
 addon.functions.SettingsCreateCheckboxes(cSocial, data)

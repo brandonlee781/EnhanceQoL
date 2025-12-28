@@ -35,6 +35,7 @@
 - Data Panels: Talent stream now offers a loadout switch menu.
 - Data Panels: Durability stream tooltip expanded with per-item details and repair info.
 - Chat: item/currency icon option now applies to all item links.
+- Option to add "DELETE" into the _delete item dialog_ now also removed focus of the editbox for use with addons like dialogKey
 
 ### 🐛 Fixed
 

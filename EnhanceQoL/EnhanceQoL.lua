@@ -2149,6 +2149,8 @@ local function initMisc()
 					then
 						local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
 						editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
+						editBox:ClearFocus()
+						editBox:SetAutoFocus(false)
 					elseif addon.db["confirmPatronOrderDialog"] and self.data and type(self.data) == "table" and self.data.text == CRAFTING_ORDERS_OWN_REAGENTS_CONFIRMATION and self.GetButton then
 						local order = C_CraftingOrders.GetClaimedOrder()
 						if order and order.npcCustomerCreatureID and order.npcCustomerCreatureID > 0 then self:GetButton(1):Click() end
@@ -2694,9 +2696,17 @@ local function initSocial()
 	addon.functions.InitDBValue("friendsListDecorShowLocation", true)
 	addon.functions.InitDBValue("friendsListDecorHideOwnRealm", true)
 	addon.functions.InitDBValue("friendsListDecorNameFontSize", 0)
+	addon.functions.InitDBValue("communityChatPrivacyEnabled", false)
+	addon.functions.InitDBValue("communityChatPrivacyMode", 1)
 	if addon.Ignore and addon.Ignore.SetEnabled then addon.Ignore:SetEnabled(addon.db["enableIgnore"]) end
 	if addon.Ignore and addon.Ignore.UpdateAnchor then addon.Ignore:UpdateAnchor() end
 	if addon.FriendsListDecor and addon.FriendsListDecor.SetEnabled then addon.FriendsListDecor:SetEnabled(addon.db["friendsListDecorEnabled"] == true) end
+	if addon.CommunityChatPrivacy and addon.CommunityChatPrivacy.SetMode then
+		addon.CommunityChatPrivacy:SetMode(addon.db["communityChatPrivacyMode"])
+	end
+	if addon.CommunityChatPrivacy and addon.CommunityChatPrivacy.SetEnabled then
+		addon.CommunityChatPrivacy:SetEnabled(addon.db["communityChatPrivacyEnabled"])
+	end
 end
 
 local initLootToast
