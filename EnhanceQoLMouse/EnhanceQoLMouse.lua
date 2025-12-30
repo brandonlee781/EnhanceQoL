@@ -31,6 +31,10 @@ local PastCursorX, PastCursorY, PresentCursorX, PresentCursorY = nil, nil, nil, 
 local trailPool = {}
 local activeCount = 0
 local playerClass = UnitClass and select(2, UnitClass("player")) or nil
+local classR, classG, classB
+if playerClass and GetClassColor then
+	classR, classG, classB = GetClassColor(playerClass)
+end
 local currentPreset = nil
 
 local trailPresets = {
@@ -117,12 +121,14 @@ local timeAccumulator = 0
 
 local function getTrailColor()
 	if addon.db["mouseTrailUseClassColor"] then
-		local class = playerClass or (UnitClass and select(2, UnitClass("player")))
-		if class then playerClass = class end
-		if class and GetClassColor then
-			local r, g, b = GetClassColor(class)
-			return r or 1, g or 1, b or 1, 1
+		if not classR then
+			local class = playerClass or (UnitClass and select(2, UnitClass("player")))
+			if class then playerClass = class end
+			if class and GetClassColor then
+				classR, classG, classB = GetClassColor(class)
+			end
 		end
+		if classR then return classR, classG, classB, 1 end
 		return 1, 1, 1, 1
 	end
 	local c = addon.db["mouseTrailColor"]
@@ -132,12 +138,14 @@ end
 
 local function getRingColor()
 	if addon.db["mouseRingUseClassColor"] then
-		local class = playerClass or (UnitClass and select(2, UnitClass("player")))
-		if class then playerClass = class end
-		if class and GetClassColor then
-			local r, g, b = GetClassColor(class)
-			return r or 1, g or 1, b or 1, 1
+		if not classR then
+			local class = playerClass or (UnitClass and select(2, UnitClass("player")))
+			if class then playerClass = class end
+			if class and GetClassColor then
+				classR, classG, classB = GetClassColor(class)
+			end
 		end
+		if classR then return classR, classG, classB, 1 end
 		return 1, 1, 1, 1
 	end
 	local c = addon.db["mouseRingColor"]
