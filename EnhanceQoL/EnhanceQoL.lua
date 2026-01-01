@@ -2337,14 +2337,14 @@ local function setupQuickSkipCinematic()
 	CinematicFrame:HookScript("OnKeyDown", function(_, key)
 		if not addon.db or not addon.db["quickSkipCinematic"] then return end
 		if key == "ESCAPE" then
-			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and CinematicFrameCloseDialogConfirmButton then CinematicFrame.closeDialog:Hide() end
+			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and _G.CinematicFrameCloseDialogConfirmButton then CinematicFrame.closeDialog:Hide() end
 		end
 	end)
 
 	CinematicFrame:HookScript("OnKeyUp", function(_, key)
 		if not addon.db or not addon.db["quickSkipCinematic"] then return end
 		if key == "SPACE" or key == "ESCAPE" or key == "ENTER" then
-			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and CinematicFrameCloseDialogConfirmButton then CinematicFrameCloseDialogConfirmButton:Click() end
+			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and _G.CinematicFrameCloseDialogConfirmButton then _G.CinematicFrameCloseDialogConfirmButton:Click() end
 		end
 	end)
 
@@ -2390,7 +2390,8 @@ local AUTO_RELEASE_PVP_EXCLUDE_ASHRAN = {
 }
 
 local function hasUsableSelfResurrection()
-	local options = C_DeathInfo and C_DeathInfo.GetSelfResurrectOptions and C_DeathInfo.GetSelfResurrectOptions()
+	local deathInfo = _G.C_DeathInfo
+	local options = deathInfo and deathInfo.GetSelfResurrectOptions and deathInfo.GetSelfResurrectOptions()
 	if not options then return false end
 	for _, option in ipairs(options) do
 		if option and option.canUse then return true end
@@ -4887,15 +4888,18 @@ local eventHandlers = {
 	["CONFIRM_SUMMON"] = function()
 		if not addon.db["autoAcceptSummon"] then return end
 		if UnitAffectingCombat("player") then return end
-		if not C_SummonInfo or not C_SummonInfo.ConfirmSummon then return end
+		local summonInfo = _G.C_SummonInfo
+		if not summonInfo or not summonInfo.ConfirmSummon then return end
 
 		C_Timer.After(0, function()
 			if not addon.db or not addon.db["autoAcceptSummon"] then return end
 			if UnitAffectingCombat("player") then return end
-			if not C_SummonInfo.GetSummonConfirmTimeLeft or C_SummonInfo.GetSummonConfirmTimeLeft() <= 0 then return end
-			if not C_SummonInfo.GetSummonConfirmSummoner or not C_SummonInfo.GetSummonConfirmSummoner() then return end
+			local info = _G.C_SummonInfo
+			if not info then return end
+			if not info.GetSummonConfirmTimeLeft or info.GetSummonConfirmTimeLeft() <= 0 then return end
+			if not info.GetSummonConfirmSummoner or not info.GetSummonConfirmSummoner() then return end
 
-			C_SummonInfo.ConfirmSummon()
+			info.ConfirmSummon()
 			StaticPopup_Hide("CONFIRM_SUMMON")
 			StaticPopup_Hide("CONFIRM_SUMMON_SCENARIO")
 			StaticPopup_Hide("CONFIRM_SUMMON_STARTING_AREA")
