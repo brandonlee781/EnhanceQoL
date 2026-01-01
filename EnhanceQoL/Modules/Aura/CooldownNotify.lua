@@ -34,26 +34,33 @@ local exportCategory
 local GetItemInfo = C_Item.GetItemInfo
 local previewImportCategory
 
-for _, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
-	if cat.useAdvancedTracking == nil then cat.useAdvancedTracking = true end
-	cat.spells = cat.spells or {}
-	local tmp = {}
-	for id, info in pairs(cat.spells) do
-		local num = tonumber(id)
-		if num then
-			if type(info) == "table" then
-				if not info.trackType and num < 0 then info.trackType = "ITEM" end
-				if not info.slot and num < 0 then info.slot = -num end
-				tmp[num] = info
-			elseif num < 0 then
-				tmp[num] = { trackType = "ITEM", slot = -num }
-			else
-				tmp[num] = true
+local function initCategoryState()
+	if not addon.db or not addon.db.cooldownNotifyCategories then return end
+	for _, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+		if cat.useAdvancedTracking == nil then cat.useAdvancedTracking = true end
+		cat.spells = cat.spells or {}
+		local tmp = {}
+		for id, info in pairs(cat.spells) do
+			local num = tonumber(id)
+			if num then
+				if type(info) == "table" then
+					if not info.trackType and num < 0 then info.trackType = "ITEM" end
+					if not info.slot and num < 0 then info.slot = -num end
+					tmp[num] = info
+				elseif num < 0 then
+					tmp[num] = { trackType = "ITEM", slot = -num }
+				else
+					tmp[num] = true
+				end
 			end
 		end
+		cat.spells = tmp
+		cat.ignoredSpells = cat.ignoredSpells or {}
 	end
-	cat.spells = tmp
-	cat.ignoredSpells = cat.ignoredSpells or {}
+end
+
+function addon.Aura.functions.InitCooldownNotify()
+	initCategoryState()
 end
 
 local DCP = CreateFrame("Frame", nil, UIParent)

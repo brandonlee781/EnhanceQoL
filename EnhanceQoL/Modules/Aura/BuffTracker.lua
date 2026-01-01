@@ -22,7 +22,7 @@ local bleedList = {
 	[434773] = true, -- mean mug
 }
 
-local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
+local selectedCategory = 1
 
 local function checkRestrictedContent()
 	if IS_MIDNIGHT_BUILD and (InCombatLockdown() or IsEncounterInProgress() or C_ChallengeMode.IsChallengeModeActive()) then return true end
@@ -66,28 +66,31 @@ local function unregisterEnchantBuff(catId, slot)
 end
 
 local hasGroupTypeFilters = false
-
-for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
-	if not cat.allowedGroupTypes then cat.allowedGroupTypes = {} end
-	if next(cat.allowedGroupTypes) then hasGroupTypeFilters = true end
-	for id, buff in pairs(cat.buffs or {}) do
-		if not buff.trackType then buff.trackType = "BUFF" end
-		if not buff.allowedSpecs then buff.allowedSpecs = {} end
-		if not buff.allowedClasses then buff.allowedClasses = {} end
-		if not buff.allowedRoles then buff.allowedRoles = {} end
-		if not buff.allowedGroupTypes then buff.allowedGroupTypes = {} end
-		if buff.showCooldown == nil then buff.showCooldown = false end
-		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
-		if next(buff.allowedGroupTypes) then hasGroupTypeFilters = true end
-		if buff.trackType == "ITEM" and buff.slot then
-			registerItemBuff(catId, id, buff.slot)
-		elseif buff.trackType == "ENCHANT" and buff.slot then
-			registerEnchantBuff(catId, id, buff.slot)
+local function initCategoryState()
+	if not addon.db or not addon.db["buffTrackerCategories"] then return end
+	if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
+	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
+		if not cat.allowedGroupTypes then cat.allowedGroupTypes = {} end
+		if next(cat.allowedGroupTypes) then hasGroupTypeFilters = true end
+		for id, buff in pairs(cat.buffs or {}) do
+			if not buff.trackType then buff.trackType = "BUFF" end
+			if not buff.allowedSpecs then buff.allowedSpecs = {} end
+			if not buff.allowedClasses then buff.allowedClasses = {} end
+			if not buff.allowedRoles then buff.allowedRoles = {} end
+			if not buff.allowedGroupTypes then buff.allowedGroupTypes = {} end
+			if buff.showCooldown == nil then buff.showCooldown = false end
+			if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
+			if next(buff.allowedGroupTypes) then hasGroupTypeFilters = true end
+			if buff.trackType == "ITEM" and buff.slot then
+				registerItemBuff(catId, id, buff.slot)
+			elseif buff.trackType == "ENCHANT" and buff.slot then
+				registerEnchantBuff(catId, id, buff.slot)
+			end
 		end
+		cat.allowedSpecs = nil
+		cat.allowedClasses = nil
+		cat.allowedRoles = nil
 	end
-	cat.allowedSpecs = nil
-	cat.allowedClasses = nil
-	cat.allowedRoles = nil
 end
 
 local anchors = {}
@@ -645,6 +648,7 @@ local function rebuildAltMapping()
 	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if cat.allowedGroupTypes and next(cat.allowedGroupTypes) then hasGroupTypeFilters = true end
 		for baseId, buff in pairs(cat.buffs or {}) do
+			if buff.allowedGroupTypes and next(buff.allowedGroupTypes) then hasGroupTypeFilters = true end
 			if
 				(not buff.allowedInstances or not next(buff.allowedInstances) or (currentInstanceGroup and buff.allowedInstances[currentInstanceGroup]))
 				and (not buff.allowedGroupTypes or not next(buff.allowedGroupTypes) or (currentGroupType and buff.allowedGroupTypes[currentGroupType]))
@@ -2923,11 +2927,16 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	end
 end
 
-for id in pairs(addon.db["buffTrackerCategories"]) do
-	applySize(id)
+function addon.Aura.functions.InitBuffTracker()
+	if not addon.db or not addon.db["buffTrackerCategories"] then return end
+	initCategoryState()
+
+	for id in pairs(addon.db["buffTrackerCategories"]) do
+		applySize(id)
+	end
+	applyLockState()
+	applyTimerText()
 end
-applyLockState()
-applyTimerText()
 
 -- ---------------------------------------------------------------------------
 -- Share Aura-Category via Chat & Addon-Channel

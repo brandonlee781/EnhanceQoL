@@ -217,8 +217,17 @@ local function ensureBarStyle(bar, db)
 		bar._tex = tex
 	end
 end
-local selectedCategory = addon.db["castTrackerSelectedCategory"] or 1
+local selectedCategory = 1
 local treeGroup
+
+function addon.Aura.functions.InitCastTracker()
+	if not addon.db then return end
+	if type(addon.db["castTrackerSelectedCategory"]) ~= "number" then addon.db["castTrackerSelectedCategory"] = 1 end
+	selectedCategory = addon.db["castTrackerSelectedCategory"] or 1
+	if CastTracker and CastTracker.functions and CastTracker.functions.Refresh then
+		CastTracker.functions.Refresh()
+	end
+end
 
 local function UpdateActiveBars(catId)
 	local cat = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
@@ -1549,8 +1558,6 @@ function CastTracker.functions.addCastTrackerOptions(container)
 		if tree and tree[1] and tree[1].value then treeGroup:SelectByValue(tree[1].value) end
 	end
 end
-
-CastTracker.functions.Refresh()
 
 -- ---------------------------------------------------------------------------
 -- Share Category via Chat & Addon-Channel

@@ -4550,7 +4550,13 @@ local function setAllHooks()
 	end)
 
 	-- Init modules
-	addon.Aura.functions.init()
+	if addon.Aura and addon.Aura.functions then
+		if addon.Aura.functions.InitDB then addon.Aura.functions.InitDB() end
+		if addon.Aura.functions.init then addon.Aura.functions.init() end
+		if addon.Aura.functions.InitBuffTracker then addon.Aura.functions.InitBuffTracker() end
+		if addon.Aura.functions.InitCastTracker then addon.Aura.functions.InitCastTracker() end
+		if addon.Aura.functions.InitCooldownNotify then addon.Aura.functions.InitCooldownNotify() end
+	end
 end
 
 function loadMain()

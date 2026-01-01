@@ -1,0 +1,16 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_Mouse", "enUS", true) -- “true” = default / fallback
+
+L["mouseRingEnabled"] = "Enable visible ring around the mouse cursor"
+L["mouseTrailEnabled"] = "Enable visible trail while moving the mouse cursor"
+L["Trailinfo"] = "Depending on your hardware this could have a performance impact"
+L["mouseRing"] = "Mouse ring"
+L["mouseTrail"] = "Mouse trail"
+L["Ring Color"] = "Ring color"
+L["Trail Color"] = "Trail color"
+L["mouseTrailDensity"] = "Mouse trail density"
+L["mouseRingSize"] = "Ring size"
+L["mouseRingHideDot"] = "Hide dot in cursor ring"
+L["mouseRingOnlyInCombat"] = "Show ring only in combat"
+L["mouseTrailOnlyInCombat"] = "Show trail only in combat"
+L["mouseRingUseClassColor"] = "Use class color for ring"
+L["mouseTrailUseClassColor"] = "Use class color for trail"
