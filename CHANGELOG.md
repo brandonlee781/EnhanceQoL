@@ -16,6 +16,7 @@
   - Auto-accept summons.
   - Auto-accept resurrection requests.
   - Auto-release in PvP/BGs.
+  - Latency stream: configurable ping colors + display mode (FPS/Latency).
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
 - **Mailbox**
   - Option to remember the last recipient in the Send Mail field until the mailbox closes.

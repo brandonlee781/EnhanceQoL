@@ -2955,9 +2955,16 @@ end
 -- Simple toggles in Settings panel (keep basic visibility outside Edit Mode)
 if addon.functions and addon.functions.SettingsCreateCategory then
 	local cUF = addon.SettingsLayout.rootUI
-	local expandable = addon.SettingsLayout.expUnitFrames
+	local expandable = addon.SettingsLayout.expEQoLUnitFrames
+	if not expandable then
+		expandable = addon.functions.SettingsCreateExpandableSection(cUF, {
+			name = L["CustomUnitFrames"] or "EQoL Unit Frames",
+			expanded = false,
+			colorizeTitle = false,
+		})
+		addon.SettingsLayout.expEQoLUnitFrames = expandable
+	end
 
-	addon.functions.SettingsCreateHeadline(cUF, L["CustomUnitFrames"], { parentSection = expandable })
 	addon.SettingsLayout.ufPlusCategory = cUF
 	addon.functions.SettingsCreateText(cUF, "|cff99e599" .. L["UFPlusHint"] .. "|r", { parentSection = expandable })
 	addon.functions.SettingsCreateText(cUF, "", { parentSection = expandable })
