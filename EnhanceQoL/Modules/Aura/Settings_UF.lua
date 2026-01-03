@@ -665,6 +665,25 @@ local function buildUnitSettings(unit)
 		if UF and UF.ApplyVisibilityRules then UF.ApplyVisibilityRules(unit) end
 		refreshSettingsUI()
 	end
+	local function getVisibilityFadeValue()
+		local cfg = ensureConfig(unit)
+		local fade = cfg and cfg.visibilityFade
+		local value = type(fade) == "number" and fade or nil
+		if value == nil and addon and addon.functions and addon.functions.GetFrameFadedAlpha then value = addon.functions.GetFrameFadedAlpha() end
+		if type(value) ~= "number" then value = 0 end
+		if value < 0 then value = 0 end
+		if value > 1 then value = 1 end
+		return math.floor((value * 100) + 0.5)
+	end
+	local function setVisibilityFadeValue(value)
+		local cfg = ensureConfig(unit)
+		local pct = tonumber(value)
+		if pct == nil then pct = 0 end
+		if pct < 0 then pct = 0 end
+		if pct > 100 then pct = 100 end
+		cfg.visibilityFade = pct / 100
+		if UF and UF.ApplyVisibilityRules then UF.ApplyVisibilityRules(unit) end
+	end
 
 	list[#list + 1] = { name = SETTINGS or "Settings", kind = settingType.Collapsible, id = "utility", defaultCollapsed = true }
 
@@ -689,7 +708,21 @@ local function buildUnitSettings(unit)
 		refreshSelf()
 	end, def.showTooltip or false, "frame")
 
-	if #visibilityOptions > 0 then list[#list + 1] = multiDropdown(L["Show when"] or "Show when", visibilityOptions, isVisibilityRuleSelected, setVisibilityRule, nil, "frame") end
+	if #visibilityOptions > 0 then
+		list[#list + 1] = multiDropdown(L["Show when"] or "Show when", visibilityOptions, isVisibilityRuleSelected, setVisibilityRule, nil, "frame")
+		list[#list + 1] = slider(
+			OPACITY or "Opacity",
+			0,
+			100,
+			1,
+			function() return getVisibilityFadeValue() end,
+			function(val) setVisibilityFadeValue(val) end,
+			0,
+			"frame",
+			true,
+			function(val) return tostring(val) .. "%" end
+		)
+	end
 
 	list[#list + 1] = slider(L["UFWidth"] or "Frame width", MIN_WIDTH, 800, 1, function() return getValue(unit, { "width" }, def.width or MIN_WIDTH) end, function(val)
 		setValue(unit, { "width" }, math.max(MIN_WIDTH, val or MIN_WIDTH))

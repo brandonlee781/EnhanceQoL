@@ -1561,7 +1561,13 @@ local function applyVisibilityRules(unit)
 	end
 	local inEdit = addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode()
 	local useConfig = (not inEdit and cfg and cfg.enabled) and normalizeVisibilityConfig(cfg.visibility) or nil
-	local opts = { noStateDriver = true }
+	local fadeAlpha = nil
+	if not inEdit and cfg and type(cfg.visibilityFade) == "number" then
+		fadeAlpha = cfg.visibilityFade
+		if fadeAlpha < 0 then fadeAlpha = 0 end
+		if fadeAlpha > 1 then fadeAlpha = 1 end
+	end
+	local opts = { noStateDriver = true, fadeAlpha = fadeAlpha }
 	if unit == "boss" then
 		for i = 1, maxBossFrames do
 			local info = UNITS["boss" .. i]

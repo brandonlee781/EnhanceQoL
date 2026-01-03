@@ -917,6 +917,7 @@ local function RefreshAllFrameVisibilities()
 		ApplyFrameVisibilityState(state)
 	end
 end
+addon.functions.RefreshAllFrameVisibilityAlpha = RefreshAllFrameVisibilities
 
 local function EnsureFrameVisibilityWatcher()
 	addon.variables = addon.variables or {}
@@ -943,6 +944,18 @@ local function EnsureFrameVisibilityWatcher()
 	addon.variables.frameVisibilityWatcher = watcher
 	UpdateFrameVisibilityContext()
 	UpdateFrameVisibilityHealthRegistration()
+end
+
+local function clampVisibilityAlpha(value)
+	if type(value) ~= "number" then return nil end
+	if value < 0 then return 0 end
+	if value > 1 then return 1 end
+	return value
+end
+
+local function getVisibilityFadeAlpha(state)
+	if not state then return nil end
+	return clampVisibilityAlpha(state.fadeAlpha)
 end
 
 local function EvaluateFrameVisibility(state)
@@ -1043,7 +1056,10 @@ ApplyFrameVisibilityState = function(state)
 	EnsureFrameVisibilityWatcher()
 	local context = frameVisibilityContext
 	local shouldShow, activeRule = EvaluateFrameVisibility(state)
-	local targetAlpha = shouldShow and 1 or 0
+	local forcedHidden = activeRule == "ALWAYS_HIDDEN" or activeRule == "ALWAYS_HIDE_IN_GROUP"
+	local fadeAlpha = getVisibilityFadeAlpha(state)
+	local targetAlpha = shouldShow and 1 or (fadeAlpha ~= nil and fadeAlpha or addon.functions.GetFrameFadedAlpha())
+	if forcedHidden then targetAlpha = 0 end
 	local isMidnightPlayerFrame = addon and addon.variables and addon.variables.isMidnight and state.frame == _G.PlayerFrame
 	local applyMidnightAlpha = shouldShow and activeRule == "PLAYER_HEALTH_NOT_FULL" and isMidnightPlayerFrame
 
@@ -1053,14 +1069,15 @@ ApplyFrameVisibilityState = function(state)
 		targetAlpha = midnightAlpha
 	end
 
+	local lastAlpha = state.lastAlpha
 	if shouldShow then
-		if state.visible == true and not applyMidnightAlpha then
+		if state.visible == true and not applyMidnightAlpha and lastAlpha == targetAlpha then
 			UpdateFrameVisibilityHealthRegistration()
 			if addon.variables.isMidnight then ApplyToFrameAndChildren(state, targetAlpha, not applyMidnightAlpha) end
 			return
 		end
 	else
-		if state.visible == false then
+		if state.visible == false and lastAlpha == targetAlpha then
 			UpdateFrameVisibilityHealthRegistration()
 			return
 		end
@@ -1068,6 +1085,7 @@ ApplyFrameVisibilityState = function(state)
 
 	ApplyToFrameAndChildren(state, targetAlpha, not applyMidnightAlpha)
 	state.visible = shouldShow
+	state.lastAlpha = targetAlpha
 	UpdateFrameVisibilityHealthRegistration()
 end
 
@@ -1158,6 +1176,7 @@ local function ApplyVisibilityToUnitFrame(frameName, cbData, config, opts)
 
 	local state = EnsureFrameState(frame, cbData)
 	state.config = config
+	state.fadeAlpha = clampVisibilityAlpha(opts and opts.fadeAlpha)
 	state.isBossFrame = frameName == BOSS_FRAME_CONTAINER_NAME
 	local isPlayerUnit = (cbData.unitToken == "player")
 	state.supportsPlayerHealthRule = isPlayerUnit
@@ -1166,7 +1185,8 @@ local function ApplyVisibilityToUnitFrame(frameName, cbData, config, opts)
 
 	local driverExpression = BuildUnitFrameDriverExpression(config)
 	local needsHealth = config and config.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule
-	local useDriver = driverExpression and not config.MOUSEOVER and not needsHealth and not (opts and opts.noStateDriver) and not state.isBossFrame
+	local hasFadeAlpha = type(state.fadeAlpha) == "number"
+	local useDriver = driverExpression and not config.MOUSEOVER and not needsHealth and not (opts and opts.noStateDriver) and not state.isBossFrame and not hasFadeAlpha
 
 	if useDriver then
 		state.driverActive = true
@@ -1740,6 +1760,19 @@ end
 addon.functions.GetActionBarFadeStrength = GetActionBarFadeStrength
 
 local function GetActionBarFadedAlpha() return 1 - GetActionBarFadeStrength() end
+
+local function GetFrameFadeStrength()
+	if not addon.db then return 1 end
+	local strength = tonumber(addon.db.frameVisibilityFadeStrength)
+	if not strength then strength = 1 end
+	if strength < 0 then strength = 0 end
+	if strength > 1 then strength = 1 end
+	return strength
+end
+addon.functions.GetFrameFadeStrength = GetFrameFadeStrength
+
+local function GetFrameFadedAlpha() return 1 - GetFrameFadeStrength() end
+addon.functions.GetFrameFadedAlpha = GetFrameFadedAlpha
 
 local function ApplyActionBarAlpha(bar, variable, config, combatOverride, skipFade)
 	if not bar then return end
@@ -3147,6 +3180,7 @@ addon.functions.initLootToast = initLootToast
 local function initUI()
 	MigrateLegacyVisibilityFlags()
 	addon.functions.InitDBValue("enableMinimapButtonBin", false)
+	addon.functions.InitDBValue("frameVisibilityFadeStrength", 1)
 	addon.functions.InitDBValue("buttonsink", {})
 	addon.functions.InitDBValue("buttonSinkAnchorPreference", "AUTO")
 	addon.functions.InitDBValue("minimapButtonBinColumns", DEFAULT_BUTTON_SINK_COLUMNS)

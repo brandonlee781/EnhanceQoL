@@ -11,6 +11,8 @@ local UpdateUnitFrameMouseover = addon.functions.UpdateUnitFrameMouseover or fun
 local RefreshAllActionBarAnchors = addon.functions.RefreshAllActionBarAnchors or function() end
 local RefreshAllActionBarVisibilityAlpha = addon.functions.RefreshAllActionBarVisibilityAlpha or function() end
 local GetActionBarFadeStrength = addon.functions.GetActionBarFadeStrength or function() return 1 end
+local GetFrameFadeStrength = addon.functions.GetFrameFadeStrength or function() return 1 end
+local RefreshAllFrameVisibilityAlpha = addon.functions.RefreshAllFrameVisibilityAlpha or function() end
 local GetVisibilityRuleMetadata = addon.functions.GetVisibilityRuleMetadata or function() return {} end
 local HasFrameVisibilityOverride = addon.functions.HasFrameVisibilityOverride or function() return false end
 local SetCooldownViewerVisibility = addon.functions.SetCooldownViewerVisibility or function() end
@@ -672,6 +674,32 @@ local function createFrameCategory()
 			end
 		end
 	end
+
+	local function getFrameFadePercent()
+		local value = GetFrameFadeStrength()
+		if value < 0 then value = 0 end
+		if value > 1 then value = 1 end
+		return math.floor((value * 100) + 0.5)
+	end
+
+	addon.functions.SettingsCreateSlider(category, {
+		var = "frameVisibilityFadeStrength",
+		text = L["frameFadeStrength"] or "Fade amount",
+		desc = L["frameFadeStrengthDesc"],
+		min = 0,
+		max = 100,
+		step = 1,
+		default = 100,
+		get = getFrameFadePercent,
+		set = function(val)
+			local pct = tonumber(val) or 0
+			if pct < 0 then pct = 0 end
+			if pct > 100 then pct = 100 end
+			addon.db.frameVisibilityFadeStrength = pct / 100
+			RefreshAllFrameVisibilityAlpha()
+		end,
+		parentSection = expandable,
+	})
 
 	createCooldownViewerDropdowns(category, expandable)
 end

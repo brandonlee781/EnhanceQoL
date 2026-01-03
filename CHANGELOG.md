@@ -12,6 +12,7 @@
   - PvP indicator icon for Player/Target/Focus.
   - Optional reverse-fill absorb bar in UF.
   - Resource bars can show configurable threshold lines (count/color/thickness).
+  - Single opacity slider for UF Plus “Show when” visibility.
   - Brewmaster: Stagger secondary resource bar with native Stagger colors.
   - Detached power bar can use its own border (texture/size/offset).
   - Cast bar icon offset slider for Target/Focus/Boss frames.
@@ -43,6 +44,7 @@
   - Economy root reorganized into Vendors & Services, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
   - Vendor module settings moved under Economy with separate Selling & Shopping and Destroy sections.
   - Quest settings moved to Gameplay with a single Questing accordion.
+  - Frame visibility rules now have a global fade amount slider.
 - **UF Plus / Resource Bars**
   - Brewmaster no longer shows the unused Mana bar.
 - **Gear & Upgrades**
