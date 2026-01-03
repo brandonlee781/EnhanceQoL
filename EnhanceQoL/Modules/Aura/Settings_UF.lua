@@ -1920,6 +1920,25 @@ local function buildUnitSettings(unit)
 		castIconSize.isEnabled = isCastIconEnabled
 		list[#list + 1] = castIconSize
 
+		local castIconOffsetX = slider(
+			L["Icon X Offset"] or "Icon X Offset",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function()
+				return getValue(unit, { "cast", "iconOffset", "x" }, (castDef.iconOffset and castDef.iconOffset.x) or -4)
+			end,
+			function(val)
+				setValue(unit, { "cast", "iconOffset", "x" }, val or -4)
+				refresh()
+			end,
+			(castDef.iconOffset and castDef.iconOffset.x) or -4,
+			"cast",
+			true
+		)
+		castIconOffsetX.isEnabled = isCastIconEnabled
+		list[#list + 1] = castIconOffsetX
+
 		list[#list + 1] = checkbox(L["Show spell name"] or "Show spell name", function() return getValue(unit, { "cast", "showName" }, castDef.showName ~= false) ~= false end, function(val)
 			setValue(unit, { "cast", "showName" }, val and true or false)
 			refresh()

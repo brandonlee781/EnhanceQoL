@@ -130,6 +130,36 @@ local data = {
 		},
 	},
 	{
+		var = "minimapButtonsMouseover",
+		text = L["minimapButtonsMouseover"],
+		desc = L["minimapButtonsMouseoverDesc"],
+		func = function(key)
+			addon.db["minimapButtonsMouseover"] = key
+			if addon.functions.applyMinimapButtonMouseover then addon.functions.applyMinimapButtonMouseover() end
+		end,
+		default = false,
+		parentCheck = function()
+			return not (
+				addon.SettingsLayout.elements["enableMinimapButtonBin"]
+				and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+				and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+			)
+		end,
+		notify = "enableMinimapButtonBin",
+		parentSection = mapExpandable,
+	},
+	{
+		var = "unclampMinimapCluster",
+		text = L["unclampMinimapCluster"],
+		desc = L["unclampMinimapClusterDesc"],
+		func = function(key)
+			addon.db["unclampMinimapCluster"] = key
+			if addon.functions.applyMinimapClusterClamp then addon.functions.applyMinimapClusterClamp() end
+		end,
+		default = false,
+		parentSection = mapExpandable,
+	},
+	{
 		var = "hideMinimapButton",
 		text = L["hideMinimapButton"],
 		func = function(v)
@@ -529,10 +559,11 @@ data = {
 	{
 		var = "enableMinimapButtonBin",
 		text = L["enableMinimapButtonBin"],
-		desc = L["enableMinimapButtonBin"],
+		desc = L["enableMinimapButtonBinDesc"],
 		func = function(key)
 			addon.db["enableMinimapButtonBin"] = key
 			addon.functions.toggleButtonSink()
+			if addon.functions.applyMinimapButtonMouseover then addon.functions.applyMinimapButtonMouseover() end
 		end,
 		default = false,
 		parentSection = buttonSinkExpandable,
@@ -540,6 +571,7 @@ data = {
 			{
 				var = "useMinimapButtonBinIcon",
 				text = L["useMinimapButtonBinIcon"],
+				desc = L["useMinimapButtonBinIconDesc"],
 				func = function(key)
 					addon.db["useMinimapButtonBinIcon"] = key
 					if key then addon.db["useMinimapButtonBinMouseover"] = false end
@@ -621,6 +653,7 @@ data = {
 			{
 				var = "useMinimapButtonBinMouseover",
 				text = L["useMinimapButtonBinMouseover"],
+				desc = L["useMinimapButtonBinMouseoverDesc"],
 				func = function(key)
 					addon.db["useMinimapButtonBinMouseover"] = key
 					if key then addon.db["useMinimapButtonBinIcon"] = false end
@@ -643,6 +676,7 @@ data = {
 			{
 				var = "lockMinimapButtonBin",
 				text = L["lockMinimapButtonBin"],
+				desc = L["lockMinimapButtonBinDesc"],
 				func = function(key)
 					addon.db["lockMinimapButtonBin"] = key
 					addon.functions.toggleButtonSink()
@@ -664,6 +698,7 @@ data = {
 			{
 				var = "minimapButtonBinHideBorder",
 				text = L["minimapButtonBinHideBorder"],
+				desc = L["minimapButtonBinHideBorderDesc"],
 				func = function(key)
 					addon.db["minimapButtonBinHideBorder"] = key
 					addon.functions.toggleButtonSink()
@@ -681,6 +716,7 @@ data = {
 			{
 				var = "minimapButtonBinHideBackground",
 				text = L["minimapButtonBinHideBackground"],
+				desc = L["minimapButtonBinHideBackgroundDesc"],
 				func = function(key)
 					addon.db["minimapButtonBinHideBackground"] = key
 					if addon.functions.applyButtonSinkAppearance then addon.functions.applyButtonSinkAppearance() end
@@ -698,6 +734,7 @@ data = {
 			{
 				var = "minimapButtonBinColumns",
 				text = L["minimapButtonBinColumns"],
+				desc = L["minimapButtonBinColumnsDesc"],
 				set = function(val)
 					val = math.floor(val + 0.5)
 					if val < 1 then
@@ -765,7 +802,7 @@ end
 
 addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	var = "ignoreMinimapSinkHole",
-	text = IGNORE,
+	text = L["minimapButtonBinIgnore"] or IGNORE,
 	parent = true,
 	element = addon.SettingsLayout.elements["enableMinimapButtonBin"] and addon.SettingsLayout.elements["enableMinimapButtonBin"].element,
 	parentCheck = isMinimapButtonBinEnabled,
@@ -889,6 +926,7 @@ local function applySquareMinimapLayout(self, underneath)
 
 	local addonCompartment = _G.AddonCompartmentFrame
 	local instanceDifficulty = MinimapCluster and MinimapCluster.InstanceDifficulty
+	local indicatorFrame = MinimapCluster and MinimapCluster.IndicatorFrame
 
 	local headerUnderneath = underneath
 	if headerUnderneath == nil then
@@ -902,7 +940,7 @@ local function applySquareMinimapLayout(self, underneath)
 	Minimap:ClearAllPoints()
 	Minimap.ZoomIn:ClearAllPoints()
 	Minimap.ZoomOut:ClearAllPoints()
-	MinimapCluster.IndicatorFrame:ClearAllPoints()
+	if indicatorFrame then indicatorFrame:ClearAllPoints() end
 	if addonCompartment then addonCompartment:ClearAllPoints() end
 	if instanceDifficulty then instanceDifficulty:ClearAllPoints() end
 
@@ -921,7 +959,7 @@ local function applySquareMinimapLayout(self, underneath)
 		Minimap.ZoomOut:SetPoint("RIGHT", Minimap.ZoomIn, "LEFT", -6, 0)
 		if addonCompartment then addonCompartment:SetPoint("TOP", Minimap.ZoomIn, "TOP", 0, -20) end
 	end
-	MinimapCluster.IndicatorFrame:SetPoint("RIGHT", MinimapCluster.Tracking.Button, "LEFT", -10, 0)
+	if indicatorFrame then indicatorFrame:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 2, -2) end
 
 	if addonCompartment then addonCompartment:SetFrameStrata("MEDIUM") end
 end
@@ -933,10 +971,21 @@ function addon.functions.applySquareMinimapLayout(forceUnderneath)
 		hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", applySquareMinimapLayout)
 		addon.variables.squareMinimapLayoutHooked = true
 	end
+	if not addon.variables.squareMinimapIndicatorHooked and type(MiniMapIndicatorFrame_UpdatePosition) == "function" then
+		hooksecurefunc("MiniMapIndicatorFrame_UpdatePosition", function()
+			if not addon.db or not addon.db.enableSquareMinimap or not addon.db.enableSquareMinimapLayout then return end
+			if not Minimap or not MinimapCluster or not MinimapCluster.IndicatorFrame then return end
+			MinimapCluster.IndicatorFrame:ClearAllPoints()
+			MinimapCluster.IndicatorFrame:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 2, -2)
+		end)
+		addon.variables.squareMinimapIndicatorHooked = true
+	end
 end
 
 function addon.functions.initMapNav()
 	addon.functions.applySquareMinimapLayout()
+	if addon.functions.applyMinimapClusterClamp then addon.functions.applyMinimapClusterClamp() end
+	if addon.functions.applyMinimapButtonMouseover then addon.functions.applyMinimapButtonMouseover() end
 	addon.functions.EnableWorldMapCoordinates()
 end
 

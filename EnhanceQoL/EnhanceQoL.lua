@@ -3162,6 +3162,8 @@ local function initUI()
 	addon.functions.InitDBValue("enableSquareMinimapLayout", false)
 	addon.functions.InitDBValue("squareMinimapBorderSize", 1)
 	addon.functions.InitDBValue("squareMinimapBorderColor", { r = 0, g = 0, b = 0 })
+	addon.functions.InitDBValue("minimapButtonsMouseover", false)
+	addon.functions.InitDBValue("unclampMinimapCluster", false)
 	addon.functions.InitDBValue("showWorldMapCoordinates", false)
 	addon.functions.InitDBValue("hiddenMinimapElements", addon.db["hiddenMinimapElements"] or {})
 	addon.functions.InitDBValue("persistAuctionHouseFilter", false)
@@ -3324,6 +3326,60 @@ local function initUI()
 		if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
 		if addon.functions.applySquareMinimapHousingBackdrop then addon.functions.applySquareMinimapHousingBackdrop() end
 	end)
+
+	local function shouldEnableMinimapButtonMouseover() return addon.db and addon.db.minimapButtonsMouseover end
+
+	local function setLibDBIconMouseover(name, enable)
+		if not LDBIcon or not name then return end
+		if LDBIcon.ShowOnEnter then
+			LDBIcon:ShowOnEnter(name, enable)
+			return
+		end
+		if not LDBIcon.GetMinimapButton then return end
+		local button = LDBIcon:GetMinimapButton(name)
+		if not button then return end
+		button.showOnMouseover = enable and true or false
+		if button.fadeOut then button.fadeOut:Stop() end
+		if enable then
+			button:SetAlpha(0)
+		else
+			button:SetAlpha(1)
+		end
+	end
+
+	function addon.functions.applyMinimapButtonMouseover()
+		if not LDBIcon or not LDBIcon.GetButtonList then return end
+		addon.variables = addon.variables or {}
+		local enable = shouldEnableMinimapButtonMouseover()
+		local buttons = LDBIcon:GetButtonList() or {}
+		for i = 1, #buttons do
+			setLibDBIconMouseover(buttons[i], enable)
+		end
+		if not addon.variables.minimapButtonMouseoverHooked then
+			if LDBIcon.RegisterCallback then
+				LDBIcon.RegisterCallback(addon, "LibDBIcon_IconCreated", function(_, button, name)
+					if shouldEnableMinimapButtonMouseover() then setLibDBIconMouseover(name, true) end
+				end)
+			else
+				hooksecurefunc(LDBIcon, "Register", function(self, name)
+					if shouldEnableMinimapButtonMouseover() then setLibDBIconMouseover(name, true) end
+				end)
+			end
+			addon.variables.minimapButtonMouseoverHooked = true
+		end
+	end
+
+	function addon.functions.applyMinimapClusterClamp()
+		if not MinimapCluster or not MinimapCluster.SetClampedToScreen then return end
+		if addon.db and addon.db.unclampMinimapCluster then
+			MinimapCluster:SetClampedToScreen(false)
+		else
+			MinimapCluster:SetClampedToScreen(true)
+		end
+	end
+
+	if addon.functions.applyMinimapButtonMouseover then addon.functions.applyMinimapButtonMouseover() end
+	if addon.functions.applyMinimapClusterClamp then addon.functions.applyMinimapClusterClamp() end
 
 	function addon.functions.toggleMinimapButton(value)
 		if value == false then

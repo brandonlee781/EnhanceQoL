@@ -339,6 +339,7 @@ local defaults = {
 			fontSize = 12,
 			showIcon = true,
 			iconSize = 22,
+			iconOffset = { x = -4, y = 0 },
 			texture = "DEFAULT",
 			color = { 0.9, 0.7, 0.2, 1 },
 			notInterruptibleColor = DEFAULT_NOT_INTERRUPTIBLE_COLOR,
@@ -1858,9 +1859,11 @@ local function applyCastLayout(cfg, unit)
 	end
 	if st.castIcon then
 		local size = ccfg.iconSize or defc.iconSize or height
+		local iconOff = ccfg.iconOffset or defc.iconOffset or { x = -4, y = 0 }
+		if type(iconOff) ~= "table" then iconOff = { x = iconOff, y = 0 } end
 		st.castIcon:SetSize(size, size)
 		st.castIcon:ClearAllPoints()
-		st.castIcon:SetPoint("RIGHT", st.castBar, "LEFT", -4, 0)
+		st.castIcon:SetPoint("RIGHT", st.castBar, "LEFT", iconOff.x or -4, iconOff.y or 0)
 		st.castIcon:SetShown(ccfg.showIcon ~= false)
 	end
 	local texKey = ccfg.texture or defc.texture or "DEFAULT"

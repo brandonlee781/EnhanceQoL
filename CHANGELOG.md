@@ -12,6 +12,7 @@
   - PvP indicator icon for Player/Target/Focus.
   - Optional reverse-fill absorb bar in UF.
   - Detached power bar can use its own border (texture/size/offset).
+  - Cast bar icon offset slider for Target/Focus/Boss frames.
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.
@@ -19,6 +20,9 @@
   - Auto-release in PvP/BGs.
   - Latency stream: configurable ping colors + display mode (FPS/Latency).
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
+- **Minimap**
+  - Hide addon minimap buttons until you mouse over the minimap.
+  - Unclamp the minimap cluster so it can sit closer to the screen edge.
 - **Mailbox**
   - Option to remember the last recipient in the Send Mail field until the mailbox closes.
 - **Character Frame**
@@ -33,6 +37,8 @@
   - Economy root reorganized into Vendors & Services, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
   - Vendor module settings moved under Economy with separate Selling & Shopping and Destroy sections.
   - Quest settings moved to Gameplay with a single Questing accordion.
+- **Minimap**
+  - Square minimap layout now anchors the mail icon to the top-left of the minimap.
 
 ### 🐛 Fixed
 
