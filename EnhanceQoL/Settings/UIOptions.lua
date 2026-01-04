@@ -18,6 +18,8 @@ local HasFrameVisibilityOverride = addon.functions.HasFrameVisibilityOverride or
 local SetCooldownViewerVisibility = addon.functions.SetCooldownViewerVisibility or function() end
 local GetCooldownViewerVisibility = addon.functions.GetCooldownViewerVisibility or function() return nil end
 local IsCooldownViewerEnabled = addon.functions.IsCooldownViewerEnabled or function() return false end
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 local ACTION_BAR_FRAME_NAMES = constants.ACTION_BAR_FRAME_NAMES or {}
 local ACTION_BAR_ANCHOR_ORDER = constants.ACTION_BAR_ANCHOR_ORDER or {}
@@ -557,6 +559,15 @@ local function createActionBarCategory()
 		colorizeTitle = false,
 	})
 
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "AutoPushSpellToActionBar",
+		text = L["AutoPushSpellToActionBar"],
+		get = function() return getCVarOptionState("AutoPushSpellToActionBar") end,
+		func = function(value) setCVarOptionState("AutoPushSpellToActionBar", value) end,
+		default = false,
+		parentSection = expandable,
+	})
+
 	createActionBarVisibility(category, expandable)
 	createAnchorControls(category, expandable)
 	createButtonAppearanceControls(category, expandable)
@@ -719,6 +730,77 @@ local function createFrameCategory()
 			addon.db.frameVisibilityFadeStrength = pct / 100
 			RefreshAllFrameVisibilityAlpha()
 		end,
+		parentSection = expandable,
+	})
+
+	local displayCVarData = {
+		{
+			var = "ShowClassColorInNameplate",
+			text = L["ShowClassColorInNameplate"],
+			get = function() return getCVarOptionState("ShowClassColorInNameplate") end,
+			func = function(value) setCVarOptionState("ShowClassColorInNameplate", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "ShowTargetCastbar",
+			text = L["ShowTargetCastbar"],
+			get = function() return getCVarOptionState("ShowTargetCastbar") end,
+			func = function(value) setCVarOptionState("ShowTargetCastbar", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "raidFramesDisplayClassColor",
+			text = L["raidFramesDisplayClassColor"],
+			get = function() return getCVarOptionState("raidFramesDisplayClassColor") end,
+			func = function(value) setCVarOptionState("raidFramesDisplayClassColor", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "pvpFramesDisplayClassColor",
+			text = L["pvpFramesDisplayClassColor"],
+			get = function() return getCVarOptionState("pvpFramesDisplayClassColor") end,
+			func = function(value) setCVarOptionState("pvpFramesDisplayClassColor", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "UnitNamePlayerGuild",
+			text = L["UnitNamePlayerGuild"],
+			get = function() return getCVarOptionState("UnitNamePlayerGuild") end,
+			func = function(value) setCVarOptionState("UnitNamePlayerGuild", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "UnitNamePlayerPVPTitle",
+			text = L["UnitNamePlayerPVPTitle"],
+			get = function() return getCVarOptionState("UnitNamePlayerPVPTitle") end,
+			func = function(value) setCVarOptionState("UnitNamePlayerPVPTitle", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+		{
+			var = "ffxDeath",
+			text = L["ffxDeath"],
+			get = function() return getCVarOptionState("ffxDeath") end,
+			func = function(value) setCVarOptionState("ffxDeath", value) end,
+			default = false,
+			parentSection = expandable,
+		},
+	}
+
+	table.sort(displayCVarData, function(a, b) return a.text < b.text end)
+	addon.functions.SettingsCreateCheckboxes(category, displayCVarData)
+
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "cooldownViewerEnabled",
+		text = L["cooldownViewerEnabled"],
+		get = function() return getCVarOptionState("cooldownViewerEnabled") end,
+		func = function(value) setCVarOptionState("cooldownViewerEnabled", value) end,
+		default = false,
 		parentSection = expandable,
 	})
 

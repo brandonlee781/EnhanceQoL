@@ -3,6 +3,8 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 -- Mount/pet fanfare auto-clear (unwrap)
 local mountUnwrapDebounce = false
@@ -431,6 +433,14 @@ data = {
 		var = "ignoreTalkingHead",
 		text = string.format(L["ignoreTalkingHeadN"], HUD_EDIT_MODE_TALKING_HEAD_FRAME_LABEL),
 		func = function(v) addon.db["ignoreTalkingHead"] = v end,
+		parentSection = interfaceExpandable,
+	},
+	{
+		var = "NameplatePersonalShowInCombat",
+		text = L["NameplatePersonalShowInCombat"],
+		get = function() return getCVarOptionState("NameplatePersonalShowInCombat") end,
+		func = function(value) setCVarOptionState("NameplatePersonalShowInCombat", value) end,
+		default = false,
 		parentSection = interfaceExpandable,
 	},
 	{

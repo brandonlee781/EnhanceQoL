@@ -8,6 +8,9 @@ else
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Mouse")
+local LMain = LibStub("AceLocale-3.0"):GetLocale(parentAddonName)
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 local cMouse = addon.SettingsLayout.rootGENERAL
 
@@ -250,6 +253,15 @@ data = {
 }
 table.sort(data[1].children, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cMouse, data)
+
+addon.functions.SettingsCreateCheckbox(cMouse, {
+	var = "enableMouseoverCast",
+	text = (LMain and LMain["enableMouseoverCast"]) or "Enable Mouseover Cast",
+	get = function() return getCVarOptionState("enableMouseoverCast") end,
+	func = function(value) setCVarOptionState("enableMouseoverCast", value) end,
+	default = false,
+	parentSection = expandable,
+})
 
 ----- REGION END
 

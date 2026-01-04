@@ -1,6 +1,8 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 local function applyParentSection(entries, section)
 	for _, entry in ipairs(entries or {}) do
@@ -89,6 +91,20 @@ local data = {
 			addon.db["chatUseArrowKeys"] = key
 			if addon.functions.ApplyChatArrowKeys then addon.functions.ApplyChatArrowKeys(key) end
 		end,
+		default = false,
+	},
+	{
+		var = "chatMouseScroll",
+		text = L["chatMouseScroll"],
+		get = function() return getCVarOptionState("chatMouseScroll") end,
+		func = function(value) setCVarOptionState("chatMouseScroll", value) end,
+		default = false,
+	},
+	{
+		var = "WholeChatWindowClickable",
+		text = L["WholeChatWindowClickable"],
+		get = function() return getCVarOptionState("WholeChatWindowClickable") end,
+		func = function(value) setCVarOptionState("WholeChatWindowClickable", value) end,
 		default = false,
 	},
 	{

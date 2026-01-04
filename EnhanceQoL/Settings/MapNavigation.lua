@@ -1,6 +1,8 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 local cMapNav = addon.SettingsLayout.rootUI
 addon.SettingsLayout.mapNavigationCategory = cMapNav
@@ -207,6 +209,14 @@ data = {
 				addon.functions.DisableWorldMapCoordinates()
 			end
 		end,
+		default = false,
+		parentSection = mapExpandable,
+	},
+	{
+		var = "mapFade",
+		text = L["mapFade"],
+		get = function() return getCVarOptionState("mapFade") end,
+		func = function(value) setCVarOptionState("mapFade", value) end,
 		default = false,
 		parentSection = mapExpandable,
 	},

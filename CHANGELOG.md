@@ -53,7 +53,8 @@
   - Root categories now use a consistent expandable section layout.
   - UI root renamed to Display.
   - Social now contains Chat settings under the Social root.
-  - System root focuses on CVars; Sound + Shared Media moved to a dedicated Sound root.
+  - System root removed; Sound + Shared Media moved to a dedicated Sound root.
+  - CVar toggles moved into General (Movement & Input + System), Display (Frames), Minimap & Map, Mouse, Action Bars, and Chat.
   - Economy root reorganized into Repair Options, Vendor Options, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
   - Vendor module settings moved under Economy as Vendor Options, with Destroy as a subsection.
   - Quest settings moved to Gameplay with a single Questing accordion.

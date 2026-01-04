@@ -1,6 +1,8 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
+local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
+local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 
 local function applyParentSection(entries, section)
 	for _, entry in ipairs(entries or {}) do
@@ -9,26 +11,43 @@ local function applyParentSection(entries, section)
 	end
 end
 
-local function setCVarValue(...)
-	if addon.functions and addon.functions.setCVarValue then return addon.functions.setCVarValue(...) end
-end
+local cGeneral = addon.SettingsLayout.rootGENERAL
+addon.SettingsLayout.systemCategory = cGeneral
 
-local function getCvarCategoryLabel(key)
-	if key == "cvarCategoryDisplay" then return _G.DISPLAY end
-	if key == "cvarCategorySystem" then return _G.GENERAL end
-	return L[key] or key
-end
-
-local cSystem = addon.SettingsLayout.rootSYSTEM
-addon.SettingsLayout.systemCategory = cSystem
-
-local cvarExpandable = addon.functions.SettingsCreateExpandableSection(cSystem, {
-	name = L["CVar"] or "CVar",
+local movementExpandable = addon.functions.SettingsCreateExpandableSection(cGeneral, {
+	name = L["cvarCategoryMovementInput"] or "Movement & Input",
 	expanded = false,
 	colorizeTitle = false,
 })
 
-local data = {
+local movementData = {
+	{
+		var = "autoDismount",
+		text = L["autoDismount"],
+		get = function() return getCVarOptionState("autoDismount") end,
+		func = function(value) setCVarOptionState("autoDismount", value) end,
+		default = false,
+	},
+	{
+		var = "autoDismountFlying",
+		text = L["autoDismountFlying"],
+		get = function() return getCVarOptionState("autoDismountFlying") end,
+		func = function(value) setCVarOptionState("autoDismountFlying", value) end,
+		default = false,
+	},
+}
+
+table.sort(movementData, function(a, b) return a.text < b.text end)
+applyParentSection(movementData, movementExpandable)
+addon.functions.SettingsCreateCheckboxes(cGeneral, movementData)
+
+local systemExpandable = addon.functions.SettingsCreateExpandableSection(cGeneral, {
+	name = L["System"] or _G.SYSTEM or "System",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+local systemData = {
 	{
 		var = "cvarPersistenceEnabled",
 		text = L["cvarPersistence"],
@@ -39,52 +58,31 @@ local data = {
 		end,
 		default = false,
 	},
+	{
+		var = "scriptErrors",
+		text = L["scriptErrors"],
+		get = function() return getCVarOptionState("scriptErrors") end,
+		func = function(value) setCVarOptionState("scriptErrors", value) end,
+		default = false,
+	},
+	{
+		var = "showTutorials",
+		text = L["showTutorials"],
+		get = function() return getCVarOptionState("showTutorials") end,
+		func = function(value) setCVarOptionState("showTutorials", value) end,
+		default = false,
+	},
+	{
+		var = "UberTooltips",
+		text = L["UberTooltips"],
+		get = function() return getCVarOptionState("UberTooltips") end,
+		func = function(value) setCVarOptionState("UberTooltips", value) end,
+		default = false,
+	},
 }
 
-table.sort(data, function(a, b) return a.text < b.text end)
-applyParentSection(data, cvarExpandable)
-addon.functions.SettingsCreateCheckboxes(cSystem, data)
-
-local categories = {}
-for key, optionData in pairs(addon.variables.cvarOptions) do
-	local categoryKey = optionData.category or "cvarCategoryMisc"
-	if not categories[categoryKey] then categories[categoryKey] = {} end
-	table.insert(categories[categoryKey], {
-		var = key,
-		text = optionData.description,
-		func = function(value)
-			local newValue
-			if value then
-				newValue = optionData.trueValue
-			else
-				newValue = optionData.falseValue
-			end
-
-			if optionData.persistent then
-				addon.db.cvarOverrides = addon.db.cvarOverrides or {}
-				addon.db.cvarOverrides[key] = newValue
-			end
-			setCVarValue(key, newValue)
-		end,
-		get = function()
-			local v = C_CVar.GetCVar(key)
-			if v == optionData.trueValue then
-				return true
-			else
-				return false
-			end
-		end,
-	})
-end
-
-for i, v in pairs(categories) do
-	addon.functions.SettingsCreateHeadline(cSystem, getCvarCategoryLabel(i), { parentSection = cvarExpandable })
-	applyParentSection(v, cvarExpandable)
-	addon.functions.SettingsCreateCheckboxes(cSystem, v)
-end
-
--- table.sort(data, function(a, b) return a.text < b.text end)
--- addon.functions.SettingsCreateCheckboxes(cSystem, data)
+applyParentSection(systemData, systemExpandable)
+addon.functions.SettingsCreateCheckboxes(cGeneral, systemData)
 
 ----- REGION END
 

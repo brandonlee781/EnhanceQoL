@@ -13,6 +13,29 @@ SettingsLib:SetNewTagResolverForPrefix(prefix, function(idOrVar) return addon.va
 addon.SettingsLayout = addon.SettingsLayout or {}
 addon.functions = addon.functions or {}
 
+local function getCVarOptionData(cvarKey) return addon.variables and addon.variables.cvarOptions and addon.variables.cvarOptions[cvarKey] end
+
+function addon.functions.GetCVarOptionState(cvarKey)
+	local optionData = getCVarOptionData(cvarKey)
+	if not optionData or not C_CVar or not C_CVar.GetCVar then return false end
+	local ok, value = pcall(C_CVar.GetCVar, cvarKey)
+	if not ok then return false end
+	return tostring(value) == tostring(optionData.trueValue)
+end
+
+function addon.functions.SetCVarOptionState(cvarKey, enabled)
+	local optionData = getCVarOptionData(cvarKey)
+	if not optionData then return end
+	local newValue = enabled and optionData.trueValue or optionData.falseValue
+	if newValue == nil then return end
+	if optionData.persistent then
+		addon.db = addon.db or {}
+		addon.db.cvarOverrides = addon.db.cvarOverrides or {}
+		addon.db.cvarOverrides[cvarKey] = tostring(newValue)
+	end
+	if addon.functions.setCVarValue then addon.functions.setCVarValue(cvarKey, newValue) end
+end
+
 ---------------------------------------------------------
 -- Kategorien
 ---------------------------------------------------------
@@ -64,7 +87,7 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 			elseif sType == "slider" then
 				addon.functions.SettingsCreateSlider(cat, v)
 			elseif sType == "hint" then
-				addon.functions.SettingsCreateText(cat, v.text, {parentSection =v.parentSection})
+				addon.functions.SettingsCreateText(cat, v.text, { parentSection = v.parentSection })
 			elseif sType == "colorpicker" then
 				addon.functions.SettingsCreateColorPicker(cat, v)
 			elseif sType == "button" then
