@@ -3824,6 +3824,7 @@ globals = {
 	"SetSelectedArtifact",
 	"SetSelectedAuctionItem",
 	"SetSelectedDisplayChannel",
+	"C_Ping",
 	"SetSelectedFaction",
 	"SetSelectedFriend",
 	"SetSelectedIgnore",
