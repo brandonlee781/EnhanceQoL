@@ -81,6 +81,8 @@ L["Level / Percent / Max"] = "Level / Percent / Max"
 L["Level / Percent / Current"] = "Level / Percent / Current"
 L["Level / Percent / Current / Max"] = "Level / Percent / Current / Max"
 -- Resource Bars UI
+L["Reverse absorb fill"] = "Reverse absorb fill"
+L["Absorb overfill"] = "Overfill absorb bar"
 L["Profiles"] = "Profiles"
 L["Resource Bars"] = "Resource Bars"
 L["Enable Resource frame"] = "Enable Resource frame"
