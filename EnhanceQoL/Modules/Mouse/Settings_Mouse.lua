@@ -15,7 +15,7 @@ local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
 local cMouse = addon.SettingsLayout.rootGENERAL
 
 local expandable = addon.functions.SettingsCreateExpandableSection(cMouse, {
-	name = MOUSE_LABEL,
+	name = (LMain and LMain["MouseAndAccessibility"]) or "Mouse & Accessibility",
 	expanded = false,
 	colorizeTitle = false,
 })

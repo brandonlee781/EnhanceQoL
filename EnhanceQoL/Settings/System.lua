@@ -41,6 +41,98 @@ table.sort(movementData, function(a, b) return a.text < b.text end)
 applyParentSection(movementData, movementExpandable)
 addon.functions.SettingsCreateCheckboxes(cGeneral, movementData)
 
+local dialogExpandable = addon.functions.SettingsCreateExpandableSection(cGeneral, {
+	name = L["DialogsAndConfirmations"] or "Dialogs & Confirmations",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+addon.functions.SettingsCreateCheckbox(cGeneral, {
+	var = "deleteItemFillDialog",
+	text = L["deleteItemFillDialog"]:format(DELETE_ITEM_CONFIRM_STRING),
+	desc = L["deleteItemFillDialogDesc"],
+	func = function(value) addon.db["deleteItemFillDialog"] = value end,
+	parentSection = dialogExpandable,
+})
+
+local function isDialogConfirmSelected(key)
+	if key == "patron" then return addon.db["confirmPatronOrderDialog"] == true end
+	if key == "trade" then return addon.db["confirmTimerRemovalTrade"] == true end
+	if key == "enchant" then return addon.db["confirmReplaceEnchant"] == true end
+	if key == "socket" then return addon.db["confirmSocketReplace"] == true end
+	if key == "token" then return addon.db["confirmPurchaseTokenItem"] == true end
+	if key == "highcost" then return addon.db["confirmHighCostItem"] == true end
+	return false
+end
+
+local function setDialogConfirmOption(key, value)
+	local enabled = value and true or false
+	if key == "patron" then
+		addon.db["confirmPatronOrderDialog"] = enabled
+	elseif key == "trade" then
+		addon.db["confirmTimerRemovalTrade"] = enabled
+	elseif key == "enchant" then
+		addon.db["confirmReplaceEnchant"] = enabled
+	elseif key == "socket" then
+		addon.db["confirmSocketReplace"] = enabled
+	elseif key == "token" then
+		addon.db["confirmPurchaseTokenItem"] = enabled
+	elseif key == "highcost" then
+		addon.db["confirmHighCostItem"] = enabled
+	end
+end
+
+local function applyDialogConfirmSelection(selection)
+	selection = selection or {}
+	addon.db["confirmPatronOrderDialog"] = selection.patron == true
+	addon.db["confirmTimerRemovalTrade"] = selection.trade == true
+	addon.db["confirmReplaceEnchant"] = selection.enchant == true
+	addon.db["confirmSocketReplace"] = selection.socket == true
+	addon.db["confirmPurchaseTokenItem"] = selection.token == true
+	addon.db["confirmHighCostItem"] = selection.highcost == true
+end
+
+addon.functions.SettingsCreateMultiDropdown(cGeneral, {
+	var = "dialogAutoConfirm",
+	text = L["dialogAutoConfirm"] or "Auto-confirm dialogs",
+	options = {
+		{
+			value = "patron",
+			text = (L["confirmPatronOrderDialog"]):format(PROFESSIONS_CRAFTER_ORDER_TAB_NPC),
+			tooltip = L["confirmPatronOrderDialogDesc"],
+		},
+		{
+			value = "trade",
+			text = L["confirmTimerRemovalTrade"],
+			tooltip = L["confirmTimerRemovalTradeDesc"],
+		},
+		{
+			value = "enchant",
+			text = L["confirmReplaceEnchant"],
+			tooltip = L["confirmReplaceEnchantDesc"],
+		},
+		{
+			value = "socket",
+			text = L["confirmSocketReplace"],
+			tooltip = L["confirmSocketReplaceDesc"],
+		},
+		{
+			value = "token",
+			text = L["confirmPurchaseTokenItem"],
+			tooltip = L["confirmPurchaseTokenItemDesc"],
+		},
+		{
+			value = "highcost",
+			text = L["confirmHighCostItem"],
+			tooltip = L["confirmHighCostItemDesc"],
+		},
+	},
+	isSelectedFunc = function(key) return isDialogConfirmSelected(key) end,
+	setSelectedFunc = function(key, selected) setDialogConfirmOption(key, selected) end,
+	setSelection = applyDialogConfirmSelection,
+	parentSection = dialogExpandable,
+})
+
 local systemExpandable = addon.functions.SettingsCreateExpandableSection(cGeneral, {
 	name = L["System"] or _G.SYSTEM or "System",
 	expanded = false,

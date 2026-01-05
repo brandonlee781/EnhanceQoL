@@ -126,6 +126,12 @@ data = {
 		func = function(value) addon.db["persistAuctionHouseFilter"] = value end,
 	},
 	{
+		text = L["closeBagsOnAuctionHouse"],
+		desc = L["closeBagsOnAuctionHouseDesc"],
+		var = "closeBagsOnAuctionHouse",
+		func = function(value) addon.db["closeBagsOnAuctionHouse"] = value end,
+	},
+	{
 		text = (function()
 			local label = _G["AUCTION_HOUSE_FILTER_CURRENTEXPANSION_ONLY"]
 			return L["alwaysUserCurExpAuctionHouse"]:format(label)

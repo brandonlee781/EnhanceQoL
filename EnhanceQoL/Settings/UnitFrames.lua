@@ -245,37 +245,6 @@ data = {
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cUnitFrame, data)
 
-addon.functions.SettingsCreateHeadline(cUnitFrame, L["CastBars2"], {
-	parentSection = expandable,
-})
-
-local function getCastbarOptions()
-	local options = {
-		{ value = "PlayerCastingBarFrame", text = PLAYER },
-	}
-	if not isEQoLUnitEnabled("target") then table.insert(options, { value = "TargetFrameSpellBar", text = TARGET }) end
-	if not isEQoLUnitEnabled("focus") then table.insert(options, { value = "FocusFrameSpellBar", text = FOCUS }) end
-	return options
-end
-
-addon.functions.SettingsCreateMultiDropdown(cUnitFrame, {
-	var = "hiddenCastBars",
-	text = L["castBarsToHide2"],
-	optionfunc = getCastbarOptions,
-	isSelectedFunc = function(key)
-		if not key then return false end
-		if addon.db.hiddenCastBars and addon.db.hiddenCastBars[key] then return true end
-
-		return false
-	end,
-	setSelectedFunc = function(key, shouldSelect)
-		addon.db.hiddenCastBars = addon.db.hiddenCastBars or {}
-		addon.db.hiddenCastBars[key] = shouldSelect and true or false
-		addon.functions.ApplyCastBarVisibility()
-	end,
-	parentSection = expandable,
-})
-
 ----- REGION END
 
 local eventHandlers = {}

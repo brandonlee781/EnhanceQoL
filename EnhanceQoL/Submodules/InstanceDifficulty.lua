@@ -92,7 +92,7 @@ function InstanceDifficulty:Update()
 		return
 	end
 
-	local _, _, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
+	local _, _, difficultyID, difficultyName, _, _, _, _, maxPlayers = GetInstanceInfo()
 	local short = getShortLabel(difficultyID, difficultyName)
 	-- Stable code for color mapping
 	local code
