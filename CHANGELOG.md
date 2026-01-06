@@ -88,6 +88,8 @@
 - Unit Frame Strata set at least "High" blocks options window
 - TomTom Minimap Icons are ignored in Button Sink
 - Mover: Dragging no longer overlays the PlayerSpells/Talents UI, so buttons remain clickable.
+- Blizzard Boss Frame visibility rule now hides when EQoL Boss Frames are enabled.
+- UF Plus Edit Mode samples now show percent text for Boss frame power/health.
 
 ---
 

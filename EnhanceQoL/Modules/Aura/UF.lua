@@ -3646,6 +3646,7 @@ local function applyBossEditSample(idx, cfg)
 
 	local cur = UnitHealth("player") or 1
 	local maxv = UnitHealthMax("player") or cur or 1
+	local percentVal = getHealthPercent("player", cur, maxv)
 	st.health:SetMinMaxValues(0, maxv)
 	st.health:SetValue(cur)
 	local color = hc.color or (def.health and def.health.color) or { 0, 0.8, 0, 1 }
@@ -3661,21 +3662,21 @@ local function applyBossEditSample(idx, cfg)
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
 		else
-			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
 		else
-			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
 		else
-			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
 		end
 	end
 
@@ -3685,6 +3686,7 @@ local function applyBossEditSample(idx, cfg)
 			local enumId, token = getMainPower("player")
 			local pCur = UnitPower("player", enumId or 0) or 0
 			local pMax = UnitPowerMax("player", enumId or 0) or 0
+			local pPercent = getPowerPercent("player", enumId or 0, pCur, pMax)
 			st.power:SetMinMaxValues(0, pMax > 0 and pMax or 1)
 			st.power:SetValue(pCur)
 			local pr, pg, pb, pa = UFHelper.getPowerColor(token)
@@ -3703,21 +3705,21 @@ local function applyBossEditSample(idx, cfg)
 				if pLeftMode == "NONE" then
 					st.powerTextLeft:SetText("")
 				else
-					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
 				end
 			end
 			if st.powerTextCenter then
 				if pCenterMode == "NONE" then
 					st.powerTextCenter:SetText("")
 				else
-					st.powerTextCenter:SetText(UFHelper.formatText(pCenterMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextCenter:SetText(UFHelper.formatText(pCenterMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
 				end
 			end
 			if st.powerTextRight then
 				if pRightMode == "NONE" then
 					st.powerTextRight:SetText("")
 				else
-					st.powerTextRight:SetText(UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextRight:SetText(UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
 				end
 			end
 			st.power:Show()
