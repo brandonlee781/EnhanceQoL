@@ -3408,7 +3408,7 @@ local function applyBars(cfg, unit)
 	syncTextFrameLevels(st)
 end
 
-local function updateNameAndLevel(cfg, unit)
+local function updateNameAndLevel(cfg, unit, levelOverride)
 	local st = states[unit]
 	if not st then return end
 	cfg = cfg or st.cfg or ensureDB(unit)
@@ -3455,7 +3455,7 @@ local function updateNameAndLevel(cfg, unit)
 				lc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
 				if not lc then lc = { 1, 0.85, 0, 1 } end
 			end
-			local levelText = UFHelper.getUnitLevelText(unit)
+			local levelText = UFHelper.getUnitLevelText(unit, levelOverride)
 			st.levelText:SetText(levelText)
 			st.levelText:SetTextColor(lc[1] or 1, lc[2] or 0.85, lc[3] or 0, lc[4] or 1)
 		end
@@ -4437,7 +4437,11 @@ local function onEvent(self, event, unit, arg1)
 			if bossCfg.enabled then updatePower(bossCfg, unit) end
 		end
 	elseif event == "UNIT_NAME_UPDATE" or event == "PLAYER_LEVEL_UP" then
-		if unit == UNIT.PLAYER or event == "PLAYER_LEVEL_UP" then updateNameAndLevel(getCfg(UNIT.PLAYER), UNIT.PLAYER) end
+		if event == "PLAYER_LEVEL_UP" then
+			updateNameAndLevel(getCfg(UNIT.PLAYER), UNIT.PLAYER, unit)
+		elseif unit == UNIT.PLAYER then
+			updateNameAndLevel(getCfg(UNIT.PLAYER), UNIT.PLAYER)
+		end
 		if unit == UNIT.TARGET then updateNameAndLevel(getCfg(UNIT.TARGET), UNIT.TARGET) end
 		if unit == UNIT.FOCUS then updateNameAndLevel(getCfg(UNIT.FOCUS), UNIT.FOCUS) end
 		if unit == UNIT.PET then updateNameAndLevel(getCfg(UNIT.PET), UNIT.PET) end

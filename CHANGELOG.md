@@ -65,6 +65,7 @@
 - **UF Plus / Resource Bars**
   - Brewmaster no longer shows the unused Mana bar.
   - Removed the "Gap between bars" unit frame setting (detached power bar replaces this use case).
+  - Export scope now lists only specs with saved settings; “All specs” exports only configured specs.
 - **Gear & Upgrades**
   - Character/Inspect display options now use a multi-select dropdown with per-option tooltips.
 - **Items & Inventory**
@@ -91,7 +92,8 @@
 - Blizzard Boss Frame visibility rule now hides when EQoL Boss Frames are enabled.
 - UF Plus Edit Mode samples now show percent text for Boss frame power/health.
 - Resource Bars: Warlock Soul Shards now show partial values (e.g. 3.4).
-- Resource Bars: Spec toggles now initialize unused specs and profile scope no longer errors on invalid class IDs.
+- Resource Bars: Spec toggles now initialize unused specs and profile scope no longer errors on missing data (invalid class IDs or scope table).
+- UF Plus: Level text now refreshes on level-up.
 
 ---
 

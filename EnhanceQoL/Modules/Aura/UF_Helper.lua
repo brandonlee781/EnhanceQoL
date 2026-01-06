@@ -290,9 +290,9 @@ end
 
 function H.textModeUsesLevel(mode) return type(mode) == "string" and mode:find("LEVEL", 1, true) ~= nil end
 
-function H.getUnitLevelText(unit)
+function H.getUnitLevelText(unit, levelOverride)
 	if not unit then return "??" end
-	local rawLevel = UnitLevel(unit) or 0
+	local rawLevel = tonumber(levelOverride) or UnitLevel(unit) or 0
 	local levelText = rawLevel > 0 and tostring(rawLevel) or "??"
 	local classification = UnitClassification and UnitClassification(unit)
 	if classification == "worldboss" then
