@@ -779,16 +779,75 @@ function DataPanel.Create(id, name, existingOnly)
 					if isNew or partsFontChanged then
 						child.text:SetFont(font, size, "OUTLINE")
 					end
-					local text = part.text or ""
-					local textChanged = text ~= child.lastText
-					if isNew or textChanged then
-						child.text:SetText(text)
-						child.lastText = text
-					end
-					if isNew or textChanged or partsFontChanged then
-						local w = child.text:GetStringWidth()
-						child.lastWidth = w
-						child:SetWidth(w)
+					local iconSpec = part.icon
+					local overlaySpec = part.iconOverlay
+					local useIcons = iconSpec ~= nil or overlaySpec ~= nil
+					if useIcons then
+						child.usingIcons = true
+						child.text:SetText("")
+						child.text:Hide()
+
+						local function applyIcon(tex, spec, sublevel, defaultSize)
+							if spec == nil then
+								if tex then tex:Hide() end
+								return tex
+							end
+							if not tex then
+								tex = child:CreateTexture(nil, "ARTWORK", nil, sublevel)
+							end
+							if spec.atlas then
+								tex:SetAtlas(spec.atlas, true)
+							elseif spec.texture then
+								tex:SetTexture(spec.texture)
+							end
+							local color = spec.vertexColor or spec.color
+							if type(color) == "table" then
+								local r = color.r or color[1] or 1
+								local g = color.g or color[2] or 1
+								local b = color.b or color[3] or 1
+								local a = color.a or color[4] or 1
+								tex:SetVertexColor(r, g, b, a)
+							else
+								tex:SetVertexColor(1, 1, 1, 1)
+							end
+							if spec.desaturate ~= nil then
+								tex:SetDesaturated(spec.desaturate and true or false)
+							else
+								tex:SetDesaturated(false)
+							end
+							local iconSize = spec.size or defaultSize
+							tex:SetSize(iconSize, iconSize)
+							tex:SetPoint("CENTER", child, "CENTER", spec.offsetX or 0, spec.offsetY or 0)
+							tex:Show()
+							return tex
+						end
+
+						local baseSize = part.iconSize or size
+						child.icon = applyIcon(child.icon, iconSpec, 0, baseSize)
+						child.iconOverlay = applyIcon(child.iconOverlay, overlaySpec, 1, baseSize)
+						local iconWidth = part.iconWidth or baseSize
+						if child.lastWidth ~= iconWidth then
+							child.lastWidth = iconWidth
+							child:SetWidth(iconWidth)
+						end
+					else
+						if child.usingIcons then
+							child.usingIcons = nil
+							if child.icon then child.icon:Hide() end
+							if child.iconOverlay then child.iconOverlay:Hide() end
+							child.text:Show()
+						end
+						local text = part.text or ""
+						local textChanged = text ~= child.lastText
+						if isNew or textChanged then
+							child.text:SetText(text)
+							child.lastText = text
+						end
+						if isNew or textChanged or partsFontChanged then
+							local w = child.text:GetStringWidth()
+							child.lastWidth = w
+							child:SetWidth(w)
+						end
 					end
 					child.currencyID = part.id
 					totalWidth = totalWidth + (child.lastWidth or 0) + (i > 1 and 5 or 0)

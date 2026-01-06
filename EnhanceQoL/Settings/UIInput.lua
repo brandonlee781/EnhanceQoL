@@ -1,4 +1,4 @@
--- luacheck: globals C_Timer C_MountJournal LE_MOUNT_JOURNAL_FILTER_COLLECTED LE_MOUNT_JOURNAL_FILTER_UNUSABLE C_PetJournal C_ToyBox C_ToyBoxInfo ToyBox CollectionsMicroButton MainMenuMicroButton_HideAlert CollectionsMicroButton_SetAlertShown MicroButtonPulseStop CreateFrame
+-- luacheck: globals C_Timer C_MountJournal LE_MOUNT_JOURNAL_FILTER_COLLECTED LE_MOUNT_JOURNAL_FILTER_UNUSABLE C_PetJournal C_ToyBox C_ToyBoxInfo ToyBox CollectionsMicroButton MainMenuMicroButton_HideAlert CollectionsMicroButton_SetAlertShown MicroButtonPulseStop CreateFrame C_CVar UIParent SetCVar ReloadUI
 
 local addonName, addon = ...
 
@@ -159,6 +159,31 @@ end
 
 local verticalScale = 11 / 17
 local horizontalScale = 565 / 571
+
+local UI_SCALE_PRESETS = {
+	Scale1440p = 0.533333333333,
+	Scale1080p = 0.711111111111,
+	Scale1440p125 = 0.666666666666,
+	Scale1080p125 = 0.888888888888,
+}
+
+local function applyUIScalePreset()
+	local db = addon.db
+	if not db then return end
+
+	local scale = UI_SCALE_PRESETS[db.uiScalePreset]
+	if not scale then return end
+	if addon.functions and addon.functions.setCVarValue then
+		addon.functions.setCVarValue("useUiScale", "1")
+		addon.functions.setCVarValue("uiscale", tostring(scale))
+	elseif C_CVar and C_CVar.SetCVar then
+		C_CVar.SetCVar("useUiScale", "1")
+		C_CVar.SetCVar("uiscale", tostring(scale))
+	end
+
+	if UIParent and UIParent.SetScale then UIParent:SetScale(scale) end
+end
+addon.functions.applyUIScalePreset = applyUIScalePreset
 
 local function EQOL_UpdateStatusBars(container, height, width, scale)
 	if not container then return end
@@ -434,17 +459,38 @@ local data = {
 }
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
-if addon.functions and addon.functions.SettingsCreateClassSpecificResourceBars then
-	addon.functions.SettingsCreateClassSpecificResourceBars(cUIInput, barsResourcesExpandable)
-end
-if addon.Aura and addon.Aura.functions and addon.Aura.functions.AddResourceBarsSettings then
-	addon.Aura.functions.AddResourceBarsSettings()
-end
+if addon.functions and addon.functions.SettingsCreateClassSpecificResourceBars then addon.functions.SettingsCreateClassSpecificResourceBars(cUIInput, barsResourcesExpandable) end
+if addon.Aura and addon.Aura.functions and addon.Aura.functions.AddResourceBarsSettings then addon.Aura.functions.AddResourceBarsSettings() end
 
 local interfaceExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
 	name = L["PopupsAndUITweaks"] or "Popups & UI Tweaks",
 	expanded = false,
 	colorizeTitle = false,
+	newTagID = "PopupsAndUITweaks"
+})
+
+local uiScaleOptions = {
+	NoScaling = L["uiScalePresetNone"] or "No scaling",
+	Scale1080p = "0.7111 (1080p)",
+	Scale1440p = "0.5333 (1440p)",
+	Scale1440p125 = "0.6666 (1440p 125%)",
+	Scale1080p125 = "0.8888 (1080p 125%)",
+}
+
+local uiScaleOrder = { "NoScaling", "Scale1440p", "Scale1440p125", "Scale1080p", "Scale1080p125" }
+
+addon.functions.SettingsCreateDropdown(cUIInput, {
+	var = "uiScalePreset",
+	text = L["uiScalePreset"] or "Login UI scaling",
+	list = uiScaleOptions,
+	order = uiScaleOrder,
+	get = function() return addon.db and addon.db.uiScalePreset or "NoScaling" end,
+	set = function(v)
+		addon.db.uiScalePreset = v
+		ReloadUI()
+	end,
+	desc = L["uiScalePresetDesc"] or "Automatically applies a preset UI scale when you log in.\n|cffff0000Warning:|r Changing this will reload your UI.",
+	parentSection = interfaceExpandable,
 })
 
 data = {
@@ -490,52 +536,12 @@ data = {
 		end,
 		parentSection = interfaceExpandable,
 	},
-	{
-		var = "gameMenuScaleEnabled",
-		text = L["gameMenuScaleEnabled"],
-		func = function(v)
-			addon.db["gameMenuScaleEnabled"] = v
-			if v then
-				addon.functions.applyGameMenuScale()
-			else
-				-- Only restore default if we were the last to apply a scale
-				if GameMenuFrame and addon.variables and addon.variables.gameMenuScaleLastApplied then
-					local current = GameMenuFrame:GetScale() or 1.0
-					if math.abs(current - addon.variables.gameMenuScaleLastApplied) < 0.0001 then GameMenuFrame:SetScale(1.0) end
-				end
-			end
-		end,
-		parentSection = interfaceExpandable,
-		children = {
-			{
-				var = "gameMenuScale",
-				text = L["gameMenuScale"],
-				get = function() return addon.db and addon.db.gameMenuScale or 1 end,
-				set = function(val)
-					local rounded = math.floor(val * 100 + 0.5) / 100
-					addon.db["gameMenuScale"] = rounded
-					addon.functions.applyGameMenuScale()
-				end,
-				parentCheck = function()
-					return addon.SettingsLayout.elements["gameMenuScaleEnabled"]
-						and addon.SettingsLayout.elements["gameMenuScaleEnabled"].setting
-						and addon.SettingsLayout.elements["gameMenuScaleEnabled"].setting:GetValue() == true
-				end,
-				min = 0.5,
-				max = 3,
-				step = 0.05,
-				parent = true,
-				default = 1,
-				sType = "slider",
-				parentSection = interfaceExpandable,
-			},
-		},
-	},
 }
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 ----- REGION END
 
 function addon.functions.initUIInput()
+	addon.functions.InitDBValue("uiScalePreset", "NoScaling")
 	addon.functions.InitDBValue("autoUnwrapMounts", false)
 	addon.functions.InitDBValue("hideMicroMenuNotificationOverlay", false)
 	UpdateAutoUnwrapWatcher()

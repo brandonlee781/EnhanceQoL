@@ -56,6 +56,8 @@ local function isEQoLUnitEnabled(unit)
 	local db = addon.db and addon.db.ufFrames
 	if not db then return false end
 	if unit == "boss" then
+		local bossCfg = db.boss
+		if bossCfg and bossCfg.enabled then return true end
 		for i = 1, 5 do
 			local cfg = db["boss" .. i]
 			if cfg and cfg.enabled then return true end
@@ -732,7 +734,6 @@ local function createFrameCategory()
 		end,
 		parentSection = expandable,
 	})
-
 end
 
 function addon.functions.initUIOptions() end

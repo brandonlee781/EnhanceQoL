@@ -3466,29 +3466,12 @@ local function initUI()
 	addon.functions.InitDBValue("dungeonJournalLootSpecIconPadding", 0)
 	addon.functions.InitDBValue("dungeonJournalLootSpecShowAll", false)
 
-	-- Game Menu (ESC) scaling
-	addon.functions.InitDBValue("gameMenuScaleEnabled", false)
-	addon.functions.InitDBValue("gameMenuScale", 1.0)
 	addon.functions.InitDBValue("optionsFrameScale", 1.0)
 	addon.functions.applyOptionsFrameScale(addon.db["optionsFrameScale"])
 
 	-- Mailbox address book
 	addon.functions.InitDBValue("enableMailboxAddressBook", false)
 	addon.functions.InitDBValue("mailboxContacts", {})
-
-	-- Remember the last scale we applied so we can avoid overwriting other addons
-	addon.variables = addon.variables or {}
-	function addon.functions.applyGameMenuScale()
-		if not GameMenuFrame then return end
-		if not addon.db or not addon.db["gameMenuScaleEnabled"] then return end
-		local desired = addon.db["gameMenuScale"] or 1.0
-		local current = GameMenuFrame:GetScale() or 1.0
-		if math.abs(current - desired) > 0.0001 then GameMenuFrame:SetScale(desired) end
-		addon.variables.gameMenuScaleLastApplied = desired
-	end
-
-	-- Apply once on load if enabled; do not keep overriding thereafter
-	addon.functions.applyGameMenuScale()
 
 	local function makeSquareMinimap()
 		MinimapCompassTexture:Hide()
@@ -4066,9 +4049,7 @@ local function initUI()
 		addon.variables = addon.variables or {}
 
 		local function getManualMouseoverButtons()
-			if not addon.variables.eqolManualMouseoverButtons then
-				addon.variables.eqolManualMouseoverButtons = setmetatable({}, { __mode = "k" })
-			end
+			if not addon.variables.eqolManualMouseoverButtons then addon.variables.eqolManualMouseoverButtons = setmetatable({}, { __mode = "k" }) end
 			return addon.variables.eqolManualMouseoverButtons
 		end
 
@@ -5512,6 +5493,8 @@ local eventHandlers = {
 		end
 	end,
 	["PLAYER_LOGIN"] = function()
+		addon.functions.applyUIScalePreset()
+
 		if addon.db["enableMinimapButtonBin"] then addon.functions.toggleButtonSink() end
 		if addon.db["actionBarAnchorEnabled"] then RefreshAllActionBarAnchors() end
 		addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()

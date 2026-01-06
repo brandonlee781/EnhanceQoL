@@ -37,6 +37,11 @@ L["DataPanelEditModeHint"] = "Configure DataPanels in Edit Mode. Move, resize, a
 L["Panel"] = "Panel"
 L["Add Panel"] = "Add Panel"
 L["Remove Panel"] = "Remove Panel"
+L["Mark Bar"] = "Mark Bar"
+L["MarkBarTargets"] = "Mark Bar: Target Icons"
+L["MarkBarWorld"] = "Mark Bar: World Markers"
+L["MarkBarUtility"] = "Mark Bar: Pings + Checks"
+L["MarkBarIconSize"] = "Icon size"
 L["Per-currency tooltips"] = "Per-currency tooltips"
 L["Show description in tooltip"] = "Show description in tooltip"
 L["Currency ID"] = "Currency ID"
@@ -716,10 +721,9 @@ L["minimapButtonBinAnchor_BottomLeft"] = "Bottom left"
 L["minimapButtonBinAnchor_BottomRight"] = "Bottom right"
 
 L["AddOn"] = "AddOn"
--- Game Menu
-L["enableGameMenuScale"] = "Enable Game Menu scaling"
-L["gameMenuScale"] = "Game Menu scale"
-L["gameMenuScaleEnabled"] = "Enable Game Menu scaling"
+L["uiScalePreset"] = "Login UI scaling"
+L["uiScalePresetDesc"] = "Automatically applies a preset UI scale when you log in.\n|cffff0000Warning:|r Changing this will reload your UI."
+L["uiScalePresetNone"] = "No scaling"
 
 -- Unit Frames: Cast bars
 L["CastBars2"] = "Castbars"

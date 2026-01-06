@@ -42,6 +42,7 @@
   - Unclamp the minimap cluster so it can sit closer to the screen edge.
 - **Interface**
   - Train All button in the trainer window to learn all available skills at once.
+  - Login UI scale preset (applies on login; changing it reloads the UI).
 - **Mailbox**
   - Option to remember the last recipient in the Send Mail field until the mailbox closes.
 - **Character Frame**
@@ -60,6 +61,7 @@
   - Quest settings moved to Gameplay with a single Questing accordion.
   - Frame visibility rules now have a global fade amount slider.
   - Blizzard frame options now hide when EQoL frames are enabled (Health Text, Castbars, Visibility rules).
+  - Game Menu scaling option removed (Mover handles it instead).
 - **UF Plus / Resource Bars**
   - Brewmaster no longer shows the unused Mana bar.
   - Removed the "Gap between bars" unit frame setting (detached power bar replaces this use case).
