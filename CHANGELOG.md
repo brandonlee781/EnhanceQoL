@@ -102,6 +102,7 @@
 
 - Resource bars hidden kept a wrong health/powervalue on show
 - Unit Frame Strata set at least "High" blocks options window
+- Unit Frames had a shadow color on the texts which made it darker
 - TomTom Minimap Icons are ignored in Button Sink
 - Mover: Dragging no longer overlays the PlayerSpells/Talents UI, so buttons remain clickable.
 - Blizzard Boss Frame visibility rule now hides when EQoL Boss Frames are enabled.

@@ -63,8 +63,8 @@ end
 function H.applyFont(fs, fontPath, size, outline)
 	if not fs then return end
 	fs:SetFont(H.getFont(fontPath), size or 14, outline or "OUTLINE")
-	fs:SetShadowColor(0, 0, 0, 0.5)
-	fs:SetShadowOffset(0.5, -0.5)
+	fs:SetShadowColor(0, 0, 0, 0)
+	fs:SetShadowOffset(0, 0)
 end
 
 function H.resolveBorderTexture(key)
