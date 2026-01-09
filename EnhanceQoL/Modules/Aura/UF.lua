@@ -2260,6 +2260,17 @@ local function setCastInfoFromUnit(unit)
 		return
 	end
 
+	local isEmpoweredCast = isChannel and isEmpowered and numEmpowerStages and numEmpowerStages > 0
+	if isEmpoweredCast and startTimeMS and endTimeMS and (not issecretvalue or (not issecretvalue(startTimeMS) and not issecretvalue(endTimeMS))) then
+		local totalMs = UFHelper.getEmpoweredChannelDurationMilliseconds and UFHelper.getEmpoweredChannelDurationMilliseconds(unit)
+		if totalMs and totalMs > 0 and (not issecretvalue or not issecretvalue(totalMs)) then
+			endTimeMS = startTimeMS + totalMs
+		else
+			local hold = UFHelper.getEmpowerHoldMilliseconds and UFHelper.getEmpowerHoldMilliseconds(unit)
+			if hold and (not issecretvalue or not issecretvalue(hold)) then endTimeMS = endTimeMS + hold end
+		end
+	end
+
 	if issecretvalue and ((startTimeMS and issecretvalue(startTimeMS)) or (endTimeMS and issecretvalue(endTimeMS))) then
 		if type(startTimeMS) ~= "nil" and type(endTimeMS) ~= "nil" then
 			st.castBar:Show()
@@ -3589,6 +3600,7 @@ local function applyConfig(unit)
 		if unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit) then resetTargetAuras(unit) end
 		if unit == UNIT.PLAYER then updateRestingIndicator(cfg) end
 		if not isBossUnit(unit) then applyVisibilityRules(unit) end
+		if unit == UNIT.PLAYER and addon.functions and addon.functions.ApplyCastBarVisibility then addon.functions.ApplyCastBarVisibility() end
 		return
 	end
 	ensureFrames(unit)
@@ -3632,6 +3644,7 @@ local function applyConfig(unit)
 			stopCast(UNIT.PLAYER)
 			st.castBar:Hide()
 		end
+		if addon.functions and addon.functions.ApplyCastBarVisibility then addon.functions.ApplyCastBarVisibility() end
 	end
 	if unit == UNIT.TARGET and st.castBar then
 		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(UNIT.TARGET) then

@@ -2938,10 +2938,23 @@ local function initUnitFrame()
 		FocusFrameSpellBar = function() return _G.FocusFrameSpellBar end,
 	}
 
+	local function isCustomPlayerCastbarEnabled()
+		local cfg = addon.db and addon.db.ufFrames and addon.db.ufFrames.player
+		if not (cfg and cfg.enabled == true) then return false end
+		local castCfg = cfg.cast
+		if not castCfg then
+			local uf = addon.Aura and addon.Aura.UF
+			local defaults = uf and uf.defaults and uf.defaults.player
+			castCfg = defaults and defaults.cast
+		end
+		if not castCfg then return false end
+		return castCfg.enabled ~= false
+	end
+
 	local function EnsureCastbarHook(frame)
 		if not frame or frame.EQOL_CastbarHooked then return end
 		frame:HookScript("OnShow", function(self)
-			if addon.db and addon.db.hiddenCastBars and addon.db.hiddenCastBars[self:GetName()] then self:Hide() end
+			if addon.db and addon.db.hiddenCastBars and addon.db.hiddenCastBars[self:GetName()] or isCustomPlayerCastbarEnabled() then self:Hide() end
 		end)
 		frame.EQOL_CastbarHooked = true
 	end

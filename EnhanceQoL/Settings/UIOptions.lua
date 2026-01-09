@@ -840,13 +840,32 @@ local function createCastbarCategory()
 		})
 	end
 
+	local function isCustomPlayerCastbarEnabled()
+		local cfg = addon.db and addon.db.ufFrames and addon.db.ufFrames.player
+		if not (cfg and cfg.enabled == true) then return false end
+		local castCfg = cfg.cast
+		if not castCfg then
+			local uf = addon.Aura and addon.Aura.UF
+			local defaults = uf and uf.defaults and uf.defaults.player
+			castCfg = defaults and defaults.cast
+		end
+		if not castCfg then return false end
+		return castCfg.enabled ~= false
+	end
+
 	local function getCastbarOptions()
-		local options = {
-			{ value = "PlayerCastingBarFrame", text = PLAYER },
-		}
+		local options = {}
+		if not isCustomPlayerCastbarEnabled() then table.insert(options, { value = "PlayerCastingBarFrame", text = PLAYER }) end
 		if not isEQoLUnitEnabled("target") then table.insert(options, { value = "TargetFrameSpellBar", text = TARGET }) end
 		if not isEQoLUnitEnabled("focus") then table.insert(options, { value = "FocusFrameSpellBar", text = FOCUS }) end
 		return options
+	end
+	local function shouldShowCastbarDropdown() return #getCastbarOptions() > 0 end
+	local function expandWith(predicate)
+		return function()
+			if expandable and expandable.IsExpanded and expandable:IsExpanded() == false then return false end
+			return predicate()
+		end
 	end
 	addon.functions.SettingsCreateHeadline(category, L["CastBars2"], {
 		parentSection = expandable,
@@ -874,7 +893,8 @@ local function createCastbarCategory()
 			addon.db.hiddenCastBars[key] = shouldSelect and true or false
 			addon.functions.ApplyCastBarVisibility()
 		end,
-		parentSection = expandable,
+		isEnabled = shouldShowCastbarDropdown,
+		parentSection = expandWith(shouldShowCastbarDropdown),
 	})
 
 	addon.functions.SettingsCreateCheckbox(category, {

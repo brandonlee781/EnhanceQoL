@@ -262,9 +262,7 @@ function H.applyStatusBarReverseFill(bar, reverse)
 	end
 end
 
-function H.shouldUseDefaultCastArt(st)
-	return st and st.castUseDefaultArt == true
-end
+function H.shouldUseDefaultCastArt(st) return st and st.castUseDefaultArt == true end
 
 local CAST_SPARK_WIDTH = 8
 local CAST_SPARK_HEIGHT = 20
@@ -452,6 +450,7 @@ function H.updateCastSpark(st, overrideType)
 end
 
 local After = C_Timer and C_Timer.After
+local UnitEmpoweredChannelDuration = _G.UnitEmpoweredChannelDuration
 local UnitEmpoweredStagePercentages = _G.UnitEmpoweredStagePercentages
 local UnitEmpoweredStageDurations = _G.UnitEmpoweredStageDurations
 local GetUnitEmpowerHoldAtMaxTime = _G.GetUnitEmpowerHoldAtMaxTime
@@ -475,8 +474,18 @@ local function normalizeStageValues(...)
 	return values
 end
 
+local function normalizeDurationMilliseconds(value)
+	if type(value) ~= "number" then return nil end
+	if issecretvalue and issecretvalue(value) then return nil end
+	if value < 0 then return nil end
+	if value > 20 then return value end
+	return value * 1000
+end
+
+H.normalizeDurationMilliseconds = normalizeDurationMilliseconds
+
 local function durationToMilliseconds(duration)
-	if type(duration) == "number" then return duration end
+	if type(duration) == "number" then return normalizeDurationMilliseconds(duration) end
 	if type(duration) ~= "table" then return nil end
 	if duration.GetMilliseconds then
 		local ms = duration:GetMilliseconds()
@@ -486,25 +495,33 @@ local function durationToMilliseconds(duration)
 	if duration.GetSeconds then
 		local seconds = duration:GetSeconds()
 		if issecretvalue and issecretvalue(seconds) then return nil end
-		return seconds * 1000
+		return normalizeDurationMilliseconds(seconds)
 	end
 	if duration.GetDuration then
 		local value = duration:GetDuration()
 		if issecretvalue and issecretvalue(value) then return nil end
-		if type(value) == "number" then
-			if value > 1000 then return value end
-			return value * 1000
-		end
+		if type(value) == "number" then return normalizeDurationMilliseconds(value) end
 	end
 	if duration.GetTime then
 		local value = duration:GetTime()
 		if issecretvalue and issecretvalue(value) then return nil end
-		if type(value) == "number" then
-			if value > 1000 then return value end
-			return value * 1000
-		end
+		if type(value) == "number" then return normalizeDurationMilliseconds(value) end
 	end
 	return nil
+end
+
+H.getDurationMilliseconds = durationToMilliseconds
+
+function H.getEmpoweredChannelDurationMilliseconds(unit)
+	if not unit or not UnitEmpoweredChannelDuration then return nil end
+	local duration = UnitEmpoweredChannelDuration(unit, true)
+	return durationToMilliseconds(duration)
+end
+
+function H.getEmpowerHoldMilliseconds(unit)
+	if not unit or not GetUnitEmpowerHoldAtMaxTime then return nil end
+	local hold = GetUnitEmpowerHoldAtMaxTime(unit)
+	return normalizeDurationMilliseconds(hold)
 end
 
 local function normalizeStagePercents(values, numStages)
@@ -607,8 +624,10 @@ local function buildEmpowerStagePercents(unit, numStages)
 	end
 	if type(durations) ~= "table" or #durations < numStages then return nil end
 	local hold = GetUnitEmpowerHoldAtMaxTime and GetUnitEmpowerHoldAtMaxTime(unit)
-	if hold ~= nil and type(hold) ~= "number" then hold = durationToMilliseconds(hold) end
-	if issecretvalue and hold and issecretvalue(hold) then return nil end
+	if hold ~= nil then
+		hold = durationToMilliseconds(hold)
+		if hold == nil then return nil end
+	end
 	local total = hold or 0
 	local percents = {}
 	local sum = 0
