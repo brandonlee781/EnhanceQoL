@@ -39,6 +39,10 @@ local VALID_STRATA = {}
 for _, strata in ipairs(STRATA_ORDER) do
 	VALID_STRATA[strata] = true
 end
+local STRATA_INDEX = {}
+for index, strata in ipairs(STRATA_ORDER) do
+	STRATA_INDEX[strata] = index
+end
 
 local function normalizePercent(value, fallback)
 	local num = tonumber(value)
@@ -79,6 +83,22 @@ local function normalizeStrata(strata, fallback)
 		if VALID_STRATA[upper] then return upper end
 	end
 	return "MEDIUM"
+end
+
+local function updateSelectionStrata(panel, targetStrata)
+	if not panel or not panel.frame then return end
+	local selection = panel.frame.Selection
+	if not selection or not selection.SetFrameStrata then return end
+	if not panel._selectionBaseStrata then
+		local baseStrata = (selection.GetFrameStrata and selection:GetFrameStrata()) or "MEDIUM"
+		panel._selectionBaseStrata = baseStrata
+		panel._selectionBaseStrataIndex = STRATA_INDEX[baseStrata] or STRATA_INDEX.MEDIUM
+	end
+	local baseIndex = panel._selectionBaseStrataIndex or STRATA_INDEX.MEDIUM
+	local normalized = normalizeStrata(targetStrata, panel._selectionBaseStrata)
+	local targetIndex = STRATA_INDEX[normalized]
+	local targetStrataFinal = (targetIndex and targetIndex > baseIndex) and normalized or panel._selectionBaseStrata
+	if targetStrataFinal and selection.GetFrameStrata and selection:GetFrameStrata() ~= targetStrataFinal then selection:SetFrameStrata(targetStrataFinal) end
 end
 
 local STRATA_DROPDOWN_VALUES = {}
@@ -535,6 +555,7 @@ function DataPanel.Create(id, name, existingOnly)
 		local normalized = normalizeStrata(strata, fallback)
 		if self.info then self.info.strata = normalized end
 		if self.frame and self.frame:GetFrameStrata() ~= normalized then self.frame:SetFrameStrata(normalized) end
+		updateSelectionStrata(self, normalized)
 		self:SyncEditModeValue("strata", normalized)
 	end
 
@@ -1181,6 +1202,7 @@ function DataPanel.Create(id, name, existingOnly)
 	registerEditModePanel(panel)
 	panel:SyncEditModeStreams()
 	panel:SyncEditModeStrata()
+	updateSelectionStrata(panel, info.strata)
 	ensureFadeWatcher()
 	panel:ApplyAlpha()
 

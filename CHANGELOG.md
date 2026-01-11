@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.0.1] - 2026-01-11
+
+### 🐛 Fixed
+
+- DataPanels: Edit Mode selection overlay no longer falls behind panels with higher frame strata.
+- Resource Bars: Absorb overfill now caps at max health and no longer errors with secret values.
+
+---
+
 ## [7.0.0] - 2026-01-10
 
 ### ✨ Added

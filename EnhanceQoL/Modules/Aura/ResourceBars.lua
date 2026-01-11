@@ -42,7 +42,6 @@ local updateBarSeparators
 local updateBarThresholds
 local forceColorUpdate
 local applyAbsorbLayout
-local updateAbsorbOverfill
 local ensureEditModeRegistration
 local lastBarSelectionPerSpec = {}
 local lastSpecCopySelection = {}
@@ -1387,6 +1386,8 @@ applyAbsorbLayout = function(bar, cfg)
 	if overfill then
 		local vertical = cfg.verticalFill == true
 		local reverseHealth = cfg.reverseFill == true
+		local baseW = (inner and inner.GetWidth and inner:GetWidth()) or (bar.GetWidth and bar:GetWidth()) or 0
+		local baseH = (inner and inner.GetHeight and inner:GetHeight()) or (bar.GetHeight and bar:GetHeight()) or 0
 		if vertical then
 			absorb:SetPoint("LEFT", inner, "LEFT")
 			absorb:SetPoint("RIGHT", inner, "RIGHT")
@@ -1395,6 +1396,11 @@ applyAbsorbLayout = function(bar, cfg)
 			else
 				absorb:SetPoint("BOTTOM", healthTex, "TOP")
 			end
+			if absorb._overfillHeight ~= baseH then
+				absorb:SetHeight(baseH)
+				absorb._overfillHeight = baseH
+			end
+			absorb._overfillWidth = nil
 		else
 			absorb:SetPoint("TOP", inner, "TOP")
 			absorb:SetPoint("BOTTOM", inner, "BOTTOM")
@@ -1403,10 +1409,17 @@ applyAbsorbLayout = function(bar, cfg)
 			else
 				absorb:SetPoint("LEFT", healthTex, "RIGHT")
 			end
+			if absorb._overfillWidth ~= baseW then
+				absorb:SetWidth(baseW)
+				absorb._overfillWidth = baseW
+			end
+			absorb._overfillHeight = nil
 		end
 	else
 		absorb:SetPoint("TOPLEFT", inner, "TOPLEFT")
 		absorb:SetPoint("BOTTOMRIGHT", inner, "BOTTOMRIGHT")
+		absorb._overfillWidth = nil
+		absorb._overfillHeight = nil
 	end
 
 	local tex = absorb.GetStatusBarTexture and absorb:GetStatusBarTexture()
@@ -1416,53 +1429,6 @@ applyAbsorbLayout = function(bar, cfg)
 		tex:SetPoint("BOTTOMRIGHT", absorb, "BOTTOMRIGHT")
 	end
 	absorb._rbOverfill = overfill and true or false
-end
-
-updateAbsorbOverfill = function(bar, cfg, absorbValue, maxHealth)
-	if not bar or not bar.absorbBar then return end
-	cfg = cfg or {}
-	local absorb = bar.absorbBar
-	local inner = bar._rbInner or bar
-	local baseW = (inner and inner.GetWidth and inner:GetWidth()) or (bar.GetWidth and bar:GetWidth()) or 0
-	local baseH = (inner and inner.GetHeight and inner:GetHeight()) or (bar.GetHeight and bar:GetHeight()) or 0
-	local vertical = cfg.verticalFill == true
-	local ratio = 0
-	local abs = absorbValue or 0
-	if maxHealth and maxHealth > 0 and abs > 0 then ratio = abs / maxHealth end
-	if ratio < 0 then ratio = 0 end
-	local size = (vertical and baseH or baseW) * ratio
-	if size < 0 then size = 0 end
-
-	if vertical then
-		if absorb._overfillWidth ~= baseW then
-			absorb:SetWidth(baseW)
-			absorb._overfillWidth = baseW
-		end
-		if absorb._overfillSize ~= size then
-			absorb:SetHeight(size)
-			absorb._overfillSize = size
-		end
-	else
-		if absorb._overfillHeight ~= baseH then
-			absorb:SetHeight(baseH)
-			absorb._overfillHeight = baseH
-		end
-		if absorb._overfillSize ~= size then
-			absorb:SetWidth(size)
-			absorb._overfillSize = size
-		end
-	end
-
-	absorb:SetMinMaxValues(0, 1)
-	if abs > 0 and size > 0 then
-		absorb:SetValue(1)
-		if not absorb:IsShown() then absorb:Show() end
-	else
-		absorb:SetValue(0)
-		absorb:Hide()
-	end
-	absorb._lastMax = 1
-	if not (addon.variables and addon.variables.isMidnight) then absorb._lastVal = abs end
 end
 
 local function applyBackdrop(frame, cfg)
@@ -2098,26 +2064,10 @@ function updateHealthBar(evt)
 					absorbBar._lastColor = { ar, ag, ab, aa }
 				end
 
-				local abs = UnitGetTotalAbsorbs("player")
-				local absSecret = issecretvalue and issecretvalue(abs)
-				local maxSecret = issecretvalue and issecretvalue(maxHealth)
-				if absSecret or maxSecret then
-					if settings.absorbSample and not maxSecret then
-						abs = maxHealth * 0.6
-						absSecret = false
-					else
-						absorbBar:Hide()
-						absorbBar:SetValue(0)
-						absorbBar._lastVal = 0
-						absorbBar._lastMax = maxSecret and (absorbBar._lastMax or 1) or maxHealth
-						return
-					end
-				end
-				abs = abs or 0
-				if settings.absorbOverfill then
-					applyAbsorbLayout(healthBar, settings)
-					updateAbsorbOverfill(healthBar, settings, abs, maxHealth)
-				elseif addon.variables.isMidnight then
+				local abs = UnitGetTotalAbsorbs("player") or 0
+				if settings.absorbSample then abs = maxHealth * 0.6 end
+				if settings.absorbOverfill then applyAbsorbLayout(healthBar, settings) end
+				if addon.variables.isMidnight then
 					absorbBar:SetValue(abs)
 					absorbBar:SetMinMaxValues(0, maxHealth)
 				else
