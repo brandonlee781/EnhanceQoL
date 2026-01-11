@@ -4665,7 +4665,7 @@ local function CreateUI()
 	addon.treeGroup = AceGUI:Create("TreeGroup")
 	addon.treeGroup.enabletooltips = false
 
-	-- Top: Combat & Dungeons (children added by sub-addons like Aura, Mythic+, Drink, CombatMeter)
+	-- Top: Combat & Dungeons (children added by sub-addons like Aura, Mythic+, Drink)
 	addon.functions.addToTree(nil, { value = "combat", text = L["CombatDungeons"] })
 
 	addon.treeGroup:SetLayout("Fill")
@@ -4685,12 +4685,12 @@ local function CreateUI()
 			-- Combat & Dungeons
 		elseif group == "combat" then
 			Settings.OpenToCategory(addon.SettingsLayout.characterInspectCategory:GetID())
-		-- Forward Combat subtree for modules (Mythic+, Aura, Drink, CombatMeter)
+		-- Forward Combat subtree for modules (Mythic+, Aura, Drink)
 		elseif group == "items" then
 			Settings.OpenToCategory(addon.SettingsLayout.inventoryCategory:GetID())
 		elseif group == "items\001economy" then
 			Settings.OpenToCategory(addon.SettingsLayout.vendorEconomyCategory:GetID())
-		-- Forward Combat subtree for modules (Mythic+, Aura, Drink, CombatMeter)
+		-- Forward Combat subtree for modules (Mythic+, Aura, Drink)
 		elseif string.sub(group, 1, string.len("combat\001")) == "combat\001" then
 			-- Normalize and dispatch for known combat modules
 			if
@@ -4704,9 +4704,6 @@ local function CreateUI()
 			elseif string.find(group, "\001drink", 1, true) or string.sub(group, 1, 5) == "drink" or group:find("combat\001drink", 1, true) then
 				local pos = group:find("drink", 1, true)
 				addon.Drinks.functions.treeCallback(container, group:sub(pos))
-			elseif string.find(group, "\001combatmeter", 1, true) or string.sub(group, 1, 11) == "combatmeter" or group:find("combat\001combatmeter", 1, true) then
-				local pos = group:find("combatmeter", 1, true)
-				addon.CombatMeter.functions.treeCallback(container, group:sub(pos))
 			end
 		-- UF Plus
 		elseif string.match(group, "^ufplus") then
@@ -4718,8 +4715,6 @@ local function CreateUI()
 			end
 		elseif string.match(group, "^aura") then
 			addon.Aura.functions.treeCallback(container, group)
-		elseif string.match(group, "^combatmeter") then
-			addon.CombatMeter.functions.treeCallback(container, group)
 		elseif string.match(group, "^move") then
 			addon.Mover.functions.treeCallback(container, group)
 		elseif string.sub(group, 1, string.len("ui\001move")) == "ui\001move" then
@@ -5068,7 +5063,6 @@ local function setAllHooks()
 		elseif mediaType == "statusbar" then
 			-- When new statusbar textures are registered, refresh any UI using them
 			if addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.MarkTextureListDirty then addon.Aura.ResourceBars.MarkTextureListDirty() end
-			if addon.CombatMeter and addon.CombatMeter.functions and addon.CombatMeter.functions.RefreshBarTextureDropdown then addon.CombatMeter.functions.RefreshBarTextureDropdown() end
 			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshPotionTextureDropdown then addon.MythicPlus.functions.RefreshPotionTextureDropdown() end
 			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.applyPotionBarTexture then addon.MythicPlus.functions.applyPotionBarTexture() end
 			if addon.Aura and addon.Aura.CastTracker and addon.Aura.CastTracker.functions and addon.Aura.CastTracker.functions.RefreshTextureDropdown then
@@ -5289,6 +5283,7 @@ local eventHandlers = {
 				end
 			end
 
+			if addon.functions.CleanupOldStuff then addon.functions.CleanupOldStuff() end
 			if addon.functions.initializePersistentCVars then addon.functions.initializePersistentCVars() end
 
 			loadMain()
@@ -5298,7 +5293,6 @@ local eventHandlers = {
 			loadSubAddon("EnhanceQoLQuery")
 			--@end-debug@
 			loadSubAddon("EnhanceQoLSharedMedia")
-			if not addon.variables.isMidnight then loadSubAddon("EnhanceQoLCombatMeter") end
 
 			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.Init then addon.Events.LegionRemix:Init() end
 
