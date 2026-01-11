@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.0.2] - 2026-01-11
+
+### 🐛 Fixed
+
+- Combat meter was shown even if disabled
+
+---
+
 ## [7.0.1] - 2026-01-11
 
 ### 🐛 Fixed
