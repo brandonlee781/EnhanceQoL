@@ -3823,6 +3823,7 @@ globals = {
 	"SetSavedInstanceExtend",
 	"SetSelectedArtifact",
 	"SetSelectedAuctionItem",
+	"PlayerFrameBottomManagedFramesContainer",
 	"SetSelectedDisplayChannel",
 	"C_Ping",
 	"SetSelectedFaction",

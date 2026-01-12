@@ -2495,6 +2495,21 @@ local function getNPCOverrideColor(unit)
 	return nil
 end
 
+local function getClassColor(class)
+	if not class then return nil end
+	if addon.db and addon.db.ufUseCustomClassColors then
+		local overrides = addon.db.ufClassColors
+		local custom = overrides and overrides[class]
+		if custom then
+			if custom.r then return custom.r, custom.g, custom.b, custom.a or 1 end
+			if custom[1] then return custom[1], custom[2], custom[3], custom[4] or 1 end
+		end
+	end
+	local fallback = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+	if fallback then return fallback.r or fallback[1], fallback.g or fallback[2], fallback.b or fallback[3], fallback.a or fallback[4] or 1 end
+	return nil
+end
+
 local function getNPCHealthColor(unit)
 	if not (UFHelper and UFHelper.getNPCColor) then return nil end
 	local key = getNPCSelectionKey(unit)
@@ -2542,10 +2557,8 @@ local function updateHealth(cfg, unit)
 		end
 	elseif hc.useClassColor and isPlayerUnit then
 		local class = select(2, UnitClass(unit))
-		local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-		if c then
-			hr, hg, hb, ha = c.r or c[1], c.g or c[2], c.b or c[3], c.a or c[4]
-		end
+		local cr, cg, cb, ca = getClassColor(class)
+		if cr then hr, hg, hb, ha = cr, cg, cb, ca end
 	end
 	if not hr and not useCustom then
 		local nr, ng, nb, na = getNPCHealthColor(unit)
@@ -2592,6 +2605,8 @@ local function updateHealth(cfg, unit)
 	local centerMode = hc.textCenter or "NONE"
 	local rightMode = hc.textRight or "CURMAX"
 	local delimiter = UFHelper.getTextDelimiter(hc, defH)
+	local delimiter2 = UFHelper.getTextDelimiterSecondary(hc, defH, delimiter)
+	local delimiter3 = UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2)
 	local hidePercentSymbol = hc.hidePercentSymbol == true
 	local levelText
 	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit) end
@@ -2599,21 +2614,21 @@ local function updateHealth(cfg, unit)
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
 		else
-			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
 		else
-			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
 		else
-			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 end
@@ -2664,13 +2679,15 @@ local function updatePower(cfg, unit)
 	if bar.SetStatusBarDesaturated then bar:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(powerToken)) end
 	local maxZero = (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0)
 	local delimiter = UFHelper.getTextDelimiter(pcfg, defP)
+	local delimiter2 = UFHelper.getTextDelimiterSecondary(pcfg, defP, delimiter)
+	local delimiter3 = UFHelper.getTextDelimiterTertiary(pcfg, defP, delimiter, delimiter2)
 	local function setPowerText(fs, mode)
 		if not fs then return end
 		if maxZero or mode == "NONE" then
 			fs:SetText("")
 			return
 		end
-		fs:SetText(UFHelper.formatText(mode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+		fs:SetText(UFHelper.formatText(mode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 	end
 	setPowerText(st.powerTextLeft, leftMode)
 	setPowerText(st.powerTextCenter, centerMode)
@@ -3606,10 +3623,8 @@ local function updateNameAndLevel(cfg, unit, levelOverride)
 		else
 			if isPlayerUnit then
 				local class = select(2, UnitClass(unit))
-				nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-				if nc then
-					nr, ng, nb, na = nc.r or nc[1], nc.g or nc[2], nc.b or nc[3], nc.a or nc[4] or 1
-				end
+				local cr, cg, cb, ca = getClassColor(class)
+				if cr then nr, ng, nb, na = cr, cg, cb, ca end
 			elseif shouldUseNPCColors(unit) then
 				local fallback = NORMAL_FONT_COLOR
 				nr = (fallback and (fallback.r or fallback[1])) or 1
@@ -3634,8 +3649,12 @@ local function updateNameAndLevel(cfg, unit, levelOverride)
 				lc = scfg.levelColor or { 1, 0.85, 0, 1 }
 			else
 				local class = select(2, UnitClass(unit))
-				lc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-				if not lc then lc = { 1, 0.85, 0, 1 } end
+				local cr, cg, cb, ca = getClassColor(class)
+				if cr then
+					lc = { cr, cg, cb, ca }
+				else
+					lc = { 1, 0.85, 0, 1 }
+				end
 			end
 			local levelText = UFHelper.getUnitLevelText(unit, levelOverride)
 			st.levelText:SetText(levelText)
@@ -3847,6 +3866,8 @@ local function applyBossEditSample(idx, cfg)
 	local centerMode = hc.textCenter or "NONE"
 	local rightMode = hc.textRight or "CURMAX"
 	local delimiter = UFHelper.getTextDelimiter(hc, defH)
+	local delimiter2 = UFHelper.getTextDelimiterSecondary(hc, defH, delimiter)
+	local delimiter3 = UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2)
 	local hidePercentSymbol = hc.hidePercentSymbol == true
 	local levelText
 	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText("player") end
@@ -3854,21 +3875,21 @@ local function applyBossEditSample(idx, cfg)
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
 		else
-			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
 		else
-			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
 		else
-			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText))
 		end
 	end
 
@@ -3888,6 +3909,8 @@ local function applyBossEditSample(idx, cfg)
 			local pCenterMode = pcfg.textCenter or "NONE"
 			local pRightMode = pcfg.textRight or "CURMAX"
 			local pDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
+			local pDelimiter2 = UFHelper.getTextDelimiterSecondary(pcfg, defP, pDelimiter)
+			local pDelimiter3 = UFHelper.getTextDelimiterTertiary(pcfg, defP, pDelimiter, pDelimiter2)
 			local pHidePercentSymbol = pcfg.hidePercentSymbol == true
 			local pLevelText = levelText
 			if not pLevelText and (UFHelper.textModeUsesLevel(pLeftMode) or UFHelper.textModeUsesLevel(pCenterMode) or UFHelper.textModeUsesLevel(pRightMode)) then
@@ -3897,21 +3920,25 @@ local function applyBossEditSample(idx, cfg)
 				if pLeftMode == "NONE" then
 					st.powerTextLeft:SetText("")
 				else
-					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pDelimiter2, pDelimiter3, pHidePercentSymbol, pLevelText))
 				end
 			end
 			if st.powerTextCenter then
 				if pCenterMode == "NONE" then
 					st.powerTextCenter:SetText("")
 				else
-					st.powerTextCenter:SetText(UFHelper.formatText(pCenterMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextCenter:SetText(
+						UFHelper.formatText(pCenterMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pDelimiter2, pDelimiter3, pHidePercentSymbol, pLevelText)
+					)
 				end
 			end
 			if st.powerTextRight then
 				if pRightMode == "NONE" then
 					st.powerTextRight:SetText("")
 				else
-					st.powerTextRight:SetText(UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pHidePercentSymbol, pLevelText))
+					st.powerTextRight:SetText(
+						UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pDelimiter2, pDelimiter3, pHidePercentSymbol, pLevelText)
+					)
 				end
 			end
 			st.power:Show()

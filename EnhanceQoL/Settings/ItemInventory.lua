@@ -5,6 +5,8 @@ local addonName, addon = ...
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local LFGListFrame = _G.LFGListFrame
 local GetContainerItemInfo = C_Container.GetContainerItemInfo
+local SetSortBagsRightToLeft = C_Container.SetSortBagsRightToLeft
+local SetInsertItemsLeftToRight = C_Container.SetInsertItemsLeftToRight
 local StaticPopup_Visible = StaticPopup_Visible
 local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
@@ -451,6 +453,41 @@ end
 
 addon.functions.onInspect = onInspect
 
+local function ensureRarityGlow(element)
+	if not element then return nil end
+	if element.rarityGlow then return element.rarityGlow end
+	local glow = element:CreateTexture(nil, "BORDER")
+	glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+	glow:SetBlendMode("ADD")
+	glow:SetAlpha(0.9)
+	glow:SetPoint("CENTER", element, "CENTER", 0, 0)
+	element.rarityGlow = glow
+	return glow
+end
+
+local function updateCharRarityGlow(element, itemQuality)
+	if not element then return end
+	if not addon.db["enhancedRarityGlow"] then
+		if element.rarityGlow then element.rarityGlow:Hide() end
+		return
+	end
+	if not itemQuality or itemQuality < 2 then
+		if element.rarityGlow then element.rarityGlow:Hide() end
+		return
+	end
+	local glow = ensureRarityGlow(element)
+	if not glow then return end
+	local w, h = element:GetSize()
+	if w and h and w > 0 and h > 0 then
+		glow:SetSize(w + 26, h + 26)
+	else
+		glow:SetSize(64, 64)
+	end
+	local r, g, b = C_Item.GetItemQualityColor(itemQuality)
+	glow:SetVertexColor(r, g, b)
+	glow:Show()
+end
+
 local function setIlvlText(element, slot)
 	-- Hide all gemslots
 	if element then
@@ -470,13 +507,15 @@ local function setIlvlText(element, slot)
 			element.ilvl:SetFormattedText("")
 			element.enchant:SetText("")
 			element.ilvlBackground:Hide()
-			return
+			if not addon.db["enhancedRarityGlow"] then return end
 		end
 
 		local eItem = Item:CreateFromEquipmentSlot(slot)
 		if eItem and not eItem:IsItemEmpty() then
 			eItem:ContinueOnItemLoad(function()
 				local link = eItem:GetItemLink()
+				local itemQuality = link and select(3, GetItemInfo(link)) or nil
+				updateCharRarityGlow(element, itemQuality)
 				local _, itemID, enchantID = string.match(link, "item:(%d+):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*)")
 				if CharOpt("gems") then
 					local itemStats = C_Item.GetItemStats(link)
@@ -564,6 +603,7 @@ local function setIlvlText(element, slot)
 			element.ilvlBackground:Hide()
 			element.enchant:SetText("")
 			if element.borderGradient then element.borderGradient:Hide() end
+			updateCharRarityGlow(element, nil)
 		end
 	end
 end
@@ -1382,6 +1422,22 @@ local function updateBuybackButtonInfo()
 	end
 end
 
+local function applyBagSortOrder()
+	if not SetSortBagsRightToLeft or not addon.db then return end
+	if addon.db["bagSortOrderEnabled"] then
+		local direction = addon.db["bagSortOrderDirection"] or "DEFAULT"
+		SetSortBagsRightToLeft(direction == "REVERSE")
+	end
+end
+
+local function applyLootOrder()
+	if not SetInsertItemsLeftToRight or not addon.db then return end
+	if addon.db["bagLootOrderEnabled"] then
+		local direction = addon.db["bagLootOrderDirection"] or "DEFAULT"
+		SetInsertItemsLeftToRight(direction == "REVERSE")
+	end
+end
+
 function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("showIlvlOnBankFrame", false)
 	addon.functions.InitDBValue("showIlvlOnMerchantframe", false)
@@ -1397,6 +1453,7 @@ function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("bagUpgradeIconPosition", "BOTTOMRIGHT")
 	addon.functions.InitDBValue("charIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
+	addon.functions.InitDBValue("enhancedRarityGlow", false)
 	addon.functions.InitDBValue("showGemsOnCharframe", false)
 	addon.functions.InitDBValue("showGemsTooltipOnCharframe", false)
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
@@ -1405,6 +1462,13 @@ function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("bagFilterFrameData", {})
 	addon.functions.InitDBValue("closeBagsOnAuctionHouse", false)
 	addon.functions.InitDBValue("showDurabilityOnCharframe", false)
+	addon.functions.InitDBValue("bagSortOrderEnabled", false)
+	addon.functions.InitDBValue("bagSortOrderDirection", "DEFAULT")
+	addon.functions.InitDBValue("bagLootOrderEnabled", false)
+	addon.functions.InitDBValue("bagLootOrderDirection", "DEFAULT")
+
+	applyBagSortOrder()
+	applyLootOrder()
 
 	hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", addon.functions.updateBags)
 	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
@@ -1743,6 +1807,85 @@ addon.functions.SettingsCreateCheckbox(cInventory, {
 		if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
 		if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
 	end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateCheckbox(cInventory, {
+	var = "enhancedRarityGlow",
+	text = L["enhancedRarityGlow"] or "Greater rarity glow",
+	desc = L["enhancedRarityGlowDesc"] or "Adds a stronger item-quality border to bags and the character panel.",
+	func = function(value)
+		addon.db["enhancedRarityGlow"] = value
+		refreshBagFrames(true)
+		if addon.functions and addon.functions.setCharFrame then addon.functions.setCharFrame() end
+	end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateHeadline(cInventory, L["bagOrderHeader"] or "Bag sort & loot order", { parentSection = expandable })
+addon.functions.SettingsCreateText(cInventory, L["bagOrderHint"] or "These options only change which bag position sorting/looting starts in. Bags still fill top-left to bottom-right.", {
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateCheckbox(cInventory, {
+	var = "bagSortOrderEnabled",
+	text = L["bagSortOrderEnabled"] or "Change sort order",
+	desc = L["bagSortOrderEnabledDesc"] or "Overrides the clean-up bags start position when enabled.",
+	func = function(value)
+		addon.db["bagSortOrderEnabled"] = value
+		if value then applyBagSortOrder() end
+	end,
+	parentSection = expandable,
+})
+
+local sortOrderParent = addon.SettingsLayout.elements["bagSortOrderEnabled"] and addon.SettingsLayout.elements["bagSortOrderEnabled"].element
+addon.functions.SettingsCreateDropdown(cInventory, {
+	list = {
+		DEFAULT = L["bagSortOrderDefault"] or "Default (Left-to-Right)",
+		REVERSE = L["bagSortOrderReverse"] or "Reverse (Right-to-Left)",
+	},
+	text = L["bagSortOrderDirection"] or "Sort order direction",
+	get = function() return addon.db["bagSortOrderDirection"] or "DEFAULT" end,
+	set = function(key)
+		addon.db["bagSortOrderDirection"] = key
+		if addon.db["bagSortOrderEnabled"] then applyBagSortOrder() end
+	end,
+	parent = sortOrderParent,
+	parentCheck = function() return addon.db["bagSortOrderEnabled"] == true end,
+	default = "DEFAULT",
+	var = "bagSortOrderDirection",
+	type = Settings.VarType.String,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateCheckbox(cInventory, {
+	var = "bagLootOrderEnabled",
+	text = L["bagLootOrderEnabled"] or "Change loot order",
+	desc = L["bagLootOrderEnabledDesc"] or "Overrides the loot start position when enabled.",
+	func = function(value)
+		addon.db["bagLootOrderEnabled"] = value
+		if value then applyLootOrder() end
+	end,
+	parentSection = expandable,
+})
+
+local lootOrderParent = addon.SettingsLayout.elements["bagLootOrderEnabled"] and addon.SettingsLayout.elements["bagLootOrderEnabled"].element
+addon.functions.SettingsCreateDropdown(cInventory, {
+	list = {
+		DEFAULT = L["bagLootOrderDefault"] or "Default (Right-to-Left)",
+		REVERSE = L["bagLootOrderReverse"] or "Reverse (Left-to-Right)",
+	},
+	text = L["bagLootOrderDirection"] or "Loot order direction",
+	get = function() return addon.db["bagLootOrderDirection"] or "DEFAULT" end,
+	set = function(key)
+		addon.db["bagLootOrderDirection"] = key
+		if addon.db["bagLootOrderEnabled"] then applyLootOrder() end
+	end,
+	parent = lootOrderParent,
+	parentCheck = function() return addon.db["bagLootOrderEnabled"] == true end,
+	default = "DEFAULT",
+	var = "bagLootOrderDirection",
+	type = Settings.VarType.String,
 	parentSection = expandable,
 })
 -- moved Money Tracker to Vendors & Economy → Money

@@ -681,6 +681,36 @@ local function isBagItemUpgrade(itemLink, itemEquipLoc, itemLevel)
 	return numericLevel > baseline
 end
 
+local function updateBagRarityGlow(itemButton, itemQuality, dimmed)
+	if not itemButton then return end
+	if not addon.db or addon.db["enhancedRarityGlow"] ~= true then
+		if itemButton.EQOLRarityGlow then itemButton.EQOLRarityGlow:Hide() end
+		return
+	end
+	if not itemQuality or itemQuality < 2 then
+		if itemButton.EQOLRarityGlow then itemButton.EQOLRarityGlow:Hide() end
+		return
+	end
+	local glow = itemButton.EQOLRarityGlow
+	if not glow then
+		glow = itemButton:CreateTexture(nil, "BORDER")
+		glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		glow:SetBlendMode("ADD")
+		glow:SetPoint("CENTER", itemButton, "CENTER", 0, 0)
+		itemButton.EQOLRarityGlow = glow
+	end
+	local w, h = itemButton:GetSize()
+	if w and h and w > 0 and h > 0 then
+		glow:SetSize(w + 20, h + 20)
+	else
+		glow:SetSize(64, 64)
+	end
+	local r, g, b = C_Item.GetItemQualityColor(itemQuality)
+	glow:SetVertexColor(r, g, b)
+	glow:SetAlpha(dimmed and 0.1 or 0.9)
+	glow:Show()
+end
+
 local function updateButtonInfo(itemButton, bag, slot, frameName)
 	itemButton:SetAlpha(1)
 	if itemButton.EQOLFilterOverlay then
@@ -712,6 +742,10 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 	local itemLink = C_Container.GetContainerItemLink(bag, slot)
 	if itemLink then
 		local _, _, itemQuality, _, _, _, _, _, itemEquipLoc, _, sellPrice, classID, subclassID, tBindType, expId = GetItemInfo(itemLink)
+		if itemQuality == nil and GetContainerItemInfo then
+			local containerInfo = GetContainerItemInfo(bag, slot)
+			if containerInfo and containerInfo.quality ~= nil then itemQuality = containerInfo.quality end
+		end
 
 		local bType, bKey, upgradeKey, bAuc
 		local data
@@ -863,11 +897,13 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 			if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:SetAlpha(1) end
 			if itemButton.ProfessionQualityOverlay and addon.db["fadeBagQualityIcons"] then itemButton.ProfessionQualityOverlay:SetAlpha(1) end
 		end
+		updateBagRarityGlow(itemButton, itemQuality, setVisibility == true)
 		-- end)
-	elseif itemButton.ItemLevelText then
+	else
 		if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
 		if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
-		itemButton.ItemLevelText:Hide()
+		if itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
+		updateBagRarityGlow(itemButton, nil, false)
 	end
 end
 

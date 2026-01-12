@@ -55,6 +55,7 @@ local textOptions = {
 
 local delimiterOptions = {
 	{ value = " ", label = L["Space"] or "Space" },
+	{ value = "  ", label = L["Double Space"] or "Double space" },
 	{ value = "/", label = "/" },
 	{ value = ":", label = ":" },
 	{ value = "-", label = "-" },
@@ -69,10 +70,34 @@ local function normalizeTextMode(value)
 	return value
 end
 
-local function textModeUsesDelimiter(value)
+local delimiterModeCounts = {
+	CURMAX = 1,
+	CURPERCENT = 1,
+	MAXPERCENT = 1,
+	PERCENTMAX = 1,
+	PERCENTCUR = 1,
+	LEVELPERCENT = 1,
+	CURMAXPERCENT = 2,
+	PERCENTCURMAX = 2,
+	LEVELPERCENTMAX = 2,
+	LEVELPERCENTCUR = 2,
+	LEVELPERCENTCURMAX = 3,
+}
+
+local function textModeDelimiterCount(value)
 	local mode = normalizeTextMode(value)
-	if type(mode) ~= "string" or mode == "PERCENT" then return false end
-	return mode:find("PERCENT", 1, true) ~= nil
+	if type(mode) ~= "string" then return 0 end
+	if mode == "PERCENT" or mode == "CURRENT" or mode == "MAX" or mode == "NONE" then return 0 end
+	return delimiterModeCounts[mode] or 0
+end
+
+local function maxDelimiterCount(leftMode, centerMode, rightMode)
+	local count = textModeDelimiterCount(leftMode)
+	local centerCount = textModeDelimiterCount(centerMode)
+	if centerCount > count then count = centerCount end
+	local rightCount = textModeDelimiterCount(rightMode)
+	if rightCount > count then count = rightCount end
+	return count
 end
 
 local outlineOptions = {
@@ -1208,13 +1233,35 @@ local function buildUnitSettings(unit)
 		healthDef.textDelimiter or " ",
 		"health"
 	)
-	healthDelimiterSetting.isEnabled = function()
+	local function healthDelimiterCount()
 		local leftMode = getValue(unit, { "health", "textLeft" }, healthDef.textLeft or "PERCENT")
 		local centerMode = getValue(unit, { "health", "textCenter" }, healthDef.textCenter or "NONE")
 		local rightMode = getValue(unit, { "health", "textRight" }, healthDef.textRight or "CURMAX")
-		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(centerMode) or textModeUsesDelimiter(rightMode)
+		return maxDelimiterCount(leftMode, centerMode, rightMode)
 	end
+	healthDelimiterSetting.isShown = function() return healthDelimiterCount() >= 1 end
 	list[#list + 1] = healthDelimiterSetting
+
+	local healthDelimiterSecondary = radioDropdown(L["Secondary Delimiter"] or "Secondary delimiter", delimiterOptions, function()
+		local primary = getValue(unit, { "health", "textDelimiter" }, healthDef.textDelimiter or " ")
+		return getValue(unit, { "health", "textDelimiterSecondary" }, primary)
+	end, function(val)
+		setValue(unit, { "health", "textDelimiterSecondary" }, val)
+		refresh()
+	end, healthDef.textDelimiterSecondary or healthDef.textDelimiter or " ", "health")
+	healthDelimiterSecondary.isShown = function() return healthDelimiterCount() >= 2 end
+	list[#list + 1] = healthDelimiterSecondary
+
+	local healthDelimiterTertiary = radioDropdown(L["Tertiary Delimiter"] or "Tertiary delimiter", delimiterOptions, function()
+		local primary = getValue(unit, { "health", "textDelimiter" }, healthDef.textDelimiter or " ")
+		local secondary = getValue(unit, { "health", "textDelimiterSecondary" }, primary)
+		return getValue(unit, { "health", "textDelimiterTertiary" }, secondary)
+	end, function(val)
+		setValue(unit, { "health", "textDelimiterTertiary" }, val)
+		refresh()
+	end, healthDef.textDelimiterTertiary or healthDef.textDelimiterSecondary or healthDef.textDelimiter or " ", "health")
+	healthDelimiterTertiary.isShown = function() return healthDelimiterCount() >= 3 end
+	list[#list + 1] = healthDelimiterTertiary
 
 	list[#list + 1] = checkbox(
 		L["Hide % symbol"] or "Hide % symbol",
@@ -1598,14 +1645,38 @@ local function buildUnitSettings(unit)
 		powerDef.textDelimiter or " ",
 		"power"
 	)
-	powerDelimiter.isEnabled = function()
-		if not isPowerEnabled() then return false end
+	local function powerDelimiterCount()
 		local leftMode = getValue(unit, { "power", "textLeft" }, powerDef.textLeft or "PERCENT")
 		local centerMode = getValue(unit, { "power", "textCenter" }, powerDef.textCenter or "NONE")
 		local rightMode = getValue(unit, { "power", "textRight" }, powerDef.textRight or "CURMAX")
-		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(centerMode) or textModeUsesDelimiter(rightMode)
+		return maxDelimiterCount(leftMode, centerMode, rightMode)
 	end
+	powerDelimiter.isShown = function() return powerDelimiterCount() >= 1 end
+	powerDelimiter.isEnabled = isPowerEnabled
 	list[#list + 1] = powerDelimiter
+
+	local powerDelimiterSecondary = radioDropdown(L["Secondary Delimiter"] or "Secondary delimiter", delimiterOptions, function()
+		local primary = getValue(unit, { "power", "textDelimiter" }, powerDef.textDelimiter or " ")
+		return getValue(unit, { "power", "textDelimiterSecondary" }, primary)
+	end, function(val)
+		setValue(unit, { "power", "textDelimiterSecondary" }, val)
+		refreshSelf()
+	end, powerDef.textDelimiterSecondary or powerDef.textDelimiter or " ", "power")
+	powerDelimiterSecondary.isShown = function() return powerDelimiterCount() >= 2 end
+	powerDelimiterSecondary.isEnabled = isPowerEnabled
+	list[#list + 1] = powerDelimiterSecondary
+
+	local powerDelimiterTertiary = radioDropdown(L["Tertiary Delimiter"] or "Tertiary delimiter", delimiterOptions, function()
+		local primary = getValue(unit, { "power", "textDelimiter" }, powerDef.textDelimiter or " ")
+		local secondary = getValue(unit, { "power", "textDelimiterSecondary" }, primary)
+		return getValue(unit, { "power", "textDelimiterTertiary" }, secondary)
+	end, function(val)
+		setValue(unit, { "power", "textDelimiterTertiary" }, val)
+		refreshSelf()
+	end, powerDef.textDelimiterTertiary or powerDef.textDelimiterSecondary or powerDef.textDelimiter or " ", "power")
+	powerDelimiterTertiary.isShown = function() return powerDelimiterCount() >= 3 end
+	powerDelimiterTertiary.isEnabled = isPowerEnabled
+	list[#list + 1] = powerDelimiterTertiary
 
 	list[#list + 1] = checkbox(L["Hide % symbol"] or "Hide % symbol", function() return getValue(unit, { "power", "hidePercentSymbol" }, powerDef.hidePercentSymbol == true) == true end, function(val)
 		setValue(unit, { "power", "hidePercentSymbol" }, val and true or false)
@@ -3474,6 +3545,91 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				addon.variables.requireReload = true
 				if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 			end
+		end,
+		parentSection = expandable,
+	})
+
+	local function getDefaultClassColor(classTag)
+		local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classTag]
+		if color then
+			if color.GetRGBA then return color:GetRGBA() end
+			return color.r or color[1] or 1, color.g or color[2] or 1, color.b or color[3] or 1, color.a or color[4] or 1
+		end
+		if C_ClassColor and C_ClassColor.GetClassColor then
+			local classColor = C_ClassColor.GetClassColor(classTag)
+			if classColor and classColor.GetRGBA then return classColor:GetRGBA() end
+		end
+		return 1, 1, 1, 1
+	end
+
+	local function ensureCustomClassColors()
+		addon.db.ufClassColors = addon.db.ufClassColors or {}
+		local order = CLASS_SORT_ORDER or {}
+		if #order == 0 and RAID_CLASS_COLORS then
+			for classTag in pairs(RAID_CLASS_COLORS) do
+				order[#order + 1] = classTag
+			end
+			table.sort(order)
+		end
+		for _, classTag in ipairs(order) do
+			if not addon.db.ufClassColors[classTag] then
+				local r, g, b, a = getDefaultClassColor(classTag)
+				addon.db.ufClassColors[classTag] = { r = r, g = g, b = b, a = a }
+			end
+		end
+	end
+
+	local classEntries = {}
+	do
+		local order = CLASS_SORT_ORDER or {}
+		if #order == 0 and RAID_CLASS_COLORS then
+			for classTag in pairs(RAID_CLASS_COLORS) do
+				order[#order + 1] = classTag
+			end
+			table.sort(order)
+		end
+		for _, classTag in ipairs(order) do
+			local label = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classTag]) or classTag
+			classEntries[#classEntries + 1] = { key = classTag, label = label }
+		end
+	end
+
+	addon.functions.SettingsCreateHeadline(cUF, L["ufClassColorsHeader"] or "Class colors", { parentSection = expandable })
+
+	addon.functions.SettingsCreateCheckbox(cUF, {
+		var = "ufUseCustomClassColors",
+		text = L["ufUseCustomClassColors"] or "Use custom class colors for unit frames",
+		desc = L["ufUseCustomClassColorsDesc"] or "Overrides class colors used by Enhance QoL unit frames.",
+		func = function(value)
+			addon.db["ufUseCustomClassColors"] = value
+			if value then ensureCustomClassColors() end
+			if Settings and Settings.NotifyUpdate then Settings.NotifyUpdate("EQOL_ufUseCustomClassColors") end
+			if addon.Aura and addon.Aura.UF and addon.Aura.UF.Refresh then addon.Aura.UF.Refresh() end
+		end,
+		parentSection = expandable,
+	})
+
+	local classColorParent = addon.SettingsLayout.elements["ufUseCustomClassColors"] and addon.SettingsLayout.elements["ufUseCustomClassColors"].element
+	addon.functions.SettingsCreateColorOverrides(cUF, {
+		var = "ufClassColors",
+		text = L["ufClassColorsLabel"] or "Class colors",
+		entries = classEntries,
+		getColor = function(key)
+			local overrides = addon.db and addon.db.ufClassColors
+			local color = overrides and overrides[key]
+			if color then return color.r or color[1] or 1, color.g or color[2] or 1, color.b or color[3] or 1, color.a or color[4] or 1 end
+			return getDefaultClassColor(key)
+		end,
+		setColor = function(key, r, g, b, a)
+			addon.db.ufClassColors = addon.db.ufClassColors or {}
+			addon.db.ufClassColors[key] = { r = r, g = g, b = b, a = a }
+			if addon.Aura and addon.Aura.UF and addon.Aura.UF.Refresh then addon.Aura.UF.Refresh() end
+		end,
+		getDefaultColor = function(key) return getDefaultClassColor(key) end,
+		parent = classColorParent,
+		parentCheck = function()
+			local entry = addon.SettingsLayout.elements["ufUseCustomClassColors"]
+			return entry and entry.setting and entry.setting:GetValue() == true
 		end,
 		parentSection = expandable,
 	})

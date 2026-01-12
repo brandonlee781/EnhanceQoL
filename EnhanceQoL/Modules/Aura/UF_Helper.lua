@@ -1001,15 +1001,25 @@ end
 
 function H.resolveTextDelimiter(delimiter)
 	if delimiter == nil or delimiter == "" then delimiter = " " end
-	if delimiter == " " then return " " end
-	return " " .. tostring(delimiter) .. " "
+	delimiter = tostring(delimiter)
+	if delimiter:find("%s") then return delimiter end
+	return " " .. delimiter .. " "
+end
+
+function H.resolveTextDelimiters(primary, secondary, tertiary)
+	local primaryResolved = H.resolveTextDelimiter(primary)
+	if secondary == nil or secondary == "" then secondary = primary end
+	local secondaryResolved = H.resolveTextDelimiter(secondary)
+	if tertiary == nil or tertiary == "" then tertiary = secondary end
+	local tertiaryResolved = H.resolveTextDelimiter(tertiary)
+	return primaryResolved, secondaryResolved, tertiaryResolved
 end
 
 local function join2(a, b, sep) return a .. sep .. b end
 
-local function join3(a, b, c, sep) return a .. sep .. b .. sep .. c end
+local function join3(a, b, c, sep1, sep2) return a .. sep1 .. b .. sep2 .. c end
 
-local function join4(a, b, c, d, sep) return a .. sep .. b .. sep .. c .. sep .. d end
+local function join4(a, b, c, d, sep1, sep2, sep3) return a .. sep1 .. b .. sep2 .. c .. sep3 .. d end
 
 function H.shortValue(val)
 	if val == nil then return "" end
@@ -1046,25 +1056,25 @@ function H.getUnitLevelText(unit, levelOverride)
 	return levelText
 end
 
-function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePercentSymbol, levelText)
+function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
 	if mode == "NONE" then return "" end
-	local join = H.resolveTextDelimiter(delimiter)
+	local joinPrimary, joinSecondary, joinTertiary = H.resolveTextDelimiters(delimiter, delimiter2, delimiter3)
 	local percentSuffix = hidePercentSymbol and "" or "%"
 	if levelText == nil or levelText == "" then levelText = "??" end
 	local isPercentMode = type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil
 	local function formatPercentMode(curText, maxText, percentText)
 		if not percentText then return "" end
 		if mode == "PERCENT" then return percentText end
-		if mode == "CURPERCENT" or mode == "CURPERCENTDASH" then return join2(curText, percentText, join) end
-		if mode == "CURMAXPERCENT" then return join3(curText, maxText, percentText, join) end
-		if mode == "MAXPERCENT" then return join2(maxText, percentText, join) end
-		if mode == "PERCENTMAX" then return join2(percentText, maxText, join) end
-		if mode == "PERCENTCUR" then return join2(percentText, curText, join) end
-		if mode == "PERCENTCURMAX" then return join3(percentText, curText, maxText, join) end
-		if mode == "LEVELPERCENT" then return join2(levelText, percentText, join) end
-		if mode == "LEVELPERCENTMAX" then return join3(levelText, percentText, maxText, join) end
-		if mode == "LEVELPERCENTCUR" then return join3(levelText, percentText, curText, join) end
-		if mode == "LEVELPERCENTCURMAX" then return join4(levelText, percentText, curText, maxText, join) end
+		if mode == "CURPERCENT" or mode == "CURPERCENTDASH" then return join2(curText, percentText, joinPrimary) end
+		if mode == "CURMAXPERCENT" then return join3(curText, maxText, percentText, joinPrimary, joinSecondary) end
+		if mode == "MAXPERCENT" then return join2(maxText, percentText, joinPrimary) end
+		if mode == "PERCENTMAX" then return join2(percentText, maxText, joinPrimary) end
+		if mode == "PERCENTCUR" then return join2(percentText, curText, joinPrimary) end
+		if mode == "PERCENTCURMAX" then return join3(percentText, curText, maxText, joinPrimary, joinSecondary) end
+		if mode == "LEVELPERCENT" then return join2(levelText, percentText, joinPrimary) end
+		if mode == "LEVELPERCENTMAX" then return join3(levelText, percentText, maxText, joinPrimary, joinSecondary) end
+		if mode == "LEVELPERCENTCUR" then return join3(levelText, percentText, curText, joinPrimary, joinSecondary) end
+		if mode == "LEVELPERCENTCURMAX" then return join4(levelText, percentText, curText, maxText, joinPrimary, joinSecondary, joinTertiary) end
 		return ""
 	end
 	if addon.variables and addon.variables.isMidnight and issecretvalue then
@@ -1076,7 +1086,7 @@ function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePe
 
 			if mode == "CURRENT" then return tostring(scur) end
 			if mode == "MAX" then return tostring(smax) end
-			if mode == "CURMAX" then return tostring(scur) .. "/" .. tostring(smax) end
+			if mode == "CURMAX" then return join2(tostring(scur), tostring(smax), joinPrimary) end
 			if isPercentMode then return formatPercentMode(tostring(scur), tostring(smax), percentText) end
 			return ""
 		end
@@ -1098,7 +1108,7 @@ function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePe
 	if mode == "CURMAX" then
 		local curText = useShort == false and tostring(cur or 0) or H.shortValue(cur or 0)
 		local maxText = useShort == false and tostring(maxv or 0) or H.shortValue(maxv or 0)
-		return curText .. "/" .. maxText
+		return join2(curText, maxText, joinPrimary)
 	end
 	if isPercentMode then
 		local curText = useShort == false and tostring(cur or 0) or H.shortValue(cur or 0)
@@ -1150,6 +1160,20 @@ function H.getTextDelimiter(cfg, def)
 	local defaultDelim = (def and def.textDelimiter) or " "
 	local delimiter = cfg and cfg.textDelimiter
 	if delimiter == nil or delimiter == "" then delimiter = defaultDelim end
+	return delimiter
+end
+
+function H.getTextDelimiterSecondary(cfg, def, primary)
+	local delimiter = cfg and cfg.textDelimiterSecondary
+	if delimiter == nil or delimiter == "" then delimiter = def and def.textDelimiterSecondary end
+	if delimiter == nil or delimiter == "" then delimiter = primary end
+	return delimiter
+end
+
+function H.getTextDelimiterTertiary(cfg, def, primary, secondary)
+	local delimiter = cfg and cfg.textDelimiterTertiary
+	if delimiter == nil or delimiter == "" then delimiter = def and def.textDelimiterTertiary end
+	if delimiter == nil or delimiter == "" then delimiter = secondary or primary end
 	return delimiter
 end
 
