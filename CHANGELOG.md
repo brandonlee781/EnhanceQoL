@@ -13,6 +13,10 @@
 - UF Plus: Secondary/tertiary delimiter options for health/power texts.
 - UF Plus: Shaman Maelstrom Weapon class resource bar with animated swirl/proc visuals (respects UF Player + Class Resource settings).
 
+### 🔄 Changed
+
+- Minimap Button Bin: Buttons are now sorted alphabetically by default.
+
 ### 🐛 Fixed
 
 - Resource Bars: Font dropdown selection no longer resets on click (fonts are selectable again).

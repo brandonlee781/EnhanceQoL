@@ -4189,7 +4189,20 @@ local function initUI()
 			end
 			if addon.variables.buttonSink then
 				local index = 0
-				for name, button in pairs(addon.variables.bagButtons) do
+				local orderedNames = {}
+				for name in pairs(addon.variables.bagButtons) do
+					orderedNames[#orderedNames + 1] = name
+				end
+				table.sort(orderedNames, function(a, b)
+					local aKey = string.lower(a or "")
+					local bKey = string.lower(b or "")
+					if aKey == bKey then
+						return (a or "") < (b or "")
+					end
+					return aKey < bKey
+				end)
+				for _, name in ipairs(orderedNames) do
+					local button = addon.variables.bagButtons[name]
 					if addon.db["ignoreMinimapButtonBin_" .. name] then
 						if addon.db.minimapButtonsMouseover then setLibDBIconMouseover(name, true, button) end
 						button:ClearAllPoints()
