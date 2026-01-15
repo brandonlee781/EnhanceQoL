@@ -24,6 +24,7 @@
 - Minimap Button Bin: Buttons are now sorted alphabetically by default.
 - DataPanels: Talents stream defaults to a grey "Talents:" prefix.
 - Resource Bars: Bar/Absorb texture dropdowns now show previews.
+- Vendors: Auto-repair now prints a message when repairs are paid from the guild bank.
 
 ### 🐛 Fixed
 

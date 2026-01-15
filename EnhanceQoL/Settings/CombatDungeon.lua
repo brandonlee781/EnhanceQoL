@@ -30,7 +30,7 @@ local combatLogInstanceMap = {
 	scenario = "scenario",
 	delve = "delve",
 }
-local DIFFICULTY_IDS = (DifficultyUtil and DifficultyUtil.ID) or {}
+local DIFFICULTY_IDS = (_G.DifficultyUtil and _G.DifficultyUtil.ID) or {}
 local COMBAT_LOG_DIFFICULTY_GROUPS = {
 	dungeon = {
 		{ key = "normal", text = PLAYER_DIFFICULTY1, difficulties = { DIFFICULTY_IDS.DungeonNormal or 1, 150, 216 } },

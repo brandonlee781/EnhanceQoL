@@ -2565,7 +2565,6 @@ local function initMisc()
 	addon.functions.InitDBValue("hideRaidTools", false)
 	addon.functions.InitDBValue("autoRepair", false)
 	addon.functions.InitDBValue("autoRepairGuildBank", false)
-	addon.functions.InitDBValue("autoRepairGuildBankMessage", false)
 	addon.functions.InitDBValue("sellAllJunk", false)
 	addon.functions.InitDBValue("autoCancelCinematic", false)
 	addon.functions.InitDBValue("quickSkipCinematic", false)
@@ -2668,9 +2667,7 @@ local function initMisc()
 				end
 				PlaySound(SOUNDKIT.ITEM_REPAIR)
 				print(L["repairCost"] .. addon.functions.formatMoney(repairAllCost))
-				if usedGuildBank and addon.db["autoRepairGuildBankMessage"] then
-					print(L["repairFromGuildBank"] or "Repaired from guild bank.")
-				end
+				if usedGuildBank then print(L["repairFromGuildBank"] or "Repaired from guild bank.") end
 			end
 		end
 		if addon.db["sellAllJunk"] and C_MerchantFrame.IsSellAllJunkEnabled() then C_MerchantFrame.SellAllJunkItems() end
@@ -4204,9 +4201,7 @@ local function initUI()
 				table.sort(orderedNames, function(a, b)
 					local aKey = string.lower(a or "")
 					local bKey = string.lower(b or "")
-					if aKey == bKey then
-						return (a or "") < (b or "")
-					end
+					if aKey == bKey then return (a or "") < (b or "") end
 					return aKey < bKey
 				end)
 				for _, name in ipairs(orderedNames) do
