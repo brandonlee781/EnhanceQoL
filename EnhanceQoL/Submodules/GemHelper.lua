@@ -87,7 +87,6 @@ local gemLayoutQueued = false
 local gemTrackerButtons = {}
 local gemTrackerQueued = false
 local gemTrackerHooked = false
-local gemTrackerDirty = true
 local gemSocketHooked = false
 -- helper to refresh / clear buttons
 local function clearGemButtons()
@@ -105,10 +104,15 @@ local function clearGemButtons()
 	wipe(gemButtons)
 end
 
+local function getGemTracker()
+	return _G.EnhanceQoLGemTracker
+end
+
 local function ensureGemTracker()
-	if EnhanceQoLGemTracker then return EnhanceQoLGemTracker end
+	local tracker = getGemTracker()
+	if tracker then return tracker end
 	if not PaperDollFrame then return nil end
-	local tracker = CreateFrame("Frame", "EnhanceQoLGemTracker", PaperDollFrame)
+	tracker = CreateFrame("Frame", "EnhanceQoLGemTracker", PaperDollFrame)
 	tracker:SetFrameStrata("HIGH")
 	tracker:SetSize((#TRACKED_GEM_TYPES * TRACKER_ICON_SIZE) + ((#TRACKED_GEM_TYPES - 1) * TRACKER_ICON_PAD), TRACKER_ICON_SIZE + TRACKER_LABEL_HEIGHT + TRACKER_LABEL_SPACING)
 	tracker:SetPoint("TOPRIGHT", PaperDollFrame, "BOTTOMRIGHT", 0, 0)
@@ -161,7 +165,7 @@ local function ensureGemTracker()
 		gemTrackerButtons[info.key] = btn
 	end
 
-	EnhanceQoLGemTracker = tracker
+	_G.EnhanceQoLGemTracker = tracker
 	return tracker
 end
 
@@ -189,7 +193,6 @@ local function queueGemTrackerUpdate(delay)
 end
 
 local function markGemTrackerDirty(delay)
-	gemTrackerDirty = true
 	local useDelay = delay
 	if useDelay == nil then useDelay = TRACKER_UPDATE_DELAY end
 	if PaperDollFrame and PaperDollFrame:IsShown() then queueGemTrackerUpdate(useDelay) end
@@ -205,8 +208,8 @@ end
 
 updateGemTracker = function()
 	if not addon.db or not addon.db["enableGemHelper"] then
-		if EnhanceQoLGemTracker then EnhanceQoLGemTracker:Hide() end
-		gemTrackerDirty = true
+		local tracker = getGemTracker()
+		if tracker then tracker:Hide() end
 		return
 	end
 	if not PaperDollFrame or not PaperDollFrame:IsShown() then return end
@@ -262,12 +265,7 @@ updateGemTracker = function()
 		end
 	end
 
-	if needsRetry then
-		gemTrackerDirty = true
-		queueGemTrackerUpdate()
-	else
-		gemTrackerDirty = false
-	end
+	if needsRetry then queueGemTrackerUpdate() end
 end
 
 local function hookGemTracker()
@@ -466,7 +464,8 @@ local function eventHandler(self, event, unit, arg1, arg2, ...)
 
 	if not addon.db or not addon.db["enableGemHelper"] then
 		if EnhanceQoLGemHelper then EnhanceQoLGemHelper:Hide() end
-		if EnhanceQoLGemTracker then EnhanceQoLGemTracker:Hide() end
+		local tracker = getGemTracker()
+		if tracker then tracker:Hide() end
 		return
 	end
 
@@ -482,8 +481,6 @@ local function eventHandler(self, event, unit, arg1, arg2, ...)
 		markGemTrackerDirty()
 	elseif event == "SOCKET_INFO_ACCEPT" then
 		markGemTrackerDirty()
-	elseif event == "PLAYER_ENTERING_WORLD" then
-		gemTrackerDirty = true
 	end
 end
 
