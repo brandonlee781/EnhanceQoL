@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL INVSLOT_HEAD INVSLOT_SHOULDER INVSLOT_CHEST INVSLOT_WAIST INVSLOT_LEGS INVSLOT_FEET INVSLOT_WRIST INVSLOT_HAND INVSLOT_BACK INVSLOT_MAINHAND INVSLOT_OFFHAND HEADSLOT SHOULDERSLOT CHESTSLOT WAISTSLOT LEGSLOT FEETSLOT WRISTSLOT HANDSSLOT BACKSLOT MAINHANDSLOT SECONDARYHANDSLOT
+-- luacheck: globals EnhanceQoL INVSLOT_HEAD INVSLOT_SHOULDER INVSLOT_CHEST INVSLOT_WAIST INVSLOT_LEGS INVSLOT_FEET INVSLOT_WRIST INVSLOT_HAND INVSLOT_BACK INVSLOT_MAINHAND INVSLOT_OFFHAND HEADSLOT SHOULDERSLOT CHESTSLOT WAISTSLOT LEGSLOT FEETSLOT WRISTSLOT HANDSSLOT BACKSLOT MAINHANDSLOT SECONDARYHANDSLOT NORMAL_FONT_COLOR
 local addonName, addon = ...
 
 local L = addon.L
@@ -20,6 +20,15 @@ local function ensureDB()
 	addon.db.datapanel.durability = addon.db.datapanel.durability or {}
 	db = addon.db.datapanel.durability
 	db.fontSize = db.fontSize or 13
+	if db.showIcon == nil then db.showIcon = true end
+	if db.useTextColor == nil then db.useTextColor = false end
+	if not db.textColor then
+		local r, g, b = 1, 0.82, 0
+		if NORMAL_FONT_COLOR and NORMAL_FONT_COLOR.GetRGB then
+			r, g, b = NORMAL_FONT_COLOR:GetRGB()
+		end
+		db.textColor = { r = r, g = g, b = b }
+	end
 end
 
 local function RestorePosition(frame)
@@ -60,6 +69,33 @@ local function createAceWindow()
 		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(fontSize)
+
+	local showIcon = AceGUI:Create("CheckBox")
+	showIcon:SetLabel(L["durabilityShowIcon"] or "Show icon")
+	showIcon:SetValue(db.showIcon)
+	showIcon:SetCallback("OnValueChanged", function(_, _, val)
+		db.showIcon = val and true or false
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(showIcon)
+
+	local useColor = AceGUI:Create("CheckBox")
+	useColor:SetLabel(L["durabilityUseTextColor"] or "Use custom text color")
+	useColor:SetValue(db.useTextColor)
+	useColor:SetCallback("OnValueChanged", function(_, _, val)
+		db.useTextColor = val and true or false
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(useColor)
+
+	local textColor = AceGUI:Create("ColorPicker")
+	textColor:SetLabel(L["Text color"] or "Text color")
+	textColor:SetColor(db.textColor.r, db.textColor.g, db.textColor.b)
+	textColor:SetCallback("OnValueChanged", function(_, _, r, g, b)
+		db.textColor = { r = r, g = g, b = b }
+		if db.useTextColor then addon.DataHub:RequestUpdate(stream) end
+	end)
+	frame:AddChild(textColor)
 
 	frame.frame:Show()
 end
@@ -111,6 +147,12 @@ local lines = {}
 local summary = { totalPercent = 100, critCount = 0, items = 0, current = 0, max = 0 }
 
 local function formatPercentColored(percent) return ("|cff%s%d%%|r"):format(getPercentColor(percent), percent) end
+
+local function colorizeValue(text, color)
+	if not text or text == "" then return text end
+	if color and color.r and color.g and color.b then return ("|cff%02x%02x%02x%s|r"):format(color.r * 255, color.g * 255, color.b * 255, text) end
+	return text
+end
 
 local function colorizeText(text, quality)
 	if not text then return UNKNOWN end
@@ -215,11 +257,28 @@ local function calculateDurability(stream)
 	local durValue = (currentDura / maxDur) * 100
 	local color = getPercentColor(durValue)
 
+	local useTextColor = db and db.useTextColor and db.textColor
 	local critDuraText = ""
-	if critDura > 0 then critDuraText = "|cffff0000" .. critDura .. "|r " .. ITEMS .. " < 50%" end
+	if critDura > 0 then
+		if useTextColor then
+			critDuraText = ("%d %s < 50%%"):format(critDura, ITEMS)
+		else
+			critDuraText = "|cffff0000" .. critDura .. "|r " .. ITEMS .. " < 50%"
+		end
+	end
 
 	stream.snapshot.fontSize = db and db.fontSize or 13
-	stream.snapshot.text = ("|T136241:16|t |cff%s%.0f|r%% %s"):format(color, durValue, critDuraText)
+	local percentText
+	if useTextColor then
+		percentText = ("%.0f%%"):format(durValue)
+	else
+		percentText = ("|cff%s%.0f|r%%"):format(color, durValue)
+	end
+	local text = percentText
+	if critDuraText ~= "" then text = text .. " " .. critDuraText end
+	if useTextColor then text = colorizeValue(text, db.textColor) end
+	if db.showIcon ~= false then text = ("|T136241:%d|t %s"):format(db and db.fontSize or 13, text) end
+	stream.snapshot.text = text
 
 	summary.totalPercent = durValue
 	summary.critCount = critDura

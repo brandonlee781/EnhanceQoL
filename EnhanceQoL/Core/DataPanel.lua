@@ -5,6 +5,7 @@ local DataHub = addon.DataHub
 local L = addon.L
 local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
+local LSM = LibStub("LibSharedMedia-3.0", true)
 
 local DEFAULT_TEXT_ALPHA = 100
 local DEFAULT_FONT_OUTLINE = true
@@ -61,6 +62,36 @@ local function normalizePercent(value, fallback)
 	if num < 0 then return 0 end
 	if num > 100 then return 100 end
 	return num
+end
+
+local function defaultFontFace() return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT end
+
+local function normalizeFontFace(value)
+	if type(value) ~= "string" or value == "" then return nil end
+	return value
+end
+
+local function fontFaceOptions()
+	local list = {}
+	local defaultPath = defaultFontFace()
+	local hasDefault = false
+	if LSM and LSM.HashTable then
+		local hash = LSM:HashTable("font") or {}
+		for name, path in pairs(hash) do
+			if type(path) == "string" and path ~= "" then
+				list[#list + 1] = { value = path, label = tostring(name) }
+				if path == defaultPath then hasDefault = true end
+			end
+		end
+	end
+	if defaultPath and not hasDefault then list[#list + 1] = { value = defaultPath, label = L["Default"] or "Default" } end
+	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	return list
+end
+
+local function slotTooltipsEnabled(slot)
+	local panel = slot and slot.panel
+	return not (panel and panel.info and panel.info.showTooltips == false)
 end
 
 local fadeWatcher
@@ -169,6 +200,7 @@ end
 local function partsOnEnter(b)
 	local s = b.slot
 	if not s then return end
+	if not slotTooltipsEnabled(s) then return end
 	GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
 	if s.perCurrency and b.currencyID then
 		GameTooltip:SetCurrencyByID(b.currencyID)
@@ -260,11 +292,15 @@ local function registerEditModePanel(panel)
 		streams = copyList(panel.info.streams),
 		fontOutline = panel.info.fontOutline ~= false,
 		fontShadow = panel.info.fontShadow == true,
+		fontFace = normalizeFontFace(panel.info.fontFace) or defaultFontFace(),
+		showTooltips = panel.info.showTooltips ~= false,
 		textAlphaInCombat = normalizePercent(panel.info.textAlphaInCombat, DEFAULT_TEXT_ALPHA),
 		textAlphaOutOfCombat = normalizePercent(panel.info.textAlphaOutOfCombat, panel.info.textAlphaInCombat),
 	}
 	panel.info.strata = defaults.strata
 	panel.info.contentAnchor = defaults.contentAnchor
+	panel.info.fontFace = defaults.fontFace
+	panel.info.showTooltips = defaults.showTooltips
 
 	local settings
 	if SettingType then
@@ -298,6 +334,12 @@ local function registerEditModePanel(panel)
 				kind = SettingType.Checkbox,
 				field = "clickThrough",
 				default = defaults.clickThrough,
+			},
+			{
+				name = L["DataPanelShowTooltips"] or "Show tooltips",
+				kind = SettingType.Checkbox,
+				field = "showTooltips",
+				default = defaults.showTooltips,
 			},
 			{
 				name = L["DataPanelStrata"],
@@ -350,6 +392,32 @@ local function registerEditModePanel(panel)
 				end,
 				generator = function(_, rootDescription, data)
 					for _, option in ipairs(CONTENT_ANCHOR_OPTIONS) do
+						rootDescription:CreateRadio(option.label, function() return data.get and data.get(nil) == option.value end, function()
+							if data.set then data.set(nil, option.value) end
+						end)
+					end
+				end,
+			},
+			{
+				name = L["DataPanelFontFace"] or "Font",
+				kind = SettingType.Dropdown,
+				field = "fontFace",
+				default = defaults.fontFace,
+				height = 200,
+				get = function(layoutName)
+					if EditMode and EditMode.GetValue then return EditMode:GetValue(id, "fontFace", layoutName) end
+					return panel.info and panel.info.fontFace or defaults.fontFace
+				end,
+				set = function(layoutName, value)
+					if EditMode and EditMode.SetValue then
+						EditMode:SetValue(id, "fontFace", value, layoutName)
+					elseif panel.info then
+						panel.info.fontFace = normalizeFontFace(value) or defaultFontFace()
+						panel:ApplyTextStyle()
+					end
+				end,
+				generator = function(_, rootDescription, data)
+					for _, option in ipairs(fontFaceOptions()) do
 						rootDescription:CreateRadio(option.label, function() return data.get and data.get(nil) == option.value end, function()
 							if data.set then data.set(nil, option.value) end
 						end)
@@ -490,6 +558,8 @@ local function ensureSettings(id, name)
 			contentAnchor = "LEFT",
 			fontOutline = DEFAULT_FONT_OUTLINE,
 			fontShadow = DEFAULT_FONT_SHADOW,
+			fontFace = defaultFontFace(),
+			showTooltips = true,
 			textAlphaInCombat = DEFAULT_TEXT_ALPHA,
 			textAlphaOutOfCombat = DEFAULT_TEXT_ALPHA,
 		}
@@ -503,6 +573,8 @@ local function ensureSettings(id, name)
 		info.contentAnchor = normalizeContentAnchor(info.contentAnchor, "LEFT")
 		if info.fontOutline == nil then info.fontOutline = DEFAULT_FONT_OUTLINE end
 		if info.fontShadow == nil then info.fontShadow = DEFAULT_FONT_SHADOW end
+		if not info.fontFace or info.fontFace == "" then info.fontFace = defaultFontFace() end
+		if info.showTooltips == nil then info.showTooltips = true end
 		info.textAlphaInCombat = normalizePercent(info.textAlphaInCombat, DEFAULT_TEXT_ALPHA)
 		info.textAlphaOutOfCombat = normalizePercent(info.textAlphaOutOfCombat, info.textAlphaInCombat)
 	end
@@ -644,6 +716,8 @@ function DataPanel.Create(id, name, existingOnly)
 		return "OUTLINE"
 	end
 
+	function panel:GetFontFace() return (self.info and self.info.fontFace) or defaultFontFace() end
+
 	function panel:ApplyFontStyle(fontString, font, size)
 		if not fontString or not fontString.SetFont or not font or not size then return end
 		fontString:SetFont(font, size, self:GetFontFlags())
@@ -672,13 +746,14 @@ function DataPanel.Create(id, name, existingOnly)
 	end
 
 	function panel:ApplyTextStyle()
+		local font = self:GetFontFace()
 		local fontFlags = self:GetFontFlags()
 		local fontShadow = self.info and self.info.fontShadow == true
 		local changed = false
 
 		for _, data in pairs(self.streams) do
 			if data.text then
-				local font, size = data.text:GetFont()
+				local _, size = data.text:GetFont()
 				if font and size then
 					self:ApplyFontStyle(data.text, font, size)
 					data.fontFlags = fontFlags
@@ -687,13 +762,14 @@ function DataPanel.Create(id, name, existingOnly)
 			end
 
 			if data.parts then
+				data.partsFont = font
 				data.partsFontFlags = fontFlags
 				data.partsFontShadow = fontShadow
 				local total = 0
 				local visibleCount = 0
 				for _, child in ipairs(data.parts) do
 					if child and child.text then
-						local font, size = child.text:GetFont()
+						local _, size = child.text:GetFont()
 						if font and size then self:ApplyFontStyle(child.text, font, size) end
 						if child:IsShown() and not child.usingIcons then
 							local width = child.text:GetStringWidth()
@@ -741,8 +817,10 @@ function DataPanel.Create(id, name, existingOnly)
 			or field == "streams"
 			or field == "strata"
 			or field == "contentAnchor"
+			or field == "fontFace"
 			or field == "fontOutline"
 			or field == "fontShadow"
+			or field == "showTooltips"
 			or field == "textAlphaInCombat"
 			or field == "textAlphaOutOfCombat"
 		then
@@ -809,6 +887,7 @@ function DataPanel.Create(id, name, existingOnly)
 		local info = self.info
 		local alphaChanged = false
 		local fontStyleChanged = false
+		local fontFaceChanged = false
 		local layoutChanged = false
 		if data.width then
 			info.width = round2(data.width)
@@ -837,6 +916,13 @@ function DataPanel.Create(id, name, existingOnly)
 				layoutChanged = true
 			end
 		end
+		if data.fontFace ~= nil then
+			local desired = normalizeFontFace(data.fontFace) or defaultFontFace()
+			if info.fontFace ~= desired then
+				info.fontFace = desired
+				fontFaceChanged = true
+			end
+		end
 		if data.fontOutline ~= nil then
 			local desired = data.fontOutline and true or false
 			if info.fontOutline ~= desired then
@@ -849,6 +935,13 @@ function DataPanel.Create(id, name, existingOnly)
 			if info.fontShadow ~= desired then
 				info.fontShadow = desired
 				fontStyleChanged = true
+			end
+		end
+		if data.showTooltips ~= nil then
+			local desired = data.showTooltips and true or false
+			if info.showTooltips ~= desired then
+				info.showTooltips = desired
+				if not desired then GameTooltip:Hide() end
 			end
 		end
 		if data.textAlphaInCombat ~= nil then
@@ -870,7 +963,7 @@ function DataPanel.Create(id, name, existingOnly)
 			self:ApplyStreams(data.streams)
 			self.applyingFromEditMode = nil
 		end
-		if fontStyleChanged then self:ApplyTextStyle() end
+		if fontStyleChanged or fontFaceChanged then self:ApplyTextStyle() end
 		if alphaChanged then self:ApplyAlpha() end
 		if layoutChanged then self:Refresh() end
 		self.suspendEditSync = nil
@@ -954,20 +1047,22 @@ function DataPanel.Create(id, name, existingOnly)
 		local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		text:SetAllPoints()
 		text:SetJustifyH("LEFT")
-		local data = { button = button, text = text, lastWidth = text:GetStringWidth(), lastText = "" }
+		local data = { button = button, text = text, lastWidth = text:GetStringWidth(), lastText = "", panel = self }
 		button.slot = data
 		button:SetScript("OnEnter", function(b)
 			local s = b.slot
-			if s.tooltip then
-				GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
-				GameTooltip:SetText(s.tooltip)
-				GameTooltip:Show()
+			if slotTooltipsEnabled(s) then
+				if s.tooltip then
+					GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
+					GameTooltip:SetText(s.tooltip)
+					GameTooltip:Show()
+				end
+				if s.OnMouseEnter then s.OnMouseEnter(b) end
 			end
-			if s.OnMouseEnter then s.OnMouseEnter(b) end
 		end)
 		button:SetScript("OnLeave", function(b)
 			local s = b.slot
-			if s.OnMouseLeave then s.OnMouseLeave(b) end
+			if slotTooltipsEnabled(s) and s.OnMouseLeave then s.OnMouseLeave(b) end
 			GameTooltip:Hide()
 		end)
 		button:RegisterForClicks("AnyUp")
@@ -993,7 +1088,7 @@ function DataPanel.Create(id, name, existingOnly)
 				queueSecureUpdate(data)
 				return
 			end
-			local font = (addon.variables and addon.variables.defaultFont) or select(1, data.text:GetFont())
+			local font = panel:GetFontFace() or select(1, data.text:GetFont())
 			local size = payload.fontSize or data.fontSize or 14
 			local fontFlags = panel:GetFontFlags()
 			local fontShadow = panel.info and panel.info.fontShadow == true

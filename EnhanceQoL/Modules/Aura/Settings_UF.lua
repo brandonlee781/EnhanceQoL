@@ -1062,6 +1062,7 @@ local function buildUnitSettings(unit)
 		setValue(unit, { "portrait", "separator", "enabled" }, val and true or false)
 		refreshSelf()
 	end, portraitSeparatorDef.enabled ~= false, "portrait")
+	list[#list].isEnabled = isPortraitEnabled
 
 	local portraitSeparatorSize = slider(L["UFPortraitSeparatorSize"] or "Separator size", 1, 64, 1, function()
 		local size = getValue(unit, { "portrait", "separator", "size" }, portraitSeparatorDef.size)
@@ -2130,113 +2131,6 @@ local function buildUnitSettings(unit)
 	raidIconOffsetY.isEnabled = isRaidIconEnabled
 	list[#list + 1] = raidIconOffsetY
 
-	if unit == "player" or unit == "target" or unit == "focus" then
-		local pvpDef = def.pvpIndicator or { enabled = false, size = 20, offset = { x = -24, y = -2 } }
-		local function isPvPIndicatorEnabled() return getValue(unit, { "pvpIndicator", "enabled" }, pvpDef.enabled == true) == true end
-		list[#list + 1] = { name = L["UFPvPIndicator"] or "Role/PvP Indicator", kind = settingType.Collapsible, id = "pvpindicator", defaultCollapsed = true }
-
-		list[#list + 1] = checkbox(L["UFPvPIndicatorEnable"] or "Show PvP indicator", isPvPIndicatorEnabled, function(val)
-			setValue(unit, { "pvpIndicator", "enabled" }, val and true or false)
-			refreshSelf()
-		end, pvpDef.enabled == true, "pvpindicator")
-
-		local pvpIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "pvpIndicator", "size" }, pvpDef.size or 20) end, function(val)
-			local v = val or pvpDef.size or 20
-			if v < 10 then v = 10 end
-			if v > 40 then v = 40 end
-			setValue(unit, { "pvpIndicator", "size" }, v)
-			refreshSelf()
-		end, pvpDef.size or 20, "pvpindicator", true)
-		pvpIconSize.isEnabled = isPvPIndicatorEnabled
-		list[#list + 1] = pvpIconSize
-
-		local pvpOffsetX = slider(
-			L["Offset X"] or "Offset X",
-			-OFFSET_RANGE,
-			OFFSET_RANGE,
-			1,
-			function() return getValue(unit, { "pvpIndicator", "offset", "x" }, (pvpDef.offset and pvpDef.offset.x) or 0) end,
-			function(val)
-				setValue(unit, { "pvpIndicator", "offset", "x" }, val or 0)
-				refreshSelf()
-			end,
-			(pvpDef.offset and pvpDef.offset.x) or 0,
-			"pvpindicator",
-			true
-		)
-		pvpOffsetX.isEnabled = isPvPIndicatorEnabled
-		list[#list + 1] = pvpOffsetX
-
-		local pvpOffsetY = slider(
-			L["Offset Y"] or "Offset Y",
-			-OFFSET_RANGE,
-			OFFSET_RANGE,
-			1,
-			function() return getValue(unit, { "pvpIndicator", "offset", "y" }, (pvpDef.offset and pvpDef.offset.y) or 0) end,
-			function(val)
-				setValue(unit, { "pvpIndicator", "offset", "y" }, val or 0)
-				refreshSelf()
-			end,
-			(pvpDef.offset and pvpDef.offset.y) or 0,
-			"pvpindicator",
-			true
-		)
-		pvpOffsetY.isEnabled = isPvPIndicatorEnabled
-		list[#list + 1] = pvpOffsetY
-
-		local roleDef = def.roleIndicator or { enabled = false, size = 18, offset = { x = 24, y = -2 } }
-		local function isRoleIndicatorEnabled() return getValue(unit, { "roleIndicator", "enabled" }, roleDef.enabled == true) == true end
-
-		list[#list + 1] = checkbox(L["UFRoleIndicatorEnable"] or "Show role indicator", isRoleIndicatorEnabled, function(val)
-			setValue(unit, { "roleIndicator", "enabled" }, val and true or false)
-			refreshSelf()
-		end, roleDef.enabled == true, "pvpindicator")
-
-		local roleIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "roleIndicator", "size" }, roleDef.size or 18) end, function(val)
-			local v = val or roleDef.size or 18
-			if v < 10 then v = 10 end
-			if v > 40 then v = 40 end
-			setValue(unit, { "roleIndicator", "size" }, v)
-			refreshSelf()
-		end, roleDef.size or 18, "pvpindicator", true)
-		roleIconSize.isEnabled = isRoleIndicatorEnabled
-		list[#list + 1] = roleIconSize
-
-		local roleOffsetX = slider(
-			L["UFRoleIndicatorOffsetX"] or "Role indicator X offset",
-			-OFFSET_RANGE,
-			OFFSET_RANGE,
-			1,
-			function() return getValue(unit, { "roleIndicator", "offset", "x" }, (roleDef.offset and roleDef.offset.x) or 0) end,
-			function(val)
-				setValue(unit, { "roleIndicator", "offset", "x" }, val or 0)
-				refreshSelf()
-			end,
-			(roleDef.offset and roleDef.offset.x) or 0,
-			"pvpindicator",
-			true
-		)
-		roleOffsetX.isEnabled = isRoleIndicatorEnabled
-		list[#list + 1] = roleOffsetX
-
-		local roleOffsetY = slider(
-			L["UFRoleIndicatorOffsetY"] or "Role indicator Y offset",
-			-OFFSET_RANGE,
-			OFFSET_RANGE,
-			1,
-			function() return getValue(unit, { "roleIndicator", "offset", "y" }, (roleDef.offset and roleDef.offset.y) or 0) end,
-			function(val)
-				setValue(unit, { "roleIndicator", "offset", "y" }, val or 0)
-				refreshSelf()
-			end,
-			(roleDef.offset and roleDef.offset.y) or 0,
-			"pvpindicator",
-			true
-		)
-		roleOffsetY.isEnabled = isRoleIndicatorEnabled
-		list[#list + 1] = roleOffsetY
-	end
-
 	if unit == "player" or unit == "target" or unit == "focus" or isBoss then
 		local castDef = def.cast or {}
 		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }
@@ -2395,12 +2289,56 @@ local function buildUnitSettings(unit)
 		castNameY.isEnabled = isCastNameEnabled
 		list[#list + 1] = castNameY
 
-		local castNameFont = checkboxDropdown(L["Font"] or "Font", fontOptions, function() return getValue(unit, { "cast", "font" }, castDef.font or "") end, function(val)
-			setValue(unit, { "cast", "font" }, val)
-			refresh()
-		end, castDef.font or "", "cast")
+		local function getCastFont() return getValue(unit, { "cast", "font" }, castDef.font or "") end
+
+		local castNameFont = {
+			name = L["Font"] or "Font",
+			kind = settingType.DropdownColor,
+			height = 180,
+			parentId = "cast",
+			default = castDef.font or "",
+			generator = function(_, root)
+				local opts = fontOptions()
+				if type(opts) ~= "table" then return end
+				for _, opt in ipairs(opts) do
+					local value = opt.value
+					local label = opt.label
+					root:CreateCheckbox(label, function() return getCastFont() == value end, function()
+						if getCastFont() ~= value then
+							setValue(unit, { "cast", "font" }, value)
+							refresh()
+						end
+					end)
+				end
+			end,
+			colorDefault = { r = 1, g = 1, b = 1, a = 1 },
+			colorGet = function()
+				local fallback = castDef.fontColor or { 1, 1, 1, 1 }
+				local r, g, b, a = toRGBA(getValue(unit, { "cast", "fontColor" }, castDef.fontColor), fallback)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			colorSet = function(_, color)
+				setColor(unit, { "cast", "fontColor" }, color.r, color.g, color.b, color.a)
+				refresh()
+			end,
+			hasOpacity = true,
+		}
 		castNameFont.isEnabled = isCastNameEnabled
 		list[#list + 1] = castNameFont
+
+		local castNameFontOutline = checkboxDropdown(
+			L["Font outline"] or "Font outline",
+			outlineOptions,
+			function() return getValue(unit, { "cast", "fontOutline" }, castDef.fontOutline or "OUTLINE") end,
+			function(val)
+				setValue(unit, { "cast", "fontOutline" }, val)
+				refresh()
+			end,
+			castDef.fontOutline or "OUTLINE",
+			"cast"
+		)
+		castNameFontOutline.isEnabled = isCastNameEnabled
+		list[#list + 1] = castNameFontOutline
 
 		local castNameFontSize = slider(L["FontSize"] or "Font size", 8, 30, 1, function() return getValue(unit, { "cast", "fontSize" }, castDef.fontSize or 12) end, function(val)
 			setValue(unit, { "cast", "fontSize" }, val or 12)
@@ -2500,7 +2438,7 @@ local function buildUnitSettings(unit)
 		castTexture.isEnabled = isCastEnabled
 		list[#list + 1] = castTexture
 
-		list[#list + 1] = checkboxColor({
+		local castBackdrop = checkboxColor({
 			name = L["UFBarBackdrop"] or "Show bar backdrop",
 			parentId = "cast",
 			defaultChecked = (castDef.backdrop and castDef.backdrop.enabled) ~= false,
@@ -2520,6 +2458,8 @@ local function buildUnitSettings(unit)
 			colorDefault = { r = 0, g = 0, b = 0, a = 0.6 },
 			isEnabled = isCastEnabled,
 		})
+		castBackdrop.isEnabled = isCastEnabled
+		list[#list + 1] = castBackdrop
 
 		list[#list + 1] = {
 			name = L["Cast color"] or "Cast color",
@@ -2895,6 +2835,112 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = { name = L["UFUnitStatus"] or "Unit status", kind = settingType.Collapsible, id = "unitStatus", defaultCollapsed = true }
 
+	if unit == "player" or unit == "target" or unit == "focus" then
+		local pvpDef = def.pvpIndicator or { enabled = false, size = 20, offset = { x = -24, y = -2 } }
+		local function isPvPIndicatorEnabled() return getValue(unit, { "pvpIndicator", "enabled" }, pvpDef.enabled == true) == true end
+
+		list[#list + 1] = checkbox(L["UFPvPIndicatorEnable"] or "Show PvP indicator", isPvPIndicatorEnabled, function(val)
+			setValue(unit, { "pvpIndicator", "enabled" }, val and true or false)
+			refreshSelf()
+		end, pvpDef.enabled == true, "unitStatus")
+
+		local pvpIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "pvpIndicator", "size" }, pvpDef.size or 20) end, function(val)
+			local v = val or pvpDef.size or 20
+			if v < 10 then v = 10 end
+			if v > 40 then v = 40 end
+			setValue(unit, { "pvpIndicator", "size" }, v)
+			refreshSelf()
+		end, pvpDef.size or 20, "unitStatus", true)
+		pvpIconSize.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpIconSize
+
+		local pvpOffsetX = slider(
+			L["Offset X"] or "Offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "pvpIndicator", "offset", "x" }, (pvpDef.offset and pvpDef.offset.x) or 0) end,
+			function(val)
+				setValue(unit, { "pvpIndicator", "offset", "x" }, val or 0)
+				refreshSelf()
+			end,
+			(pvpDef.offset and pvpDef.offset.x) or 0,
+			"unitStatus",
+			true
+		)
+		pvpOffsetX.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpOffsetX
+
+		local pvpOffsetY = slider(
+			L["Offset Y"] or "Offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "pvpIndicator", "offset", "y" }, (pvpDef.offset and pvpDef.offset.y) or 0) end,
+			function(val)
+				setValue(unit, { "pvpIndicator", "offset", "y" }, val or 0)
+				refreshSelf()
+			end,
+			(pvpDef.offset and pvpDef.offset.y) or 0,
+			"unitStatus",
+			true
+		)
+		pvpOffsetY.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpOffsetY
+
+		local roleDef = def.roleIndicator or { enabled = false, size = 18, offset = { x = 24, y = -2 } }
+		local function isRoleIndicatorEnabled() return getValue(unit, { "roleIndicator", "enabled" }, roleDef.enabled == true) == true end
+
+		list[#list + 1] = checkbox(L["UFRoleIndicatorEnable"] or "Show role indicator", isRoleIndicatorEnabled, function(val)
+			setValue(unit, { "roleIndicator", "enabled" }, val and true or false)
+			refreshSelf()
+		end, roleDef.enabled == true, "unitStatus")
+
+		local roleIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "roleIndicator", "size" }, roleDef.size or 18) end, function(val)
+			local v = val or roleDef.size or 18
+			if v < 10 then v = 10 end
+			if v > 40 then v = 40 end
+			setValue(unit, { "roleIndicator", "size" }, v)
+			refreshSelf()
+		end, roleDef.size or 18, "unitStatus", true)
+		roleIconSize.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleIconSize
+
+		local roleOffsetX = slider(
+			L["UFRoleIndicatorOffsetX"] or "Role indicator X offset",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "roleIndicator", "offset", "x" }, (roleDef.offset and roleDef.offset.x) or 0) end,
+			function(val)
+				setValue(unit, { "roleIndicator", "offset", "x" }, val or 0)
+				refreshSelf()
+			end,
+			(roleDef.offset and roleDef.offset.x) or 0,
+			"unitStatus",
+			true
+		)
+		roleOffsetX.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleOffsetX
+
+		local roleOffsetY = slider(
+			L["UFRoleIndicatorOffsetY"] or "Role indicator Y offset",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "roleIndicator", "offset", "y" }, (roleDef.offset and roleDef.offset.y) or 0) end,
+			function(val)
+				setValue(unit, { "roleIndicator", "offset", "y" }, val or 0)
+				refreshSelf()
+			end,
+			(roleDef.offset and roleDef.offset.y) or 0,
+			"unitStatus",
+			true
+		)
+		roleOffsetY.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleOffsetY
+	end
+
 	list[#list + 1] = checkbox(L["UFUnitStatusEnable"] or "Show unit status", function() return getValue(unit, { "status", "unitStatus", "enabled" }, usDef.enabled == true) == true end, function(val)
 		setValue(unit, { "status", "unitStatus", "enabled" }, val and true or false)
 		refresh()
@@ -3222,6 +3268,22 @@ local function buildUnitSettings(unit)
 			setValue(unit, { "auraIcons", "size" }, val or auraDef.size or 24)
 			refresh()
 		end, auraDef.size or 24, "auras", true)
+		list[#list].isEnabled = isAuraEnabled
+
+		list[#list + 1] = slider(
+			L["Aura debuff size"] or "Aura debuff size",
+			12,
+			48,
+			1,
+			function() return getValue(unit, { "auraIcons", "debuffSize" }, auraDef.debuffSize or auraDef.size or 24) end,
+			function(val)
+				setValue(unit, { "auraIcons", "debuffSize" }, val or auraDef.debuffSize or auraDef.size or 24)
+				refresh()
+			end,
+			auraDef.debuffSize or auraDef.size or 24,
+			"auras",
+			true
+		)
 		list[#list].isEnabled = isAuraEnabled
 
 		list[#list + 1] = slider(L["Aura spacing"] or "Aura spacing", 0, 10, 1, function() return getValue(unit, { "auraIcons", "padding" }, auraDef.padding or 2) end, function(val)

@@ -6,6 +6,7 @@
 
 - DataPanels: Pet Tracker stream with customizable text color/size and optional blinking when a pet spec has no active pet. Checks for Frost Mage, Hunter, Warlock, Unholy DK and respects needed talents.
 - DataPanels: Edit Mode click-through toggle to make panels ignore mouse input.
+- DataPanels: Edit Mode font selection per panel + tooltip toggle.
 - DataPanels: Content alignment option (left/center/right) in Edit Mode.
 - DataPanels: Mail notification stream with minimap mail icon and tooltip senders.
 - Sound: Additional sounds mapping per event with a per-event dropdown (extra sounds toggle).
@@ -35,6 +36,7 @@
 - Resource Bars: Bar/Absorb texture dropdowns now show previews.
 - Vendors: Auto-repair now prints a message when repairs are paid from the guild bank.
 - Mounts: Random mount keybind now picks a usable random mount based on swimming/flyable/ground conditions.
+- UF Plus: Role/PvP indicator options are now under Unit status.
 
 ### 🐛 Fixed
 
@@ -44,6 +46,7 @@
 - Talents: Filter out the internal TalentLoadoutManager placeholder loadout in selection lists.
 - UF Plus: Aura icon tooltips now show for private/secret auras via auraInstanceID fallback.
 - UF Plus: Boss frame name/level color options are available like other frames.
+- UF Plus: Channelled casts no longer show failed when re-pressing the spell mid-channel.
 
 ### ❌ Removed
 

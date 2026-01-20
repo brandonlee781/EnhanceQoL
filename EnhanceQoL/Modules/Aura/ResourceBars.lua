@@ -165,11 +165,8 @@ local function SetColorCurvePointsPower(pType, maxColor, defColor)
 	if curve then
 		curvePower[pType] = C_CurveUtil and C_CurveUtil.CreateColorCurve()
 		curvePower[pType]:SetType(Enum.LuaCurveType.Cosine)
-		if maxColor then
-			curvePower[pType]:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) -- sattes Grün
-		else
-			curvePower[pType]:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
-		end
+		if maxColor then curvePower[pType]:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) end
+		if defColor then curvePower[pType]:AddPoint(1.0, CreateColor(defColor[1], defColor[2], defColor[3], defColor[4])) end
 	end
 end
 SetColorCurvePoints()
@@ -902,18 +899,30 @@ local function specNameByIndex(specIndex)
 	return specName
 end
 
-local function exportResourceProfile(scopeKey)
+local function resolveProfileDB(profileName)
+	if type(profileName) == "string" and profileName ~= "" then
+		local profiles = EnhanceQoLDB and EnhanceQoLDB.profiles
+		if type(profiles) ~= "table" then return nil, true end
+		return profiles[profileName], true
+	end
+	addon.db = addon.db or {}
+	return addon.db, false
+end
+
+local function exportResourceProfile(scopeKey, profileName)
 	scopeKey = scopeKey or "ALL"
 	local classKey = addon.variables.unitClass
 	if not classKey then return nil, "NO_CLASS" end
-	addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
-	local classConfig = addon.db.personalResourceBarSettings[classKey]
+	local db, externalProfile = resolveProfileDB(profileName)
+	if type(db) ~= "table" then return nil, "NO_DATA" end
+	if not externalProfile then db.personalResourceBarSettings = db.personalResourceBarSettings or {} end
+	local classConfig = db.personalResourceBarSettings and db.personalResourceBarSettings[classKey]
 
 	local payload = {
 		kind = RB.RESOURCE_SHARE_KIND,
 		version = 1,
 		class = classKey,
-		enableResourceFrame = addon.db["enableResourceFrame"] and true or false,
+		enableResourceFrame = db["enableResourceFrame"] and true or false,
 		specs = {},
 		specNames = {},
 	}
@@ -923,14 +932,15 @@ local function exportResourceProfile(scopeKey)
 		payload.class = "ALL"
 		payload.specs = nil
 		payload.specNames = nil
-		payload.classes = CopyTable(addon.db.personalResourceBarSettings)
+		if type(db.personalResourceBarSettings) ~= "table" then return nil, "EMPTY" end
+		payload.classes = CopyTable(db.personalResourceBarSettings)
 		do
 			local globals = {}
-			if type(addon.db.resourceBarsAutoEnable) == "table" then globals.resourceBarsAutoEnable = CopyTable(addon.db.resourceBarsAutoEnable) end
-			if addon.db.resourceBarsHideOutOfCombat ~= nil then globals.resourceBarsHideOutOfCombat = addon.db.resourceBarsHideOutOfCombat and true or false end
-			if addon.db.resourceBarsHideMounted ~= nil then globals.resourceBarsHideMounted = addon.db.resourceBarsHideMounted and true or false end
-			if addon.db.resourceBarsHideVehicle ~= nil then globals.resourceBarsHideVehicle = addon.db.resourceBarsHideVehicle and true or false end
-			if type(addon.db.globalResourceBarSettings) == "table" then globals.globalResourceBarSettings = CopyTable(addon.db.globalResourceBarSettings) end
+			if type(db.resourceBarsAutoEnable) == "table" then globals.resourceBarsAutoEnable = CopyTable(db.resourceBarsAutoEnable) end
+			if db.resourceBarsHideOutOfCombat ~= nil then globals.resourceBarsHideOutOfCombat = db.resourceBarsHideOutOfCombat and true or false end
+			if db.resourceBarsHideMounted ~= nil then globals.resourceBarsHideMounted = db.resourceBarsHideMounted and true or false end
+			if db.resourceBarsHideVehicle ~= nil then globals.resourceBarsHideVehicle = db.resourceBarsHideVehicle and true or false end
+			if type(db.globalResourceBarSettings) == "table" then globals.globalResourceBarSettings = CopyTable(db.globalResourceBarSettings) end
 			if next(globals) then payload.globalSettings = globals end
 		end
 		if type(payload.classes) ~= "table" or not next(payload.classes) then return nil, "EMPTY" end
@@ -1593,6 +1603,7 @@ local function applyBarFillColor(bar, cfg, pType)
 	bar._lastColor = bar._lastColor or {}
 	bar._lastColor[1], bar._lastColor[2], bar._lastColor[3], bar._lastColor[4] = r, g, b, a or 1
 	bar._usingMaxColor = false
+	if pType and pType ~= "RUNES" then SetColorCurvePointsPower(pType, cfg.maxColor, bar._baseColor) end
 	configureSpecialTexture(bar, pType, cfg)
 end
 
@@ -3121,19 +3132,24 @@ function updatePowerBar(type, runeSlot)
 			local targetR, targetG, targetB, targetA = br, bgc, bb, ba
 			local useMaxColor = cfg.useMaxColor == true
 			local reachedCap = (issecretvalue and not issecretvalue(curPower) or not addon.variables.isMidnight) and curPower >= max(maxPower, 1)
-			if useMaxColor and reachedCap then
-				local maxCol = cfg.maxColor or RB.WHITE
-				targetR, targetG, targetB, targetA = maxCol[1] or br, maxCol[2] or bgc, maxCol[3] or bb, maxCol[4] or ba
-			elseif reachedThree then
-				targetR, targetG, targetB, targetA = getHolyThreeColor(cfg)
-			end
-			if lc[1] ~= targetR or lc[2] ~= targetG or lc[3] ~= targetB or lc[4] ~= targetA then
-				bar._lastColor = lc
-				if cfg.useBarColor and not cfg.useMaxColor and not reachedThree then bar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1) end
-				bar:SetStatusBarColor(targetR, targetG, targetB, targetA)
+			if useMaxColor and issecretvalue and issecretvalue(curPower) and UnitPowerPercent and curvePower[type] then
+				local curveColor = UnitPowerPercent("player", pType, false, curvePower[type])
+				bar:GetStatusBarTexture():SetVertexColor(curveColor:GetRGBA())
+			else
+				if useMaxColor and reachedCap then
+					local maxCol = cfg.maxColor or RB.WHITE
+					targetR, targetG, targetB, targetA = maxCol[1] or br, maxCol[2] or bgc, maxCol[3] or bb, maxCol[4] or ba
+				elseif reachedThree then
+					targetR, targetG, targetB, targetA = getHolyThreeColor(cfg)
+				end
+				if lc[1] ~= targetR or lc[2] ~= targetG or lc[3] ~= targetB or lc[4] ~= targetA then
+					bar._lastColor = lc
+					if cfg.useBarColor and not cfg.useMaxColor and not reachedThree then bar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1) end
+					bar:SetStatusBarColor(targetR, targetG, targetB, targetA)
+				end
 			end
 		end
-		bar._usingMaxColor = (cfg.useMaxColor == true) and (curPower >= max(maxPower, 1))
+		bar._usingMaxColor = (cfg.useMaxColor == true)
 		bar._usingHolyThreeColor = reachedThree and not bar._usingMaxColor
 	end
 
@@ -4773,6 +4789,9 @@ ResourceBars.ImportErrorMessage = importErrorMessage
 ResourceBars.SpecNameByIndex = specNameByIndex
 ResourceBars.SaveGlobalProfile = saveGlobalProfile
 ResourceBars.ApplyGlobalProfile = applyGlobalProfile
+
+addon.exportResourceProfile = function(profileName, scopeKey) return ResourceBars.ExportProfile(scopeKey, profileName) end
+addon.importResourceProfile = function(encoded, scopeKey) return ResourceBars.ImportProfile(encoded, scopeKey) end
 
 function addon.Aura.functions.InitResourceBars()
 	if addon.db["enableResourceFrame"] then

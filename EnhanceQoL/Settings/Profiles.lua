@@ -71,9 +71,14 @@ local function sanitizeProfileData(source)
 	return filtered
 end
 
-local function exportActiveProfile()
+local function resolveExportProfileName(profileName)
+	if type(profileName) == "string" and profileName ~= "" then return profileName end
+	return getActiveProfileName()
+end
+
+local function exportActiveProfile(profileName)
 	if not serializer or not deflate then return nil, "NO_LIB" end
-	local profileName = getActiveProfileName()
+	profileName = resolveExportProfileName(profileName)
 	if not profileName then return nil, "NO_ACTIVE" end
 	local source = EnhanceQoLDB and EnhanceQoLDB.profiles and EnhanceQoLDB.profiles[profileName]
 	if type(source) ~= "table" or not next(source) then return nil, "NO_DATA" end

@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL MenuUtil MenuResponse MASTER_VOLUME MUSIC_VOLUME FX_VOLUME AMBIENCE_VOLUME DIALOG_VOLUME AUDIO_OUTPUT_DEVICE GAMEMENU_OPTIONS FONT_SIZE UIParent GameTooltip
+-- luacheck: globals EnhanceQoL MenuUtil MenuResponse MASTER_VOLUME MUSIC_VOLUME FX_VOLUME AMBIENCE_VOLUME DIALOG_VOLUME AUDIO_OUTPUT_DEVICE GAMEMENU_OPTIONS FONT_SIZE UIParent GameTooltip NORMAL_FONT_COLOR
 local addonName, addon = ...
 local L = addon.L
 
@@ -66,6 +66,15 @@ local function ensureDB()
 	db.fontSize = db.fontSize or 14
 	db.step = db.step or 0.05
 	db.activeStream = db.activeStream or "master"
+	if db.iconOnly == nil then db.iconOnly = false end
+	if db.useTextColor == nil then db.useTextColor = false end
+	if not db.textColor then
+		local r, g, b = 1, 0.82, 0
+		if NORMAL_FONT_COLOR and NORMAL_FONT_COLOR.GetRGB then
+			r, g, b = NORMAL_FONT_COLOR:GetRGB()
+		end
+		db.textColor = { r = r, g = g, b = b }
+	end
 end
 
 local function RestorePosition(frame)
@@ -106,6 +115,33 @@ local function createAceWindow()
 	end)
 	frame:AddChild(fontSize)
 
+	local iconOnly = AceGUI:Create("CheckBox")
+	iconOnly:SetLabel(L["volumeIconOnly"] or "Icon only")
+	iconOnly:SetValue(db.iconOnly)
+	iconOnly:SetCallback("OnValueChanged", function(_, _, val)
+		db.iconOnly = val and true or false
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(iconOnly)
+
+	local useColor = AceGUI:Create("CheckBox")
+	useColor:SetLabel(L["volumeUseTextColor"] or "Use custom text color")
+	useColor:SetValue(db.useTextColor)
+	useColor:SetCallback("OnValueChanged", function(_, _, val)
+		db.useTextColor = val and true or false
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(useColor)
+
+	local textColor = AceGUI:Create("ColorPicker")
+	textColor:SetLabel(L["Text color"] or "Text color")
+	textColor:SetColor(db.textColor.r, db.textColor.g, db.textColor.b)
+	textColor:SetCallback("OnValueChanged", function(_, _, r, g, b)
+		db.textColor = { r = r, g = g, b = b }
+		if db.useTextColor then addon.DataHub:RequestUpdate(stream) end
+	end)
+	frame:AddChild(textColor)
+
 	frame.frame:Show()
 end
 
@@ -117,6 +153,12 @@ local function clampVolume(value)
 end
 
 local function formatPercent(value) return format("%d%%", floor(value * 100 + 0.5)) end
+
+local function colorizeText(text, color)
+	if not text or text == "" then return text end
+	if color and color.r and color.g and color.b then return ("|cff%02x%02x%02x%s|r"):format(color.r * 255, color.g * 255, color.b * 255, text) end
+	return text
+end
 
 local function getStreamInfo(id) return STREAMS[id] or STREAMS.master end
 
@@ -213,10 +255,18 @@ local function updateVolume(streamObj)
 	local volume = getStreamVolume(activeId)
 	local size = db.fontSize or 14
 	local label = info.label or info.id or "Volume"
-	if not isStreamEnabled(activeId) then label = "|cffff0000" .. label .. "|r" end
+	local useTextColor = db.useTextColor and db.textColor
+	if not useTextColor and not isStreamEnabled(activeId) then label = "|cffff0000" .. label .. "|r" end
 	local tooltip = buildTooltip()
 	streamObj.snapshot.fontSize = size
-	streamObj.snapshot.text = ("|TInterface\\Common\\VoiceChat-Speaker:%d:%d:0:0|t %s: %s"):format(size, size, label, formatPercent(volume))
+	local baseText = ("%s: %s"):format(label, formatPercent(volume))
+	if useTextColor then baseText = colorizeText(baseText, db.textColor) end
+	local icon = ("|TInterface\\Common\\VoiceChat-Speaker:%d:%d:0:0|t"):format(size, size)
+	if db.iconOnly then
+		streamObj.snapshot.text = icon
+	else
+		streamObj.snapshot.text = icon .. " " .. baseText
+	end
 	streamObj.snapshot.tooltip = tooltip
 	streamObj.snapshot.ignoreMenuModifier = true
 	updateTooltipForButton(hoveredButton, tooltip)
