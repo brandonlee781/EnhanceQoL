@@ -729,10 +729,24 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = { name = L["Frame"] or "Frame", kind = settingType.Collapsible, id = "frame", defaultCollapsed = false }
 
-	list[#list + 1] = checkbox(L["UFShowTooltip"] or "Show unit tooltip", function() return getValue(unit, { "showTooltip" }, def.showTooltip or false) == true end, function(val)
+	local function isTooltipEnabled() return getValue(unit, { "showTooltip" }, def.showTooltip or false) == true end
+
+	list[#list + 1] = checkbox(L["UFShowTooltip"] or "Show unit tooltip", isTooltipEnabled, function(val)
 		setValue(unit, { "showTooltip" }, val and true or false)
 		refreshSelf()
+		refreshSettingsUI()
 	end, def.showTooltip or false, "frame")
+
+	list[#list + 1] = checkbox(
+		L["UFTooltipUseEditMode"] or "Use Edit Mode tooltip position",
+		function() return getValue(unit, { "tooltipUseEditMode" }, def.tooltipUseEditMode == true) == true end,
+		function(val)
+			setValue(unit, { "tooltipUseEditMode" }, val and true or false)
+		end,
+		def.tooltipUseEditMode == true,
+		"frame",
+		isTooltipEnabled
+	)
 
 	if #visibilityOptions > 0 then
 		list[#list + 1] = multiDropdown(L["Show when"] or "Show when", visibilityOptions, isVisibilityRuleSelected, setVisibilityRule, nil, "frame")

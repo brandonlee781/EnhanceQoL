@@ -187,6 +187,7 @@ local defaults = {
 	player = {
 		enabled = false,
 		showTooltip = false,
+		tooltipUseEditMode = false,
 		width = 220,
 		healthHeight = 24,
 		powerHeight = 16,
@@ -3539,7 +3540,11 @@ local function ensureFrames(unit)
 		if not (cfg and cfg.showTooltip) then return end
 		if not GameTooltip or GameTooltip:IsForbidden() then return end
 		if info and info.unit then
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			if cfg.tooltipUseEditMode and GameTooltip_SetDefaultAnchor then
+				GameTooltip_SetDefaultAnchor(GameTooltip, self)
+			else
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			end
 			GameTooltip:SetUnit(info.unit)
 			GameTooltip:Show()
 		end
