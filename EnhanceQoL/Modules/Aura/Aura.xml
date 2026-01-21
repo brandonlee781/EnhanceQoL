@@ -2,8 +2,10 @@
 	<Script file="widgets\DragTreeGroup.lua" />
 	<Script file="Aura.lua" />
 	<Script file="BuffTracker.lua" />
+	<!--@debug@-->
 	<Script file="CooldownPanels_Helper.lua" />
 	<Script file="CooldownPanels.lua" />
+	<!--@end-debug@-->
 	<Script file="UF_Helper.lua" />
 	<Script file="UF.lua" />
 	<Script file="ShamanMaelstromWeaponBar.lua" />
