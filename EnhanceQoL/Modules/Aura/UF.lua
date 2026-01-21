@@ -5057,6 +5057,7 @@ function UF.Enable()
 		ensureBossFramesReady(bossCfg)
 		updateBossFrames(true)
 	end
+	if addon.functions and addon.functions.UpdateClassResourceVisibility then addon.functions.UpdateClassResourceVisibility() end
 	-- hideBlizzardPlayerFrame()
 	-- hideBlizzardTargetFrame()
 end
@@ -5075,6 +5076,7 @@ function UF.Disable()
 		_G.PlayerFrame:Show()
 	end
 	ensureEventHandling()
+	if addon.functions and addon.functions.UpdateClassResourceVisibility then addon.functions.UpdateClassResourceVisibility() end
 end
 
 function UF.Refresh()

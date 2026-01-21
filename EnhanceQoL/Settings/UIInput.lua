@@ -232,9 +232,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["deathknight_HideRuneFrame"],
 			func = function(value)
 				addon.db["deathknight_HideRuneFrame"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if RuneFrame then RuneFrame:Hide() end
 				else
 					if RuneFrame then RuneFrame:Show() end
@@ -250,9 +249,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["druid_HideComboPoint"],
 			func = function(value)
 				addon.db["druid_HideComboPoint"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if DruidComboPointBarFrame then DruidComboPointBarFrame:Hide() end
 				else
 					if DruidComboPointBarFrame then DruidComboPointBarFrame:Show() end
@@ -266,9 +264,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["evoker_HideEssence"],
 			func = function(value)
 				addon.db["evoker_HideEssence"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if EssencePlayerFrame then EssencePlayerFrame:Hide() end
 				else
 					if EssencePlayerFrame then EssencePlayerFrame:Show() end
@@ -284,9 +281,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["monk_HideHarmonyBar"],
 			func = function(value)
 				addon.db["monk_HideHarmonyBar"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Hide() end
 				else
 					if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Show() end
@@ -305,9 +301,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["rogue_HideComboPoint"],
 			func = function(value)
 				addon.db["rogue_HideComboPoint"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if RogueComboPointBarFrame then RogueComboPointBarFrame:Hide() end
 				else
 					if RogueComboPointBarFrame then RogueComboPointBarFrame:Show() end
@@ -322,9 +317,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["paladin_HideHolyPower"],
 			func = function(value)
 				addon.db["paladin_HideHolyPower"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if PaladinPowerBarFrame then PaladinPowerBarFrame:Hide() end
 				else
 					if PaladinPowerBarFrame then PaladinPowerBarFrame:Show() end
@@ -338,9 +332,8 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 			text = L["warlock_HideSoulShardBar"],
 			func = function(value)
 				addon.db["warlock_HideSoulShardBar"] = value
-				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
 				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-				if value and not ufActive and not ufCR then
+				if value and not ufActive then
 					if WarlockPowerFrame then WarlockPowerFrame:Hide() end
 				else
 					if WarlockPowerFrame then WarlockPowerFrame:Show() end

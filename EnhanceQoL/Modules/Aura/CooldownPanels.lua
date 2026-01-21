@@ -26,6 +26,7 @@ CooldownPanels.runtime = CooldownPanels.runtime or {}
 local DEFAULT_PREVIEW_COUNT = 6
 local MAX_PREVIEW_COUNT = 12
 local PREVIEW_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+local PREVIEW_ICON_SIZE = 36
 local VALID_DIRECTIONS = {
 	RIGHT = true,
 	LEFT = true,
@@ -42,10 +43,13 @@ local GetItemInfoInstantFn = (C_Item and C_Item.GetItemInfoInstant) or GetItemIn
 local GetItemIconByID = C_Item and C_Item.GetItemIconByID
 local GetItemCooldownFn = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
 local GetItemCountFn = (C_Item and C_Item.GetItemCount) or GetItemCount
+local GetItemSpell = C_Item and C_Item.GetItemSpell
 local GetInventoryItemID = GetInventoryItemID
 local GetInventoryItemCooldown = GetInventoryItemCooldown
+local GetInventorySlotInfo = GetInventorySlotInfo
 local GetActionInfo = GetActionInfo
 local GetCursorInfo = GetCursorInfo
+local GetCursorPosition = GetCursorPosition
 local ClearCursor = ClearCursor
 local GetSpellCooldownInfo = C_Spell and C_Spell.GetSpellCooldown or GetSpellCooldown
 local GetSpellChargesInfo = C_Spell and C_Spell.GetSpellCharges
@@ -54,6 +58,8 @@ local IsSpellKnown = IsSpellKnown
 local IsEquippedItem = IsEquippedItem
 local GetTime = GetTime
 local ActionButtonSpellAlertManager = ActionButtonSpellAlertManager
+local MenuUtil = MenuUtil
+local issecretvalue = _G.issecretvalue
 
 local directionOptions = {
 	{ value = "LEFT", label = _G.HUD_EDIT_MODE_SETTING_BAGS_DIRECTION_LEFT or _G.LEFT or "Left" },
@@ -119,6 +125,28 @@ local function getPreviewCount(panel)
 	return count
 end
 
+local function getEditorPreviewCount(panel, previewFrame, baseLayout)
+	if not panel or type(panel.order) ~= "table" then return DEFAULT_PREVIEW_COUNT end
+	local count = #panel.order
+	if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+	if not previewFrame then return count end
+
+	local spacing = clampInt((baseLayout and baseLayout.spacing) or 0, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local step = PREVIEW_ICON_SIZE + spacing
+	if step <= 0 then return count end
+	local width = previewFrame:GetWidth() or 0
+	local height = previewFrame:GetHeight() or 0
+	if width <= 0 or height <= 0 then return count end
+
+	local cols = math.floor((width + spacing) / step)
+	local rows = math.floor((height + spacing) / step)
+	if cols < 1 then cols = 1 end
+	if rows < 1 then rows = 1 end
+	local capacity = cols * rows
+	if capacity <= 0 then return count end
+	return math.min(count, capacity)
+end
+
 local function getEntryIcon(entry)
 	if not entry or type(entry) ~= "table" then return PREVIEW_ICON end
 	if entry.type == "SPELL" and entry.spellID then return (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.spellID)) or PREVIEW_ICON end
@@ -148,14 +176,51 @@ local function getEntryIcon(entry)
 	return PREVIEW_ICON
 end
 
-local SLOT_LABELS = {
-	[13] = L["CooldownPanelSlotTrinket1"] or "Trinket 1",
-	[14] = L["CooldownPanelSlotTrinket2"] or "Trinket 2",
-	[16] = L["CooldownPanelSlotMainHand"] or "Main Hand",
-	[17] = L["CooldownPanelSlotOffHand"] or "Off Hand",
+local SLOT_LABELS = {}
+local SLOT_MENU_ENTRIES
+local SLOT_DEFS = {
+	{ name = "HeadSlot", label = _G.HEADSLOT or "Head" },
+	{ name = "NeckSlot", label = _G.NECKSLOT or "Neck" },
+	{ name = "ShoulderSlot", label = _G.SHOULDERSLOT or "Shoulder" },
+	{ name = "BackSlot", label = _G.BACKSLOT or "Back" },
+	{ name = "ChestSlot", label = _G.CHESTSLOT or "Chest" },
+	{ name = "ShirtSlot", label = _G.SHIRTSLOT or "Shirt" },
+	{ name = "TabardSlot", label = _G.TABARDSLOT or "Tabard" },
+	{ name = "WristSlot", label = _G.WRISTSLOT or "Wrist" },
+	{ name = "HandsSlot", label = _G.HANDSSLOT or "Hands" },
+	{ name = "WaistSlot", label = _G.WAISTSLOT or "Waist" },
+	{ name = "LegsSlot", label = _G.LEGSSLOT or "Legs" },
+	{ name = "FeetSlot", label = _G.FEETSLOT or "Feet" },
+	{ name = "Finger0Slot", label = string.format("%s 1", _G.FINGER0SLOT or "Finger") },
+	{ name = "Finger1Slot", label = string.format("%s 2", _G.FINGER1SLOT or "Finger") },
+	{ name = "Trinket0Slot", label = string.format("%s 1", _G.TRINKET0SLOT or "Trinket") },
+	{ name = "Trinket1Slot", label = string.format("%s 2", _G.TRINKET1SLOT or "Trinket") },
+	{ name = "MainHandSlot", label = _G.MAINHANDSLOT or "Main Hand" },
+	{ name = "SecondaryHandSlot", label = _G.SECONDARYHANDSLOT or "Off Hand" },
+	{ name = "RangedSlot", label = _G.RANGEDSLOT or "Ranged" },
 }
 
-local function getSlotLabel(slotId) return SLOT_LABELS[slotId] or ("Slot " .. tostring(slotId)) end
+local function getSlotMenuEntries()
+	if SLOT_MENU_ENTRIES then return SLOT_MENU_ENTRIES end
+	SLOT_MENU_ENTRIES = {}
+	if not GetInventorySlotInfo then return SLOT_MENU_ENTRIES end
+	for _, def in ipairs(SLOT_DEFS) do
+		local ok, slotId = pcall(GetInventorySlotInfo, def.name)
+		if ok and slotId then
+			local label = def.label or def.name
+			SLOT_LABELS[slotId] = label
+			SLOT_MENU_ENTRIES[#SLOT_MENU_ENTRIES + 1] = { id = slotId, label = label }
+		end
+	end
+	return SLOT_MENU_ENTRIES
+end
+
+local function getSlotLabel(slotId)
+	if not next(SLOT_LABELS) then
+		getSlotMenuEntries()
+	end
+	return SLOT_LABELS[slotId] or ("Slot " .. tostring(slotId))
+end
 
 local function getSpellName(spellId)
 	if not spellId then return nil end
@@ -195,6 +260,14 @@ local function getEntryName(entry)
 	end
 	if entry.type == "SLOT" then return getSlotLabel(entry.slotID) end
 	return "Entry"
+end
+
+local function getEntryTypeLabel(entryType)
+	local key = entryType and tostring(entryType):upper() or nil
+	if key == "SPELL" then return _G.STAT_CATEGORY_SPELL or _G.SPELLS or "Spell" end
+	if key == "ITEM" then return _G.AUCTION_HOUSE_HEADER_ITEM or _G.ITEMS or "Item" end
+	if key == "SLOT" then return L["CooldownPanelSlotType"] or "Slot" end
+	return entryType or ""
 end
 
 local function isSpellKnownSafe(spellId)
@@ -447,6 +520,13 @@ local function createIconFrame(parent)
 	icon.charges:SetPoint("TOP", icon, "TOP", 0, -1)
 	icon.charges:Hide()
 
+	icon.previewGlow = icon:CreateTexture(nil, "OVERLAY")
+	icon.previewGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+	icon.previewGlow:SetVertexColor(1, 0.82, 0.2, 1)
+	icon.previewGlow:SetBlendMode("ADD")
+	icon.previewGlow:SetAlpha(0.6)
+	icon.previewGlow:Hide()
+
 	return icon
 end
 
@@ -472,8 +552,27 @@ local function setGlow(frame, enabled)
 	end
 end
 
+local function isSafeNumber(value)
+	return type(value) == "number" and (not issecretvalue or not issecretvalue(value))
+end
+
+local function isSafeGreaterThan(value, threshold)
+	if not isSafeNumber(value) or not isSafeNumber(threshold) then return false end
+	return value > threshold
+end
+
+local function isSafeLessThan(a, b)
+	if not isSafeNumber(a) or not isSafeNumber(b) then return false end
+	return a < b
+end
+
+local function isSafeNotFalse(value)
+	if issecretvalue and issecretvalue(value) then return true end
+	return value ~= false
+end
+
 local function isCooldownActive(startTime, duration)
-	if not startTime or not duration then return false end
+	if not isSafeNumber(startTime) or not isSafeNumber(duration) then return false end
 	if duration <= 0 or startTime <= 0 then return false end
 	if not GetTime then return false end
 	return (startTime + duration) > GetTime()
@@ -504,6 +603,12 @@ local function hasItem(itemID)
 		if count and count > 0 then return true end
 	end
 	return false
+end
+
+local function itemHasUseSpell(itemID)
+	if not itemID or not GetItemSpell then return false end
+	local _, spellId = GetItemSpell(itemID)
+	return spellId ~= nil
 end
 
 local function createPanelFrame(panelId, panel)
@@ -618,6 +723,11 @@ local function applyIconLayout(frame, count, layout)
 		end
 
 		icon:SetSize(iconSize, iconSize)
+		if icon.previewGlow then
+			icon.previewGlow:ClearAllPoints()
+			icon.previewGlow:SetPoint("CENTER", icon, "CENTER", 0, 0)
+			icon.previewGlow:SetSize(iconSize * 1.8, iconSize * 1.8)
+		end
 		icon:ClearAllPoints()
 		icon:SetPoint("TOPLEFT", frame, "TOPLEFT", col * step, -row * step)
 	end
@@ -790,6 +900,48 @@ local function createRowButton(parent, height)
 	return row
 end
 
+local function showEditorDragIcon(editor, texture)
+	if not editor then return end
+	if not editor.dragIcon then
+		local frame = CreateFrame("Frame", nil, UIParent)
+		frame:SetSize(34, 34)
+		frame:SetFrameStrata("TOOLTIP")
+		frame.texture = frame:CreateTexture(nil, "OVERLAY")
+		frame.texture:SetAllPoints()
+		editor.dragIcon = frame
+	end
+	editor.dragIcon.texture:SetTexture(texture or PREVIEW_ICON)
+	editor.dragIcon:SetScript("OnUpdate", function(f)
+		local x, y = GetCursorPosition()
+		local scale = UIParent:GetEffectiveScale()
+		f:ClearAllPoints()
+		f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+	end)
+	editor.dragIcon:Show()
+end
+
+local function hideEditorDragIcon(editor)
+	if not editor or not editor.dragIcon then return end
+	editor.dragIcon:SetScript("OnUpdate", nil)
+	editor.dragIcon:Hide()
+end
+
+local function showSlotMenu(owner, panelId)
+	if not panelId or not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	local entries = getSlotMenuEntries()
+	if not entries or #entries == 0 then return end
+	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+		rootDescription:SetTag("MENU_EQOL_COOLDOWN_PANEL_SLOTS")
+		rootDescription:CreateTitle(L["CooldownPanelAddSlot"] or "Add Slot")
+		for _, slot in ipairs(entries) do
+			rootDescription:CreateButton(slot.label, function()
+				CooldownPanels:AddEntrySafe(panelId, "SLOT", slot.id)
+				CooldownPanels:RefreshEditor()
+			end)
+		end
+	end)
+end
+
 getEditor = function()
 	local runtime = CooldownPanels.runtime and CooldownPanels.runtime["editor"]
 	return runtime and runtime.editor or nil
@@ -903,17 +1055,17 @@ local function ensureEditor()
 	entryIdBox:SetPoint("TOPLEFT", entryIcon, "BOTTOMLEFT", 0, -8)
 	entryIdBox:SetNumeric(true)
 
-	local cbAlways = createCheck(right, L["CooldownPanelAlwaysShow"] or "Always show")
-	cbAlways:SetPoint("TOPLEFT", entryIdBox, "BOTTOMLEFT", -2, -6)
-
-	local cbCooldown = createCheck(right, L["CooldownPanelShowCooldown"] or "Show cooldown")
-	cbCooldown:SetPoint("TOPLEFT", cbAlways, "BOTTOMLEFT", 0, -4)
+	local cbCooldownText = createCheck(right, L["CooldownPanelShowCooldownText"] or "Show cooldown text")
+	cbCooldownText:SetPoint("TOPLEFT", entryIdBox, "BOTTOMLEFT", -2, -6)
 
 	local cbCharges = createCheck(right, L["CooldownPanelShowCharges"] or "Show charges")
-	cbCharges:SetPoint("TOPLEFT", cbCooldown, "BOTTOMLEFT", 0, -4)
+	cbCharges:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
 	local cbStacks = createCheck(right, L["CooldownPanelShowStacks"] or "Show stack count")
 	cbStacks:SetPoint("TOPLEFT", cbCharges, "BOTTOMLEFT", 0, -4)
+
+	local cbItemCount = createCheck(right, L["CooldownPanelShowItemCount"] or "Show item count")
+	cbItemCount:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
 	local cbGlow = createCheck(right, L["CooldownPanelGlowReady"] or "Glow when ready")
 	cbGlow:SetPoint("TOPLEFT", cbStacks, "BOTTOMLEFT", 0, -4)
@@ -938,6 +1090,7 @@ local function ensureEditor()
 	previewFrame:SetPoint("TOPLEFT", middle, "TOPLEFT", 12, -36)
 	previewFrame:SetPoint("TOPRIGHT", middle, "TOPRIGHT", -12, -36)
 	previewFrame:SetHeight(190)
+	previewFrame:SetClipsChildren(true)
 	previewFrame.bg = previewFrame:CreateTexture(nil, "BACKGROUND")
 	previewFrame.bg:SetAllPoints(previewFrame)
 	previewFrame.bg:SetColorTexture(0, 0, 0, 0.3)
@@ -981,6 +1134,11 @@ local function ensureEditor()
 	entryContent:SetWidth(entryScroll:GetWidth() or 1)
 	entryScroll:SetScript("OnSizeChanged", function(self) entryContent:SetWidth(self:GetWidth() or 1) end)
 
+	local entryHint = middle:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	entryHint:SetPoint("BOTTOMRIGHT", entryScroll, "TOPRIGHT", -2, 6)
+	entryHint:SetJustifyH("RIGHT")
+	entryHint:SetText(L["CooldownPanelEntriesHint"] or "Drag entries to reorder")
+
 	local addSpellLabel = createLabel(middle, L["CooldownPanelAddSpellID"] or "Add Spell ID", 11, "OUTLINE")
 	addSpellLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 46)
 	addSpellLabel:SetTextColor(0.9, 0.9, 0.9, 1)
@@ -997,23 +1155,18 @@ local function ensureEditor()
 	addItemBox:SetPoint("LEFT", addItemLabel, "RIGHT", 6, 0)
 	addItemBox:SetNumeric(true)
 
-	local slotLabel = createLabel(middle, L["CooldownPanelAddSlot"] or "Add Slot", 11, "OUTLINE")
-	slotLabel:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 46)
-	slotLabel:SetTextColor(0.9, 0.9, 0.9, 1)
-
-	local slotTrinket1 = createButton(middle, L["CooldownPanelSlotTrinket1"] or "Trinket 1", 86, 20)
-	slotTrinket1:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 22)
-
-	local slotTrinket2 = createButton(middle, L["CooldownPanelSlotTrinket2"] or "Trinket 2", 86, 20)
-	slotTrinket2:SetPoint("RIGHT", slotTrinket1, "LEFT", -6, 0)
-
-	local slotMainHand = createButton(middle, L["CooldownPanelSlotMainHand"] or "Main Hand", 86, 20)
-	slotMainHand:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 2)
-
-	local slotOffHand = createButton(middle, L["CooldownPanelSlotOffHand"] or "Off Hand", 86, 20)
-	slotOffHand:SetPoint("RIGHT", slotMainHand, "LEFT", -6, 0)
+	local slotButton = createButton(middle, L["CooldownPanelAddSlot"] or "Add Slot", 120, 20)
+	slotButton:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 20)
 
 	frame:SetScript("OnShow", function() CooldownPanels:RefreshEditor() end)
+	frame:SetScript("OnHide", function()
+		if runtime and runtime.editor then
+			hideEditorDragIcon(runtime.editor)
+			runtime.editor.draggingEntry = nil
+			runtime.editor.dragEntryId = nil
+			runtime.editor.dragTargetId = nil
+		end
+	end)
 
 	runtime.editor = {
 		frame = frame,
@@ -1028,12 +1181,7 @@ local function ensureEditor()
 		deletePanel = deletePanel,
 		addSpellBox = addSpellBox,
 		addItemBox = addItemBox,
-		slotButtons = {
-			trinket1 = slotTrinket1,
-			trinket2 = slotTrinket2,
-			mainHand = slotMainHand,
-			offHand = slotOffHand,
-		},
+		slotButton = slotButton,
 		inspector = {
 			panelName = panelNameBox,
 			panelEnabled = panelEnabled,
@@ -1041,10 +1189,10 @@ local function ensureEditor()
 			entryName = entryName,
 			entryType = entryType,
 			entryId = entryIdBox,
-			cbAlways = cbAlways,
-			cbCooldown = cbCooldown,
+			cbCooldownText = cbCooldownText,
 			cbCharges = cbCharges,
 			cbStacks = cbStacks,
+			cbItemCount = cbItemCount,
 			cbGlow = cbGlow,
 			removeEntry = removeEntry,
 		},
@@ -1084,21 +1232,8 @@ local function ensureEditor()
 		CooldownPanels:RefreshEditor()
 	end)
 
-	slotTrinket1:SetScript("OnClick", function()
-		if editor.selectedPanelId then CooldownPanels:AddEntrySafe(editor.selectedPanelId, "SLOT", 13) end
-		CooldownPanels:RefreshEditor()
-	end)
-	slotTrinket2:SetScript("OnClick", function()
-		if editor.selectedPanelId then CooldownPanels:AddEntrySafe(editor.selectedPanelId, "SLOT", 14) end
-		CooldownPanels:RefreshEditor()
-	end)
-	slotMainHand:SetScript("OnClick", function()
-		if editor.selectedPanelId then CooldownPanels:AddEntrySafe(editor.selectedPanelId, "SLOT", 16) end
-		CooldownPanels:RefreshEditor()
-	end)
-	slotOffHand:SetScript("OnClick", function()
-		if editor.selectedPanelId then CooldownPanels:AddEntrySafe(editor.selectedPanelId, "SLOT", 17) end
-		CooldownPanels:RefreshEditor()
+	slotButton:SetScript("OnClick", function(self)
+		showSlotMenu(self, editor.selectedPanelId)
 	end)
 
 	panelNameBox:SetScript("OnEnterPressed", function(self)
@@ -1182,10 +1317,10 @@ local function ensureEditor()
 		end)
 	end
 
-	bindEntryToggle(cbAlways, "alwaysShow")
-	bindEntryToggle(cbCooldown, "showCooldown")
 	bindEntryToggle(cbCharges, "showCharges")
 	bindEntryToggle(cbStacks, "showStacks")
+	bindEntryToggle(cbCooldownText, "showCooldownText")
+	bindEntryToggle(cbItemCount, "showItemCount")
 	bindEntryToggle(cbGlow, "glowReady")
 
 	removeEntry:SetScript("OnClick", function()
@@ -1274,6 +1409,21 @@ local function refreshPanelList(editor, root)
 	content:SetHeight(totalHeight > 1 and totalHeight or 1)
 end
 
+local function moveEntryInOrder(panel, entryId, targetEntryId)
+	if not panel or not panel.order then return false end
+	if not entryId or not targetEntryId or entryId == targetEntryId then return false end
+	local fromIndex, toIndex
+	for i, id in ipairs(panel.order) do
+		if id == entryId then fromIndex = i end
+		if id == targetEntryId then toIndex = i end
+	end
+	if not fromIndex or not toIndex then return false end
+	table.remove(panel.order, fromIndex)
+	if fromIndex < toIndex then toIndex = toIndex - 1 end
+	table.insert(panel.order, toIndex, entryId)
+	return true
+end
+
 local function refreshEntryList(editor, panel)
 	local list = editor.entryList
 	if not list then return end
@@ -1300,6 +1450,46 @@ local function refreshEntryList(editor, panel)
 
 					row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 					row.kind:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+					row:RegisterForDrag("LeftButton")
+					row:SetScript("OnDragStart", function(self)
+						if not editor.selectedPanelId then return end
+						editor.dragEntryId = self.entryId
+						editor.dragTargetId = nil
+						editor.draggingEntry = true
+						showEditorDragIcon(editor, self.icon and self.icon:GetTexture())
+						self:SetAlpha(0.6)
+					end)
+					row:SetScript("OnDragStop", function(self)
+						self:SetAlpha(1)
+						if not editor.draggingEntry then return end
+						editor.draggingEntry = nil
+						hideEditorDragIcon(editor)
+						local fromId = editor.dragEntryId
+						local targetId = editor.dragTargetId
+						editor.dragEntryId = nil
+						editor.dragTargetId = nil
+						if not fromId or not targetId or fromId == targetId then
+							CooldownPanels:RefreshEditor()
+							return
+						end
+						local panelId = editor.selectedPanelId
+						local activePanel = panelId and CooldownPanels:GetPanel(panelId) or nil
+						if activePanel and moveEntryInOrder(activePanel, fromId, targetId) then
+							CooldownPanels:RefreshPanel(panelId)
+						end
+						CooldownPanels:RefreshEditor()
+					end)
+					row:SetScript("OnEnter", function(self)
+						if editor.draggingEntry then
+							editor.dragTargetId = self.entryId
+							if self.bg then self.bg:SetColorTexture(0.2, 0.7, 0.2, 0.35) end
+						end
+					end)
+					row:SetScript("OnLeave", function(self)
+						if editor.draggingEntry then
+							updateRowVisual(self, self.entryId == editor.selectedEntryId)
+						end
+					end)
 					editor.entryRows[index] = row
 				end
 				row:ClearAllPoints()
@@ -1309,7 +1499,7 @@ local function refreshEntryList(editor, panel)
 				row.entryId = entryId
 				row.icon:SetTexture(getEntryIcon(entry))
 				row.label:SetText(getEntryName(entry))
-				row.kind:SetText(entry.type or "")
+				row.kind:SetText(getEntryTypeLabel(entry.type))
 				row:Show()
 
 				updateRowVisual(row, entryId == editor.selectedEntryId)
@@ -1324,6 +1514,37 @@ local function refreshEntryList(editor, panel)
 
 	local totalHeight = index * (rowHeight + spacing)
 	content:SetHeight(totalHeight > 1 and totalHeight or 1)
+end
+
+local function getPreviewLayout(panel, previewFrame, count)
+	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
+	local previewLayout = Helper.CopyTableShallow(baseLayout)
+	previewLayout.iconSize = PREVIEW_ICON_SIZE
+
+	if not previewFrame or not count or count < 1 then return previewLayout end
+
+	local iconSize = PREVIEW_ICON_SIZE
+	local spacing = clampInt(baseLayout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local direction = normalizeDirection(baseLayout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local wrapCount = clampInt(baseLayout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
+
+	local width = previewFrame:GetWidth() or 0
+	local height = previewFrame:GetHeight() or 0
+	local step = iconSize + spacing
+	if width <= 0 or height <= 0 or step <= 0 then return previewLayout end
+
+	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
+	local available = primaryHorizontal and width or height
+	local maxPrimary = math.floor((available + spacing) / step)
+	if maxPrimary < 1 then maxPrimary = 1 end
+
+	if wrapCount == 0 then
+		if count > maxPrimary then previewLayout.wrapCount = maxPrimary end
+	else
+		previewLayout.wrapCount = math.min(wrapCount, maxPrimary)
+	end
+
+	return previewLayout
 end
 
 local function refreshPreview(editor, panel)
@@ -1346,8 +1567,10 @@ local function refreshPreview(editor, panel)
 		return
 	end
 
-	local count = getPreviewCount(panel)
-	applyIconLayout(canvas, count, panel.layout or Helper.PANEL_LAYOUT_DEFAULTS)
+	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
+	local count = getEditorPreviewCount(panel, preview, baseLayout)
+	local layout = getPreviewLayout(panel, preview, count)
+	applyIconLayout(canvas, count, layout)
 	canvas:ClearAllPoints()
 	canvas:SetPoint("CENTER", preview, "CENTER")
 
@@ -1358,12 +1581,82 @@ local function refreshPreview(editor, panel)
 		local icon = canvas.icons[i]
 		icon.texture:SetTexture(getEntryIcon(entry))
 		icon.entryId = entryId
+		icon.count:Hide()
+		icon.charges:Hide()
+		if icon.previewGlow then icon.previewGlow:Hide() end
+		if entry then
+			if entry.type == "SPELL" then
+				if entry.showCharges then
+					icon.charges:SetText("2")
+					icon.charges:Show()
+				end
+				if entry.showStacks then
+					icon.count:SetText("3")
+					icon.count:Show()
+				end
+			elseif entry.type == "ITEM" then
+				if entry.showItemCount ~= false then
+					icon.count:SetText("20")
+					icon.count:Show()
+				end
+			end
+			if entry.glowReady and icon.previewGlow then icon.previewGlow:Show() end
+		end
 	end
 
 	if preview.dropHint then
 		preview.dropHint:SetText(L["CooldownPanelDropHint"] or "Drop spells or items here")
 		preview.dropHint:SetShown((panel.order and #panel.order or 0) == 0)
 	end
+end
+
+local function layoutInspectorToggles(inspector, entry)
+	if not inspector then return end
+	local function hideToggle(cb)
+		if not cb then return end
+		cb:Hide()
+		cb:Disable()
+		cb:SetChecked(false)
+	end
+	if not entry then
+		hideToggle(inspector.cbCooldownText)
+		hideToggle(inspector.cbCharges)
+		hideToggle(inspector.cbStacks)
+		hideToggle(inspector.cbItemCount)
+		hideToggle(inspector.cbGlow)
+		return
+	end
+
+	local prev = inspector.entryId
+	local function place(cb, show)
+		if not cb then return end
+		cb:ClearAllPoints()
+		cb:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", -2, -6)
+		if show then
+			cb:Show()
+			cb:Enable()
+			prev = cb
+		else
+			cb:Hide()
+			cb:Disable()
+		end
+	end
+
+	place(inspector.cbCooldownText, true)
+	if entry.type == "SPELL" then
+		place(inspector.cbCharges, true)
+		place(inspector.cbStacks, true)
+		place(inspector.cbItemCount, false)
+	elseif entry.type == "ITEM" then
+		place(inspector.cbCharges, false)
+		place(inspector.cbStacks, false)
+		place(inspector.cbItemCount, true)
+	else
+		place(inspector.cbCharges, false)
+		place(inspector.cbStacks, false)
+		place(inspector.cbItemCount, false)
+	end
+	place(inspector.cbGlow, true)
 end
 
 local function refreshInspector(editor, panel, entry)
@@ -1385,22 +1678,18 @@ local function refreshInspector(editor, panel, entry)
 	if entry then
 		inspector.entryIcon:SetTexture(getEntryIcon(entry))
 		inspector.entryName:SetText(getEntryName(entry))
-		inspector.entryType:SetText(entry.type or "")
+		inspector.entryType:SetText(getEntryTypeLabel(entry.type))
 		inspector.entryId:SetText(tostring(entry.spellID or entry.itemID or entry.slotID or ""))
 
-		inspector.cbAlways:SetChecked(entry.alwaysShow and true or false)
-		inspector.cbCooldown:SetChecked(entry.showCooldown and true or false)
+		inspector.cbCooldownText:SetChecked(entry.showCooldownText ~= false)
 		inspector.cbCharges:SetChecked(entry.showCharges and true or false)
 		inspector.cbStacks:SetChecked(entry.showStacks and true or false)
+		inspector.cbItemCount:SetChecked(entry.type == "ITEM" and entry.showItemCount ~= false)
 		inspector.cbGlow:SetChecked(entry.glowReady and true or false)
 
 		inspector.entryId:Enable()
-		inspector.cbAlways:Enable()
-		inspector.cbCooldown:Enable()
-		inspector.cbCharges:Enable()
-		inspector.cbStacks:Enable()
-		inspector.cbGlow:Enable()
 		inspector.removeEntry:Enable()
+		layoutInspectorToggles(inspector, entry)
 	else
 		inspector.entryIcon:SetTexture(PREVIEW_ICON)
 		inspector.entryName:SetText(L["CooldownPanelSelectEntry"] or "Select an entry.")
@@ -1408,17 +1697,8 @@ local function refreshInspector(editor, panel, entry)
 		inspector.entryId:SetText("")
 
 		inspector.entryId:Disable()
-		inspector.cbAlways:SetChecked(false)
-		inspector.cbCooldown:SetChecked(false)
-		inspector.cbCharges:SetChecked(false)
-		inspector.cbStacks:SetChecked(false)
-		inspector.cbGlow:SetChecked(false)
-		inspector.cbAlways:Disable()
-		inspector.cbCooldown:Disable()
-		inspector.cbCharges:Disable()
-		inspector.cbStacks:Disable()
-		inspector.cbGlow:Disable()
 		inspector.removeEntry:Disable()
+		layoutInspectorToggles(inspector, nil)
 	end
 end
 
@@ -1465,13 +1745,11 @@ function CooldownPanels:RefreshEditor()
 			editor.addItemBox:Disable()
 		end
 	end
-	if editor.slotButtons then
-		for _, btn in pairs(editor.slotButtons) do
-			if panelActive then
-				btn:Enable()
-			else
-				btn:Disable()
-			end
+	if editor.slotButton then
+		if panelActive then
+			editor.slotButton:Enable()
+		else
+			editor.slotButton:Disable()
 		end
 	end
 
@@ -1556,12 +1834,21 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		local entry = entryId and panel.entries and panel.entries[entryId] or nil
 		local icon = frame.icons[i]
 		icon.texture:SetTexture(getEntryIcon(entry))
+		icon.cooldown:SetHideCountdownNumbers(not (entry and entry.showCooldownText ~= false))
 		icon.cooldown:Clear()
 		icon.count:Hide()
 		icon.charges:Hide()
+		if icon.previewGlow then icon.previewGlow:Hide() end
 		icon.texture:SetDesaturated(false)
 		icon.texture:SetAlpha(1)
 		setGlow(icon, false)
+		if entry and entry.type == "ITEM" and entry.itemID and entry.showItemCount ~= false and GetItemCountFn then
+			local countValue = GetItemCountFn(entry.itemID, true)
+			if isSafeGreaterThan(countValue, 0) then
+				icon.count:SetText(countValue)
+				icon.count:Show()
+			end
+		end
 	end
 end
 
@@ -1587,13 +1874,16 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local entry = panel.entries and panel.entries[entryId]
 		if entry then
 			local showCooldown = entry.showCooldown ~= false
+			local showCooldownText = entry.showCooldownText ~= false
 			local showCharges = entry.showCharges == true
 			local showStacks = entry.showStacks == true
+			local showItemCount = entry.type == "ITEM" and entry.showItemCount ~= false
 			local alwaysShow = entry.alwaysShow ~= false
 			local glowReady = entry.glowReady ~= false
 
 			local iconTexture = getEntryIcon(entry)
 			local stackCount
+			local itemCount
 			local chargesInfo
 			local cooldownStart, cooldownDuration, cooldownEnabled, cooldownRate
 			local show = false
@@ -1608,30 +1898,36 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					end
 					if showStacks and GetPlayerAuraBySpellID then
 						local aura = GetPlayerAuraBySpellID(entry.spellID)
-						if aura and aura.applications and aura.applications > 1 then stackCount = aura.applications end
+						if aura and isSafeGreaterThan(aura.applications, 1) then stackCount = aura.applications end
 					end
 					show = alwaysShow
-					if not show and showCooldown and cooldownEnabled ~= false and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
-					if not show and showCharges and chargesInfo and chargesInfo.maxCharges and chargesInfo.currentCharges and chargesInfo.currentCharges < chargesInfo.maxCharges then show = true end
+					if not show and showCooldown and isSafeNotFalse(cooldownEnabled) and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
+					if not show and showCharges and chargesInfo and isSafeLessThan(chargesInfo.currentCharges, chargesInfo.maxCharges) then show = true end
 					if not show and showStacks and stackCount then show = true end
 				end
 			elseif entry.type == "ITEM" and entry.itemID then
-				if hasItem(entry.itemID) then
+				if hasItem(entry.itemID) and itemHasUseSpell(entry.itemID) then
 					if showCooldown then
 						cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(entry.itemID)
 					end
+					if showItemCount and GetItemCountFn then
+						local count = GetItemCountFn(entry.itemID, true)
+						if isSafeGreaterThan(count, 0) then itemCount = count end
+					end
 					show = alwaysShow
-					if not show and showCooldown and cooldownEnabled ~= false and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
+					if not show and showCooldown and isSafeNotFalse(cooldownEnabled) and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 				end
 			elseif entry.type == "SLOT" and entry.slotID then
 				local itemId = GetInventoryItemID and GetInventoryItemID("player", entry.slotID) or nil
 				if itemId then
-					iconTexture = GetItemIconByID and GetItemIconByID(itemId) or iconTexture
-					if showCooldown then
-						cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(itemId, entry.slotID)
+					if itemHasUseSpell(itemId) then
+						iconTexture = GetItemIconByID and GetItemIconByID(itemId) or iconTexture
+						if showCooldown then
+							cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(itemId, entry.slotID)
+						end
+						show = alwaysShow
+						if not show and showCooldown and isSafeNotFalse(cooldownEnabled) and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 					end
-					show = alwaysShow
-					if not show and showCooldown and cooldownEnabled ~= false and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 				end
 			end
 
@@ -1639,10 +1935,13 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				visible[#visible + 1] = {
 					icon = iconTexture or PREVIEW_ICON,
 					showCooldown = showCooldown,
+					showCooldownText = showCooldownText,
 					showCharges = showCharges,
 					showStacks = showStacks,
+					showItemCount = showItemCount,
 					glowReady = glowReady,
 					stackCount = stackCount,
+					itemCount = itemCount,
 					chargesInfo = chargesInfo,
 					cooldownStart = cooldownStart or 0,
 					cooldownDuration = cooldownDuration or 0,
@@ -1662,25 +1961,33 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local data = visible[i]
 		local icon = frame.icons[i]
 		icon.texture:SetTexture(data.icon or PREVIEW_ICON)
+		icon.cooldown:SetHideCountdownNumbers(not data.showCooldownText)
+		if icon.previewGlow then icon.previewGlow:Hide() end
 
 		local cooldownStart = data.cooldownStart or 0
 		local cooldownDuration = data.cooldownDuration or 0
 		local cooldownRate = data.cooldownRate or 1
-		local cooldownActive = data.showCooldown and data.cooldownEnabled ~= false and isCooldownActive(cooldownStart, cooldownDuration)
+		local cooldownEnabledOk = isSafeNotFalse(data.cooldownEnabled)
+		local cooldownActive = data.showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration)
 
-		if data.showCharges and data.chargesInfo and data.chargesInfo.maxCharges and data.chargesInfo.maxCharges > 0 then
-			icon.charges:SetText(data.chargesInfo.currentCharges or 0)
-			icon.charges:Show()
-			if data.showCooldown and data.chargesInfo.currentCharges and data.chargesInfo.currentCharges < data.chargesInfo.maxCharges then
+		if data.showCharges and data.chargesInfo and isSafeGreaterThan(data.chargesInfo.maxCharges, 0) then
+			if isSafeNumber(data.chargesInfo.currentCharges) then
+				icon.charges:SetText(data.chargesInfo.currentCharges)
+				icon.charges:Show()
+			else
+				icon.charges:Hide()
+			end
+			if data.showCooldown and isSafeLessThan(data.chargesInfo.currentCharges, data.chargesInfo.maxCharges) then
 				cooldownStart = data.chargesInfo.cooldownStartTime or cooldownStart
 				cooldownDuration = data.chargesInfo.cooldownDuration or cooldownDuration
 				cooldownRate = data.chargesInfo.chargeModRate or cooldownRate
-				cooldownActive = data.showCooldown and isCooldownActive(cooldownStart, cooldownDuration)
+				cooldownActive = data.showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration)
 			end
 		else
 			icon.charges:Hide()
 		end
 
+		if not isSafeNumber(cooldownRate) then cooldownRate = 1 end
 		if data.showCooldown and cooldownActive then
 			icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 			icon.texture:SetDesaturated(true)
@@ -1691,7 +1998,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			icon.texture:SetAlpha(1)
 		end
 
-		if data.showStacks and data.stackCount then
+		if data.showItemCount and data.itemCount then
+			icon.count:SetText(data.itemCount)
+			icon.count:Show()
+		elseif data.showStacks and data.stackCount then
 			icon.count:SetText(data.stackCount)
 			icon.count:Show()
 		else
@@ -1701,7 +2011,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		if data.glowReady then
 			local ready = false
 			if data.showCharges and data.chargesInfo and data.chargesInfo.currentCharges then
-				ready = data.chargesInfo.currentCharges > 0
+				ready = isSafeGreaterThan(data.chargesInfo.currentCharges, 0)
 			elseif data.showCooldown then
 				ready = not cooldownActive
 			end

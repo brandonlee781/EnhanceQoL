@@ -25,9 +25,10 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 Helper.ENTRY_DEFAULTS = {
 	alwaysShow = true,
 	showCooldown = true,
+	showCooldownText = true,
 	showCharges = false,
 	showStacks = false,
-	glowReady = true,
+	glowReady = false,
 }
 
 function Helper.CopyTableShallow(source)
@@ -80,7 +81,15 @@ function Helper.NormalizeRoot(root)
 	end
 	if type(root.defaults.entry) ~= "table" then
 		root.defaults.entry = Helper.CopyTableShallow(Helper.ENTRY_DEFAULTS)
+	else
+		for key, value in pairs(Helper.ENTRY_DEFAULTS) do
+			if root.defaults.entry[key] == nil then root.defaults.entry[key] = value end
+		end
 	end
+	root.defaults.entry.alwaysShow = Helper.ENTRY_DEFAULTS.alwaysShow
+	root.defaults.entry.showCooldown = Helper.ENTRY_DEFAULTS.showCooldown
+	root.defaults.entry.showCooldownText = Helper.ENTRY_DEFAULTS.showCooldownText
+	root.defaults.entry.glowReady = Helper.ENTRY_DEFAULTS.glowReady
 	return root
 end
 
@@ -104,9 +113,17 @@ end
 function Helper.NormalizeEntry(entry, defaults)
 	if type(entry) ~= "table" then return end
 	defaults = defaults or {}
-	local entryDefaults = defaults.entry or Helper.ENTRY_DEFAULTS
+	local entryDefaults = defaults.entry or {}
 	for key, value in pairs(entryDefaults) do
 		if entry[key] == nil then entry[key] = value end
+	end
+	for key, value in pairs(Helper.ENTRY_DEFAULTS) do
+		if entry[key] == nil then entry[key] = value end
+	end
+	entry.alwaysShow = true
+	entry.showCooldown = true
+	if entry.type == "ITEM" and entry.showItemCount == nil then
+		entry.showItemCount = true
 	end
 end
 
@@ -148,13 +165,17 @@ end
 
 function Helper.CreateEntry(entryType, idValue, defaults)
 	defaults = defaults or {}
-	local entryDefaults = defaults.entry or Helper.ENTRY_DEFAULTS
+	local entryDefaults = defaults.entry or {}
 	local entry = Helper.CopyTableShallow(entryDefaults)
+	for key, value in pairs(Helper.ENTRY_DEFAULTS) do
+		if entry[key] == nil then entry[key] = value end
+	end
 	entry.type = entryType
 	if entryType == "SPELL" then
 		entry.spellID = tonumber(idValue)
 	elseif entryType == "ITEM" then
 		entry.itemID = tonumber(idValue)
+		if entry.showItemCount == nil then entry.showItemCount = true end
 	elseif entryType == "SLOT" then
 		entry.slotID = tonumber(idValue)
 	end

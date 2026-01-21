@@ -1,12 +1,17 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
+local AceGUI = addon.AceGUI
 -- (no direct LSM/AceGUI usage here; UI rendering handled in submodules)
 
 function addon.Aura.functions.init()
 	addon.functions.addToTree(nil, {
 		value = "bufftracker",
 		text = L["BuffTracker"] or "Aura Tracker",
+	})
+	addon.functions.addToTree(nil, {
+		value = "cooldownpanels",
+		text = L["CooldownPanels"] or "Cooldown Panels",
 	})
 end
 
@@ -25,6 +30,21 @@ function addon.Aura.functions.treeCallback(container, group)
 	if seg == "bufftracker" then
 		addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.Aura.scanBuffs()
+	elseif seg == "cooldownpanels" then
+		local label = AceGUI:Create("Label")
+		label:SetFullWidth(true)
+		label:SetText(L["CooldownPanelEditModeHint"] or "Use Edit Mode to move and resize panels.")
+		container:AddChild(label)
+
+		local btn = AceGUI:Create("Button")
+		btn:SetText(L["CooldownPanelOpenEditor"] or "Open Cooldown Panel Editor")
+		btn:SetFullWidth(true)
+		btn:SetCallback("OnClick", function()
+			if addon.Aura and addon.Aura.CooldownPanels and addon.Aura.CooldownPanels.OpenEditor then
+				addon.Aura.CooldownPanels:OpenEditor()
+			end
+		end)
+		container:AddChild(btn)
 	end
 end
 addon.Aura.functions.BuildSoundTable()

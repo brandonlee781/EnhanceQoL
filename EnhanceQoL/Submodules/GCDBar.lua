@@ -35,9 +35,6 @@ local DB_COLOR = "gcdBarColor"
 
 local DEFAULT_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 
-local function isMidnight() return addon and addon.variables and addon.variables.isMidnight end
-if not isMidnight() then return end
-
 local function getValue(key, fallback)
 	if not addon.db then return fallback end
 	local value = addon.db[key]
@@ -318,7 +315,7 @@ function GCDBar:RegisterEditMode()
 		onApply = function(_, _, data) GCDBar:ApplyLayoutData(data) end,
 		onEnter = function() GCDBar:ShowEditModeHint(true) end,
 		onExit = function() GCDBar:ShowEditModeHint(false) end,
-		isEnabled = function() return isMidnight() and addon.db and addon.db[DB_ENABLED] end,
+		isEnabled = function() return addon.db and addon.db[DB_ENABLED] end,
 		settings = settings,
 		showOutsideEditMode = false,
 		showReset = false,
@@ -330,12 +327,6 @@ function GCDBar:RegisterEditMode()
 end
 
 function GCDBar:OnSettingChanged(enabled)
-	if not isMidnight() then
-		self:UnregisterEvents()
-		if self.frame then self.frame:Hide() end
-		return
-	end
-
 	if enabled then
 		self:EnsureFrame()
 		self:RegisterEditMode()

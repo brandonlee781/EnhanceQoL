@@ -13,6 +13,7 @@
 	<Script file='System.lua'/>
 	<Script file='UIOptions.lua'/>
 	<Script file='../Modules/Aura/Settings_Ressourcebars.lua'/>
+	<Script file='../Modules/Aura/Settings_CooldownPanels.lua'/>
 	<Script file='UIInput.lua'/>
 	<Script file='ActionTracker.lua'/>
 	<Script file='MapNavigation.lua'/>

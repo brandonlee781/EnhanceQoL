@@ -65,9 +65,10 @@ function addon.Aura.functions.InitDB()
 			entry = {
 				alwaysShow = true,
 				showCooldown = true,
+				showCooldownText = true,
 				showCharges = false,
 				showStacks = false,
-				glowReady = true,
+				glowReady = false,
 			},
 		},
 	})
