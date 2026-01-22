@@ -6,6 +6,7 @@
 
 - DataPanels: Stream gap slider per panel.
 - DataPanels: Time stream left-click opens the Time Manager (stopwatch/alarm).
+- Combat text: +Combat/-Combat indicator with Edit Mode settings (duration, font, size, color).
 - UF Plus: Aura cooldown text size slider.
 - UF Plus: Masque for Buff/Debuff
 - Resource Bars: Added "Use short numbers" toggle for text to control AbbreviateNumbers usage.

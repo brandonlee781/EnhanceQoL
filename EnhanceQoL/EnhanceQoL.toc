@@ -58,6 +58,7 @@ Submodules\ContainerActions.lua
 Submodules\MountActions.lua
 Submodules\ActionTracker.lua
 Submodules\GCDBar.lua
+Submodules\CombatText.lua
 Submodules\ChatIM\ChannelHistory.lua
 Submodules\ChatIM\UI.lua
 Submodules\ChatIM\Core.lua

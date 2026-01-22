@@ -978,6 +978,16 @@ function addon.functions.initUIOptions()
 	addon.functions.InitDBValue("gcdBarColor", defaults.color or { r = 1, g = 0.82, b = 0.2, a = 1 })
 
 	if addon.GCDBar and addon.GCDBar.OnSettingChanged then addon.GCDBar:OnSettingChanged(addon.db["gcdBarEnabled"]) end
+
+	local combatDefaults = (addon.CombatText and addon.CombatText.defaults) or {}
+	local combatFont = combatDefaults.fontFace or (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+	addon.functions.InitDBValue("combatTextEnabled", false)
+	addon.functions.InitDBValue("combatTextDuration", combatDefaults.duration or 3)
+	addon.functions.InitDBValue("combatTextFont", combatFont)
+	addon.functions.InitDBValue("combatTextFontSize", combatDefaults.fontSize or 32)
+	addon.functions.InitDBValue("combatTextColor", combatDefaults.color or { r = 1, g = 1, b = 1, a = 1 })
+
+	if addon.CombatText and addon.CombatText.OnSettingChanged then addon.CombatText:OnSettingChanged(addon.db["combatTextEnabled"]) end
 end
 
 local function createNameplatesCategory()
@@ -1056,6 +1066,23 @@ local function createCastbarCategory()
 	})
 
 	addon.functions.SettingsCreateText(category, "|cffffd700" .. (L["gcdBarEditModeHint"] or "Configure size, texture, and color in Edit Mode.") .. "|r", {
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateHeadline(category, L["CombatText"] or "Combat text", {
+		parentSection = expandable,
+	})
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "combatTextEnabled",
+		text = L["combatTextEnabled"] or "Enable combat text",
+		desc = L["combatTextDesc"],
+		func = function(value)
+			addon.db["combatTextEnabled"] = value and true or false
+			if addon.CombatText and addon.CombatText.OnSettingChanged then addon.CombatText:OnSettingChanged(addon.db["combatTextEnabled"]) end
+		end,
+		parentSection = expandable,
+	})
+	addon.functions.SettingsCreateText(category, "|cffffd700" .. (L["combatTextEditModeHint"] or "Configure text size, font, color, and position in Edit Mode.") .. "|r", {
 		parentSection = expandable,
 	})
 

@@ -23,6 +23,8 @@ local function ensureDB()
 	addon.db.datapanel.friends = addon.db.datapanel.friends or {}
 	db = addon.db.datapanel.friends
 	db.fontSize = db.fontSize or 13
+	if db.splitDisplay == nil then db.splitDisplay = false end
+	if db.splitDisplayInline == nil then db.splitDisplayInline = false end
 end
 
 local function RestorePosition(frame)
@@ -63,6 +65,29 @@ local function createAceWindow()
 		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(fontSize)
+
+	local splitDisplayInline
+	local splitDisplay = AceGUI:Create("CheckBox")
+	splitDisplay:SetLabel(L["Friends/Guild display"] or "Show friends + guild")
+	splitDisplay:SetValue(db.splitDisplay == true)
+	splitDisplay:SetCallback("OnValueChanged", function(_, _, val)
+		db.splitDisplay = val and true or false
+		if splitDisplayInline and splitDisplayInline.SetDisabled then
+			splitDisplayInline:SetDisabled(not db.splitDisplay)
+		end
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(splitDisplay)
+
+	splitDisplayInline = AceGUI:Create("CheckBox")
+	splitDisplayInline:SetLabel(L["Friends/Guild display single line"] or "Single-line layout")
+	splitDisplayInline:SetValue(db.splitDisplayInline == true)
+	splitDisplayInline:SetDisabled(not db.splitDisplay)
+	splitDisplayInline:SetCallback("OnValueChanged", function(_, _, val)
+		db.splitDisplayInline = val and true or false
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(splitDisplayInline)
 
 	frame.frame:Show()
 end
@@ -159,6 +184,8 @@ local function getFriends(stream)
 
 	local seen = {} -- key -> true (dedupe across sources)
 	local totalUnique = 0
+	local friendsCount = 0
+	local guildOnlineCount = 0
 
 	-- 1) Battle.net friends (prefer these when deduping)
 	local numBNetTotal, _ = BNGetNumFriends()
@@ -222,6 +249,7 @@ local function getFriends(stream)
 			end
 		end
 	end
+	friendsCount = totalUnique
 
 	-- 3) Guild members
 	local gMember = GetNumGuildMembers and GetNumGuildMembers()
@@ -229,6 +257,7 @@ local function getFriends(stream)
 		for i = 1, gMember do
 			local name, _, _, level, _, _, _, _, isOnline, _, classToken, _, _, _, _, _, guid = GetGuildRosterInfo(i)
 			if isOnline and guid ~= myGuid and name and level then
+				guildOnlineCount = guildOnlineCount + 1
 				local key = makeKey(name)
 				if not seen[key] then
 					seen[key] = true
@@ -252,7 +281,15 @@ local function getFriends(stream)
 	table.sort(tooltipData.guild, byName)
 
 	stream.snapshot.fontSize = db and db.fontSize or 13
-	stream.snapshot.text = totalUnique .. " " .. FRIENDS
+	if db and db.splitDisplay then
+		if db.splitDisplayInline then
+			stream.snapshot.text = string.format("%s: %d  %s: %d", GUILD, guildOnlineCount, FRIENDS, friendsCount)
+		else
+			stream.snapshot.text = string.format("%s: %d\n%s: %d", GUILD, guildOnlineCount, FRIENDS, friendsCount)
+		end
+	else
+		stream.snapshot.text = totalUnique .. " " .. FRIENDS
+	end
 
 	-- If our extended window is open, refresh its content
 	if listWindow and listWindow.frame and listWindow.frame:IsShown() then populateListWindow() end
