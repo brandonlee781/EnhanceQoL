@@ -3618,6 +3618,8 @@ local function buildUnitSettings(unit)
 	return list
 end
 
+local DEFAULT_SETTINGS_MAX_HEIGHT = 900
+
 local function registerUnitFrame(unit, info)
 	if UF.EnsureFrames then
 		if unit == "boss" then
@@ -3639,6 +3641,7 @@ local function registerUnitFrame(unit, info)
 		settingsSpacing = 1,
 		sliderHeight = 28,
 		layoutDefaults = layout,
+		settingsMaxHeight = DEFAULT_SETTINGS_MAX_HEIGHT,
 		onApply = function(_, _, data)
 			local cfg = ensureConfig(unit)
 			cfg.anchor = cfg.anchor or {}

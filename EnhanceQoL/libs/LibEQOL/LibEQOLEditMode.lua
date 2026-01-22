@@ -1,4 +1,4 @@
-local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 7001001
+local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 11000000
 local LibStub = _G.LibStub
 assert(LibStub, MODULE_MAJOR .. " requires LibStub")
 local C_Timer = _G.C_Timer
@@ -75,7 +75,7 @@ lib.pendingDeletedLayouts = State.pendingDeletedLayouts
 
 local DEFAULT_SETTINGS_SPACING = 2
 local DEFAULT_SLIDER_HEIGHT = 32
-local COLOR_BUTTON_WIDTH = 30
+local COLOR_BUTTON_WIDTH = 22
 local DROPDOWN_COLOR_MAX_WIDTH = 200
 
 local function normalizeSpacing(value, fallback)
@@ -1807,6 +1807,18 @@ local function buildMultiDropdown()
 		oldDropdown:Hide()
 		frame.OldDropdown = oldDropdown
 
+		local button = CreateFrame("Button", nil, frame)
+		button:SetSize(36, 22)
+		button:SetPoint("LEFT", dropdown, "RIGHT", 6, 0)
+
+		do
+			local gap = 6
+			local base = dropdown:GetWidth() or 200
+			local ddW = math.max(80, base - (button:GetWidth() + gap))
+			dropdown:SetWidth(ddW)
+			oldDropdown:SetWidth(ddW)
+		end
+
 		local summary = frame:CreateFontString(nil, nil, "GameFontHighlightSmall")
 		summary:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -2)
 		summary:SetPoint("TOPRIGHT", dropdown, "BOTTOMRIGHT", 0, -2)
@@ -2118,12 +2130,13 @@ local function buildDropdownColor()
 		end
 		local targetWidth = math.min(DROPDOWN_COLOR_MAX_WIDTH, available)
 
-		self.Button:ClearAllPoints()
-		self.Button:SetPoint("RIGHT", self, "RIGHT", -rightMargin, 0)
-
 		self.Dropdown:ClearAllPoints()
 		self.Dropdown:SetPoint("LEFT", self.Label, "RIGHT", leftGap, 0)
 		self.Dropdown:SetWidth(targetWidth)
+
+		self.Button:ClearAllPoints()
+		self.Button:SetPoint("LEFT", self.Dropdown, "RIGHT", rightMargin, 0)
+
 	end
 
 	function mixin:Setup(data, selection)
@@ -3601,7 +3614,6 @@ function lib:AddFrame(frame, callback, default)
 		if default.settingsSpacing ~= nil then
 			State.settingsSpacingOverrides[frame] = normalizeSpacing(default.settingsSpacing, DEFAULT_SETTINGS_SPACING)
 		end
-		-- Optional: Dialog-Settings max height (macht Settings scrollable)
 		if default.settingsMaxHeight ~= nil or default.maxSettingsHeight ~= nil then
 			local v = default.settingsMaxHeight ~= nil and default.settingsMaxHeight or default.maxSettingsHeight
 			State.settingsMaxHeightOverrides[frame] = normalizePositive(v, nil)
@@ -3721,6 +3733,18 @@ function lib:SetFrameSettingsResetVisible(frame, showReset)
 	State.settingsResetToggles[frame] = not not showReset
 	if Internal.dialog and Internal.dialog.selection and Internal.dialog.selection.parent == frame then
 		Internal.dialog:UpdateSettings()
+	end
+end
+
+function lib:SetFrameSettingsMaxHeight(frame, height)
+	if height == nil then
+		State.settingsMaxHeightOverrides[frame] = nil
+	else
+		State.settingsMaxHeightOverrides[frame] = normalizePositive(height, nil)
+	end
+
+	if Internal.dialog and Internal.dialog.selection and Internal.dialog.selection.parent == frame then
+		Internal.dialog:Layout()
 	end
 end
 

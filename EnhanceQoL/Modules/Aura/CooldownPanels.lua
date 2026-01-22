@@ -856,6 +856,24 @@ local function createIconFrame(parent)
 	icon.previewBling:SetBlendMode("ADD")
 	icon.previewBling:Hide()
 
+	icon.previewSoundBorder = CreateFrame("Frame", nil, icon.overlay, "BackdropTemplate")
+	icon.previewSoundBorder:SetSize(14, 14)
+	icon.previewSoundBorder:SetPoint("TOPRIGHT", icon.overlay, "TOPRIGHT", -1, -1)
+	icon.previewSoundBorder:SetBackdrop({
+		bgFile = "Interface\\Buttons\\WHITE8x8",
+		edgeFile = "Interface\\Buttons\\WHITE8x8",
+		edgeSize = 1,
+	})
+	icon.previewSoundBorder:SetBackdropColor(0, 0, 0, 0.55)
+	icon.previewSoundBorder:SetBackdropBorderColor(0.9, 0.9, 0.9, 0.9)
+	icon.previewSoundBorder:Hide()
+
+	icon.previewSound = icon.previewSoundBorder:CreateTexture(nil, "OVERLAY")
+	icon.previewSound:SetTexture("Interface\\Common\\VoiceChat-Speaker")
+	icon.previewSound:SetSize(12, 12)
+	icon.previewSound:SetPoint("CENTER", icon.previewSoundBorder, "CENTER", 0, 0)
+	icon.previewSound:SetAlpha(0.95)
+
 	return icon
 end
 
@@ -2034,6 +2052,7 @@ local function refreshPreview(editor, panel)
 			local icon = canvas.icons[i]
 			icon.texture:SetTexture(PREVIEW_ICON)
 			icon.entryId = nil
+			if icon.previewSoundBorder then icon.previewSoundBorder:Hide() end
 		end
 		if preview.dropHint then
 			preview.dropHint:SetText(L["CooldownPanelSelectPanel"] or "Select a panel to edit.")
@@ -2060,6 +2079,7 @@ local function refreshPreview(editor, panel)
 		icon.count:Hide()
 		icon.charges:Hide()
 		if icon.previewGlow then icon.previewGlow:Hide() end
+		if icon.previewSoundBorder then icon.previewSoundBorder:Hide() end
 		if entry then
 			if entry.type == "SPELL" then
 				if entry.showCharges then
@@ -2077,6 +2097,7 @@ local function refreshPreview(editor, panel)
 				end
 			end
 			if entry.glowReady and icon.previewGlow then icon.previewGlow:Show() end
+			if entry.soundReady and icon.previewSoundBorder then icon.previewSoundBorder:Show() end
 		end
 	end
 
