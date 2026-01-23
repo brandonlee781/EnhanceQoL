@@ -193,7 +193,7 @@ local function EQOL_UpdateStatusBars(container, height, width, scale)
 
 	for _, child in pairs({ container:GetChildren() }) do
 		if child and child.StatusBar then
-			local point, relTo, relPoint, x, y = child:GetPoint()
+			local point = { child:GetPoint() }
 
 			child:SetHeight(height)
 			child:SetWidth(width)
@@ -202,7 +202,18 @@ local function EQOL_UpdateStatusBars(container, height, width, scale)
 			child.StatusBar:SetWidth(width * horizontalScale)
 
 			child:ClearAllPoints()
-			child:SetPoint(point, relTo, relPoint, -1 * scale * (width / 500) * 2, (3 / 20) * height)
+			child:SetPoint(point[1], point[2], point[3], -5 * (width / 571), (3 / 20) * height)
+
+			if child.ExhaustionLevelFillBar then
+				child.ExhaustionLevelFillBar:SetHeight(height * verticalScale)
+				child.ExhaustionLevelFillBar:SetWidth(width * horizontalScale)
+
+				local fillPoint = { child.ExhaustionLevelFillBar:GetPoint() }
+				child.ExhaustionLevelFillBar:ClearAllPoints()
+				child.ExhaustionLevelFillBar:SetPoint(fillPoint[1], fillPoint[2], fillPoint[3], 5 * (width / 571), (3 / 20) * height)
+
+				if child.ExhaustionTick and child.ExhaustionTick.UpdateTickPosition then child.ExhaustionTick:UpdateTickPosition() end
+			end
 		end
 	end
 	container:SetScale(scale)
@@ -459,7 +470,7 @@ local interfaceExpandable = addon.functions.SettingsCreateExpandableSection(cUII
 	name = L["PopupsAndUITweaks"] or "Popups & UI Tweaks",
 	expanded = false,
 	colorizeTitle = false,
-	newTagID = "PopupsAndUITweaks"
+	newTagID = "PopupsAndUITweaks",
 })
 
 local uiScaleOptions = {
@@ -541,7 +552,7 @@ function addon.functions.initUIInput()
 	ApplyNotificationOverlaySetting(true)
 
 	if addon.db and addon.db.modifyXPRepBar then
-		local height, width, scale = 571, 17, 1
+		local height, width, scale = 17, 571, 1
 		if addon.db and addon.db.modifyXPRepBarHeight then height = addon.db and addon.db.modifyXPRepBarHeight end
 		if addon.db and addon.db.modifyXPRepBarWidth then width = addon.db and addon.db.modifyXPRepBarWidth end
 		if addon.db and addon.db.modifyXPRepBarScale then scale = addon.db and addon.db.modifyXPRepBarScale end

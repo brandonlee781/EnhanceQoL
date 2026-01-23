@@ -141,6 +141,20 @@ local function getSourceName(sourceID)
 	return name
 end
 
+local function getSpellNameByID(spellID)
+	if not spellID then return nil end
+	local name
+	if C_Spell and C_Spell.GetSpellName then name = C_Spell.GetSpellName(spellID) end
+	if not name and GetSpellInfo then name = GetSpellInfo(spellID) end
+	return name
+end
+
+local function buildMountMacro(spellID)
+	local name = getSpellNameByID(spellID)
+	if not name or name == "" then return nil end
+	return "/cancelform\n/cast " .. name
+end
+
 local function getMountDebugInfo(spellID)
 	local sourceName = getSourceName(spellID)
 	local mountID, sourceType = getMountIdFromSource(spellID)
@@ -228,6 +242,13 @@ end
 function MountActions:PrepareActionButton(btn)
 	if InCombatLockdown and InCombatLockdown() then return end
 	if not btn or not btn._eqolAction then return end
+	btn:SetAttribute("type1", "macro")
+	btn:SetAttribute("type", "macro")
+	if IsMounted and IsMounted() then
+		btn:SetAttribute("macrotext1", "/dismount")
+		btn:SetAttribute("macrotext", "/dismount")
+		return
+	end
 	if btn._eqolAction == "random" then
 		local spellID
 		local targetSpellID = getMountedTargetSpellID()
@@ -236,21 +257,19 @@ function MountActions:PrepareActionButton(btn)
 		else
 			spellID = self:GetRandomMountSpell()
 		end
-		if spellID then
-			btn:SetAttribute("spell1", spellID)
-			btn:SetAttribute("spell", spellID)
-		else
-			btn:SetAttribute("spell1", RANDOM_FAVORITE_SPELL_ID)
-			btn:SetAttribute("spell", RANDOM_FAVORITE_SPELL_ID)
-		end
+		local macro = buildMountMacro(spellID or RANDOM_FAVORITE_SPELL_ID)
+		btn:SetAttribute("macrotext1", macro)
+		btn:SetAttribute("macrotext", macro)
 	elseif btn._eqolAction == "repair" then
 		local spellID = pickFirstUsable(REPAIR_MOUNT_SPELLS)
-		btn:SetAttribute("spell1", spellID)
-		btn:SetAttribute("spell", spellID)
+		local macro = buildMountMacro(spellID)
+		btn:SetAttribute("macrotext1", macro)
+		btn:SetAttribute("macrotext", macro)
 	elseif btn._eqolAction == "ah" then
 		local spellID = pickFirstUsable(AH_MOUNT_SPELLS)
-		btn:SetAttribute("spell1", spellID)
-		btn:SetAttribute("spell", spellID)
+		local macro = buildMountMacro(spellID)
+		btn:SetAttribute("macrotext1", macro)
+		btn:SetAttribute("macrotext", macro)
 	end
 end
 
@@ -293,17 +312,17 @@ function MountActions:EnsureButton(name, action)
 	local btn = _G[name]
 	if not btn then btn = CreateFrame("Button", name, UIParent, "InsecureActionButtonTemplate") end
 	btn:RegisterForClicks("AnyDown")
-	btn:SetAttribute("type1", "spell")
-	btn:SetAttribute("type", "spell")
+	btn:SetAttribute("type1", "macro")
+	btn:SetAttribute("type", "macro")
 	-- Force the action to trigger on key down regardless of ActionButtonUseKeyDown.
 	btn:SetAttribute("pressAndHoldAction", true)
 	btn._eqolAction = action
 	if action == "random" then
-		btn:SetAttribute("spell1", RANDOM_FAVORITE_SPELL_ID)
-		btn:SetAttribute("spell", RANDOM_FAVORITE_SPELL_ID)
+		local macro = buildMountMacro(RANDOM_FAVORITE_SPELL_ID)
+		btn:SetAttribute("macrotext1", macro)
+		btn:SetAttribute("macrotext", macro)
 	end
 	btn:SetScript("PreClick", function(self) MountActions:PrepareActionButton(self) end)
-	btn:SetScript("OnClick", function(self, button, down) MountActions:HandleClick(self, button, down) end)
 	return btn
 end
 

@@ -8,6 +8,8 @@
 - UF Plus: Dimensius P3 Boss frame wasn't reappearing
 - Cooldown Panels: Some spells where not shown
 - Cooldown Panels: Masque icons now size correctly when adding new entries (no reload needed).
+- XP/Rep Bar: Resizing no longer flips the bar or distorts textures (rested overlay/tick aligned).
+- Mount keybinds now auto-cancel Druid shapeshift forms before summoning auction/repair/random mounts.
 
 ---
 
