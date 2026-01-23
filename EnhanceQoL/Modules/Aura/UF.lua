@@ -19,6 +19,7 @@ UF.ClassResourceUtil = UF.ClassResourceUtil or {}
 local ClassResourceUtil = UF.ClassResourceUtil
 addon.variables = addon.variables or {}
 addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+addon.variables.ufSampleHealAbsorb = addon.variables.ufSampleHealAbsorb or {}
 local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 
@@ -42,6 +43,7 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local AceGUI = addon.AceGUI or LibStub("AceGUI-3.0")
 local DEFAULT_NOT_INTERRUPTIBLE_COLOR = { 204 / 255, 204 / 255, 204 / 255, 1 }
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs or function() return 0 end
+local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs or function() return 0 end
 local RegisterStateDriver = _G.RegisterStateDriver
 local UnregisterStateDriver = _G.UnregisterStateDriver
 local IsResting = _G.IsResting
@@ -230,6 +232,11 @@ local defaults = {
 			absorbTexture = "SOLID",
 			absorbReverseFill = false,
 			useAbsorbGlow = true,
+			healAbsorbColor = { 1.0, 0.3, 0.3, 0.7 },
+			healAbsorbUseCustomColor = false,
+			showSampleHealAbsorb = false,
+			healAbsorbTexture = "SOLID",
+			healAbsorbReverseFill = true,
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
 			textCenter = "NONE",
@@ -1951,6 +1958,8 @@ do
 	petDefaults.health.absorbUseCustomColor = false
 	petDefaults.health.useAbsorbGlow = false
 	petDefaults.health.showSampleAbsorb = false
+	petDefaults.health.healAbsorbUseCustomColor = false
+	petDefaults.health.showSampleHealAbsorb = false
 	if petDefaults.status and petDefaults.status.combatIndicator then petDefaults.status.combatIndicator.enabled = false end
 	defaults.pet = petDefaults
 
@@ -1968,6 +1977,8 @@ do
 	bossDefaults.health.useAbsorbGlow = false
 	bossDefaults.health.showSampleAbsorb = false
 	bossDefaults.health.absorbUseCustomColor = false
+	bossDefaults.health.healAbsorbUseCustomColor = false
+	bossDefaults.health.showSampleHealAbsorb = false
 	if bossDefaults.auraIcons then bossDefaults.auraIcons.enabled = false end
 	if bossDefaults.status then bossDefaults.status.nameColorMode = "CUSTOM" end
 	defaults.boss = bossDefaults
@@ -2040,16 +2051,8 @@ local function applyBarBackdrop(bar, cfg)
 	bar:SetBackdropColor(col[1] or 0, col[2] or 0, col[3] or 0, col[4] or 0.6)
 end
 
-local function getAbsorbColor(hc, unit)
-	local def = defaultsFor(unit)
-	local defaultAbsorb = (def.health and def.health.absorbColor) or { 0.85, 0.95, 1, 0.7 }
-	if hc and hc.absorbUseCustomColor and hc.absorbColor then
-		return hc.absorbColor[1] or defaultAbsorb[1], hc.absorbColor[2] or defaultAbsorb[2], hc.absorbColor[3] or defaultAbsorb[3], hc.absorbColor[4] or defaultAbsorb[4]
-	end
-	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
-end
-
 local function shouldShowSampleAbsorb(unit) return addon.variables.ufSampleAbsorb and addon.variables.ufSampleAbsorb[unit] == true end
+local function shouldShowSampleHealAbsorb(unit) return addon.variables.ufSampleHealAbsorb and addon.variables.ufSampleHealAbsorb[unit] == true end
 
 function UF.ClearCastInterruptState(st)
 	if not st then return end
@@ -2808,7 +2811,7 @@ local function updateHealth(cfg, unit)
 		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
 		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then abs = (maxForValue or 1) * 0.6 end
 		st.absorb:SetValue(abs or 0)
-		local ar, ag, ab, aa = getAbsorbColor(hc, unit)
+		local ar, ag, ab, aa = UFHelper.getAbsorbColor(hc, defH)
 		st.absorb:SetStatusBarColor(ar or 0.85, ag or 0.95, ab or 1, aa or 0.7)
 		if st.overAbsorbGlow then
 			local showGlow = hc.useAbsorbGlow ~= false and ((C_StringUtil and not C_StringUtil.TruncateWhenZero(abs)) or (not issecretvalue and abs > 0))
@@ -2819,6 +2822,24 @@ local function updateHealth(cfg, unit)
 				st.overAbsorbGlow:Hide()
 			end
 		end
+	end
+	if allowAbsorb and st.healAbsorb then
+		local healAbs = UnitGetTotalHealAbsorbs and UnitGetTotalHealAbsorbs(unit) or 0
+		local maxForValue
+		if issecretvalue and issecretvalue(maxv) then
+			maxForValue = maxv or 1
+		else
+			maxForValue = (maxv and maxv > 0) and maxv or 1
+		end
+		st.healAbsorb:SetMinMaxValues(0, maxForValue or 1)
+		local hasVisibleHealAbsorb = healAbs and (not issecretvalue or not issecretvalue(healAbs)) and healAbs > 0
+		if shouldShowSampleHealAbsorb(unit) and not hasVisibleHealAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then healAbs = (maxForValue or 1) * 0.6 end
+		if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(healAbs)) then
+			if (cur or 0) < (healAbs or 0) then healAbs = cur or 0 end
+		end
+		st.healAbsorb:SetValue(healAbs or 0)
+		local har, hag, hab, haa = UFHelper.getHealAbsorbColor(hc, defH)
+		st.healAbsorb:SetStatusBarColor(har or 1, hag or 0.3, hab or 0.3, haa or 0.7)
 	end
 	local leftMode = hc.textLeft or "PERCENT"
 	local centerMode = hc.textCenter or "NONE"
@@ -3722,10 +3743,14 @@ local function ensureFrames(unit)
 			st.overAbsorbGlow:SetAlpha(0.8)
 			st.overAbsorbGlow:Hide()
 		end
+		st.healAbsorb = st.healAbsorb or CreateFrame("StatusBar", info.healthName .. "HealAbsorb", st.health, "BackdropTemplate")
+		if st.healAbsorb.SetStatusBarDesaturated then st.healAbsorb:SetStatusBarDesaturated(false) end
 	else
 		if st.absorb then st.absorb:Hide() end
 		st.absorb = nil
 		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
+		if st.healAbsorb then st.healAbsorb:Hide() end
+		st.healAbsorb = nil
 	end
 	if (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) and not st.castBar then
 		st.castBar = CreateFrame("StatusBar", info.healthName .. "Cast", st.frame, "BackdropTemplate")
@@ -3848,6 +3873,21 @@ local function applyBars(cfg, unit)
 		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
 	elseif st.overAbsorbGlow then
 		st.overAbsorbGlow:Hide()
+	end
+	if allowAbsorb and st.healAbsorb then
+		local healAbsorbTextureKey = hc.healAbsorbTexture or hc.texture
+		st.healAbsorb:SetStatusBarTexture(UFHelper.resolveTexture(healAbsorbTextureKey))
+		if st.healAbsorb.SetStatusBarDesaturated then st.healAbsorb:SetStatusBarDesaturated(false) end
+		UFHelper.configureSpecialTexture(st.healAbsorb, "HEALTH", healAbsorbTextureKey, hc)
+		local reverseHealAbsorb = hc.healAbsorbReverseFill
+		if reverseHealAbsorb == nil then reverseHealAbsorb = defH.healAbsorbReverseFill == true end
+		UFHelper.applyStatusBarReverseFill(st.healAbsorb, reverseHealAbsorb)
+		st.healAbsorb:SetAllPoints(st.health)
+		local anchorBar = st.absorb or st.health
+		setFrameLevelAbove(st.healAbsorb, anchorBar, 1)
+		st.healAbsorb:SetMinMaxValues(0, 1)
+		st.healAbsorb:SetValue(0)
+		-- no heal absorb glow
 	end
 	if st.castBar and (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) then
 		local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
@@ -4328,6 +4368,7 @@ local unitEvents = {
 	"UNIT_HEALTH",
 	"UNIT_MAXHEALTH",
 	"UNIT_ABSORB_AMOUNT_CHANGED",
+	"UNIT_HEAL_ABSORB_AMOUNT_CHANGED",
 	"UNIT_POWER_UPDATE",
 	"UNIT_POWER_FREQUENT",
 	"UNIT_MAXPOWER",
@@ -4850,7 +4891,7 @@ local function onEvent(self, event, unit, ...)
 			end
 		end
 		if firstChanged then AuraUtil.updateTargetAuraIcons(firstChanged, unit) end
-	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
+	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED" then
 		if unit == UNIT.PLAYER then updateHealth(getCfg(UNIT.PLAYER), UNIT.PLAYER) end
 		if unit == UNIT.TARGET then updateHealth(getCfg(UNIT.TARGET), UNIT.TARGET) end
 		if unit == UNIT.PET then updateHealth(getCfg(UNIT.PET), UNIT.PET) end

@@ -7,7 +7,8 @@
 - Quest Tracker: Minimized '+' anchor now supports bottom corners properly.
 - UF Plus: Detached power bar can use a custom strata.
 - UF Plus: Optional handling for empty power bars (max 0) when power is detached.
-- Cooldown Viewer: Optional /cdm and /wa slash commands to open settings.
+- UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
+- Cooldown Viewer: Optional /cdm and /wa9 slash commands to open settings.
 
 ### 🐛 Fixed
 

@@ -1412,6 +1412,22 @@ function H.isPowerDesaturated(pToken)
 	return overrides and overrides[pToken] ~= nil
 end
 
+function H.getAbsorbColor(hc, defH)
+	local defaultAbsorb = (defH and defH.absorbColor) or { 0.85, 0.95, 1, 0.7 }
+	if hc and hc.absorbUseCustomColor and hc.absorbColor then
+		return hc.absorbColor[1] or defaultAbsorb[1], hc.absorbColor[2] or defaultAbsorb[2], hc.absorbColor[3] or defaultAbsorb[3], hc.absorbColor[4] or defaultAbsorb[4]
+	end
+	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
+end
+
+function H.getHealAbsorbColor(hc, defH)
+	local defaultAbsorb = (defH and defH.healAbsorbColor) or { 1, 0.3, 0.3, 0.7 }
+	if hc and hc.healAbsorbUseCustomColor and hc.healAbsorbColor then
+		return hc.healAbsorbColor[1] or defaultAbsorb[1], hc.healAbsorbColor[2] or defaultAbsorb[2], hc.healAbsorbColor[3] or defaultAbsorb[3], hc.healAbsorbColor[4] or defaultAbsorb[4]
+	end
+	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
+end
+
 function H.getNPCColorDefault(key)
 	local c = key and npcColorDefaults[key]
 	if not c then return nil end

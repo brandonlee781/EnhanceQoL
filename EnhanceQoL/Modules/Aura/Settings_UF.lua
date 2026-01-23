@@ -278,7 +278,9 @@ end
 
 addon.variables = addon.variables or {}
 addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+addon.variables.ufSampleHealAbsorb = addon.variables.ufSampleHealAbsorb or {}
 local sampleAbsorb = addon.variables.ufSampleAbsorb
+local sampleHealAbsorb = addon.variables.ufSampleHealAbsorb
 
 local function getValue(unit, path, fallback)
 	local cfg = ensureConfig(unit)
@@ -1576,6 +1578,65 @@ local function buildUnitSettings(unit)
 			"absorb"
 		)
 		list[#list + 1] = absorbTextureSetting
+
+		list[#list + 1] = { name = L["HealAbsorbBar"] or "Heal Absorb Bar", kind = settingType.Collapsible, id = "healAbsorb", defaultCollapsed = true }
+		local healAbsorbColorDef = healthDef.healAbsorbColor or { 1, 0.3, 0.3, 0.7 }
+
+		list[#list + 1] = checkboxColor({
+			name = L["Use custom heal absorb color"] or "Use custom heal absorb color",
+			parentId = "healAbsorb",
+			defaultChecked = healthDef.healAbsorbUseCustomColor == true,
+			isChecked = function() return getValue(unit, { "health", "healAbsorbUseCustomColor" }, healthDef.healAbsorbUseCustomColor == true) == true end,
+			onChecked = function(val)
+				debounced(unit .. "_healAbsorbCustomColorToggle", function()
+					setValue(unit, { "health", "healAbsorbUseCustomColor" }, val and true or false)
+					if val and not getValue(unit, { "health", "healAbsorbColor" }) then setValue(unit, { "health", "healAbsorbColor" }, healAbsorbColorDef) end
+					refresh()
+					refreshSettingsUI()
+				end)
+			end,
+			getColor = function() return toRGBA(getValue(unit, { "health", "healAbsorbColor" }, healAbsorbColorDef), healAbsorbColorDef) end,
+			onColor = function(color)
+				setColor(unit, { "health", "healAbsorbColor" }, color.r, color.g, color.b, color.a)
+				setValue(unit, { "health", "healAbsorbUseCustomColor" }, true)
+				refresh()
+			end,
+			colorDefault = {
+				r = healAbsorbColorDef[1] or 1,
+				g = healAbsorbColorDef[2] or 0.3,
+				b = healAbsorbColorDef[3] or 0.3,
+				a = healAbsorbColorDef[4] or 0.7,
+			},
+		})
+
+		list[#list + 1] = checkbox(
+			L["Reverse heal absorb fill"] or "Reverse heal absorb fill",
+			function() return getValue(unit, { "health", "healAbsorbReverseFill" }, healthDef.healAbsorbReverseFill == true) == true end,
+			function(val)
+				setValue(unit, { "health", "healAbsorbReverseFill" }, val and true or false)
+				refresh()
+			end,
+			healthDef.healAbsorbReverseFill == true,
+			"healAbsorb"
+		)
+
+		list[#list + 1] = checkbox(L["Show sample heal absorb"] or "Show sample heal absorb", function() return sampleHealAbsorb[unit] == true end, function(val)
+			sampleHealAbsorb[unit] = val and true or false
+			refresh()
+		end, false, "healAbsorb")
+
+		local healAbsorbTextureSetting = checkboxDropdown(
+			L["Heal absorb texture"] or "Heal absorb texture",
+			textureOpts,
+			function() return getValue(unit, { "health", "healAbsorbTexture" }, healthDef.healAbsorbTexture or healthDef.texture or "SOLID") end,
+			function(val)
+				setValue(unit, { "health", "healAbsorbTexture" }, val)
+				refresh()
+			end,
+			healthDef.healAbsorbTexture or healthDef.texture or "SOLID",
+			"healAbsorb"
+		)
+		list[#list + 1] = healAbsorbTextureSetting
 	end
 
 	list[#list + 1] = { name = L["PowerBar"] or "Power Bar", kind = settingType.Collapsible, id = "power", defaultCollapsed = true }
