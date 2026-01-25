@@ -1402,6 +1402,15 @@ local function isSlashCommandOwnedByEQOL(command, listName, prefix, maxIndex)
 	return false
 end
 
+local function getPullCountdownSeconds(msg)
+	local number = tonumber(msg and msg:match("(%d+)") or "")
+	if not number then number = (addon.db and addon.db["pullTimerLongTime"]) or 10 end
+	if number < 0 then number = 0 end
+	local maxSeconds = (Constants and Constants.PartyCountdownConstants and Constants.PartyCountdownConstants.MaxCountdownSeconds) or 3600
+	if number > maxSeconds then number = maxSeconds end
+	return number
+end
+
 local function toggleCooldownViewerSettings()
 	if InCombatLockdown and InCombatLockdown() then return end
 	local frame = _G.CooldownViewerSettings
@@ -1481,6 +1490,17 @@ function addon.functions.registerCooldownManagerSlashCommand()
 	_G.SLASH_EQOLCDMSC1 = commands[1]
 	_G.SLASH_EQOLCDMSC2 = commands[2]
 	SlashCmdList["EQOLCDMSC"] = function() toggleCooldownViewerSettings() end
+end
+
+function addon.functions.registerPullTimerSlashCommand()
+	if not SlashCmdList then return end
+	local function canClaim(command) return isSlashCommandOwnedByEQOL(command, "EQOLPULL", "EQOLPULL", 1) or not isSlashCommandRegistered(command) end
+	if not canClaim("/pull") then return end
+	_G.SLASH_EQOLPULL1 = "/pull"
+	SlashCmdList["EQOLPULL"] = function(msg)
+		local seconds = getPullCountdownSeconds(msg)
+		if C_PartyInfo and C_PartyInfo.DoCountdown then C_PartyInfo.DoCountdown(seconds) end
+	end
 end
 
 function addon.functions.registerEditModeSlashCommand()

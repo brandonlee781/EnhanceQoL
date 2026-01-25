@@ -32,6 +32,7 @@
 ### 🔁 Changed
 
 - Resource Bars: Druid Treant form no longer listed in form filters (mapped to Humanoid)
+- Minimap: Only re-show hidden elements if EnhanceQoL hid them (avoids overriding other addons)
 
 ### 🐛 Fixed
 
