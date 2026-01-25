@@ -1503,20 +1503,21 @@ function addon.Vendor.functions.InitState()
 		hookBagFrame(frame)
 	end
 
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
-		if not addon.db or not addon.db["vendorShowSellTooltip"] then return end
-		if not data or not tooltip.GetOwner then return end
-		local oTooltip = tooltip.GetOwner and tooltip:GetOwner()
-		if not oTooltip or not oTooltip.GetBagID or not oTooltip.GetID then return end
-		local bagID = oTooltip:GetBagID()
-		local slotIndex = oTooltip:GetID()
-		if bagID and slotIndex then
-			local key = bagID .. "_" .. slotIndex
-			if sellMarkLookup[key] then
-				tooltip:AddLine(L["vendorWillBeSold"], 1, 0, 0)
-			elseif destroyMarkLookup[key] then
-				tooltip:AddLine(L["vendorWillBeDestroyed"], 1, 0.3, 0.1)
-			end
-		end
-	end)
+	-- ! STILL BUGGY 2026-01-25
+	-- TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+	-- 	if not addon.db or not addon.db["vendorShowSellTooltip"] then return end
+	-- 	if not data or not tooltip.GetOwner then return end
+	-- 	local oTooltip = tooltip.GetOwner and tooltip:GetOwner()
+	-- 	if not oTooltip or not oTooltip.GetBagID or not oTooltip.GetID then return end
+	-- 	local bagID = oTooltip:GetBagID()
+	-- 	local slotIndex = oTooltip:GetID()
+	-- 	if bagID and slotIndex then
+	-- 		local key = bagID .. "_" .. slotIndex
+	-- 		if sellMarkLookup[key] then
+	-- 			tooltip:AddLine(L["vendorWillBeSold"], 1, 0, 0)
+	-- 		elseif destroyMarkLookup[key] then
+	-- 			tooltip:AddLine(L["vendorWillBeDestroyed"], 1, 0.3, 0.1)
+	-- 		end
+	-- 	end
+	-- end)
 end

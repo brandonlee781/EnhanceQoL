@@ -188,6 +188,21 @@ addon.functions.SettingsCreateCheckbox(cGeneral, {
 	parentSection = utilitiesExpandable,
 })
 addon.functions.SettingsCreateCheckbox(cGeneral, {
+	var = "enablePullTimerSlashCommand",
+	text = L["enablePullTimerSlashCommand"],
+	desc = L["enablePullTimerSlashCommandDesc"],
+	func = function(value)
+		addon.db["enablePullTimerSlashCommand"] = value
+		if value then
+			addon.functions.registerPullTimerSlashCommand()
+		else
+			addon.variables.requireReload = true
+		end
+	end,
+	default = false,
+	parentSection = utilitiesExpandable,
+})
+addon.functions.SettingsCreateCheckbox(cGeneral, {
 	var = "enableEditModeSlashCommand",
 	text = L["enableEditModeSlashCommand"],
 	desc = L["enableEditModeSlashCommandDesc"],

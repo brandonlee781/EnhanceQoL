@@ -116,6 +116,8 @@ local COOLDOWN_VIEWER_VISIBILITY_MODES = {
 	IN_COMBAT = "IN_COMBAT",
 	WHILE_MOUNTED = "WHILE_MOUNTED",
 	WHILE_NOT_MOUNTED = "WHILE_NOT_MOUNTED",
+	SKYRIDING_ACTIVE = "SKYRIDING_ACTIVE",
+	SKYRIDING_INACTIVE = "SKYRIDING_INACTIVE",
 	MOUSEOVER = "MOUSEOVER",
 	PLAYER_HAS_TARGET = "PLAYER_HAS_TARGET",
 	PLAYER_CASTING = "PLAYER_CASTING",
@@ -522,6 +524,13 @@ local visibilityRuleMetadata = {
 		appliesTo = { actionbar = true },
 		order = 25,
 	},
+	SKYRIDING_INACTIVE = {
+		key = "SKYRIDING_INACTIVE",
+		label = L["visibilityRule_hideSkyriding"] or "Hide while skyriding",
+		description = L["visibilityRule_hideSkyriding_desc"],
+		appliesTo = { actionbar = true },
+		order = 26,
+	},
 	ALWAYS_HIDDEN = {
 		key = "ALWAYS_HIDDEN",
 		label = L["visibilityRule_alwaysHidden"] or "Always hidden",
@@ -809,6 +818,7 @@ local ApplyFrameVisibilityState -- forward declaration
 local midnightPlayerHealthCurve
 local midnightPlayerHealthCurveAlpha
 local IsInDruidTravelForm
+local EnsureSkyridingStateDriver
 
 local function GetMidnightPlayerHealthAlpha(fadedAlpha)
 	if type(fadedAlpha) ~= "number" then fadedAlpha = 0 end
@@ -1394,6 +1404,8 @@ local function normalizeCooldownViewerConfigValue(val, acc)
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.IN_COMBAT then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.IN_COMBAT] = true end
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED] = true end
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED] = true end
+	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE] = true end
+	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE] = true end
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER] = true end
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET] = true end
 	if val == COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING then acc[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING] = true end
@@ -1454,14 +1466,29 @@ local function computeCooldownViewerTargetAlpha(cfg, state)
 	local hasTarget = UnitExists and UnitExists("target")
 	local isCasting = IsPlayerCasting()
 	local inGroup = IsInGroup and IsInGroup() and true or false
+	local isSkyriding = addon.variables and addon.variables.isPlayerSkyriding
 	local fadedAlpha = (addon.functions and addon.functions.GetCooldownViewerFadedAlpha and addon.functions.GetCooldownViewerFadedAlpha()) or 0
 	local healthAlpha
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HEALTH_NOT_FULL] then healthAlpha = GetPlayerHealthVisibilityAlpha(fadedAlpha) end
+	local hideSkyriding = cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE] == true
+	local hasShowRules = cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.IN_COMBAT]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_IN_GROUP]
+		or cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HEALTH_NOT_FULL]
+
+	if hideSkyriding and isSkyriding then return fadedAlpha end
+	if not hasShowRules then return 1 end
 
 	local shouldShow = false
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.IN_COMBAT] and inCombat then shouldShow = true end
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED] and mounted then shouldShow = true end
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED] and not mounted then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE] and isSkyriding then shouldShow = true end
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER] and hovered then shouldShow = true end
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET] and hasTarget then shouldShow = true end
 	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING] and isCasting then shouldShow = true end
@@ -1690,6 +1717,7 @@ local function EnsureCooldownViewerWatcher()
 	addon.variables = addon.variables or {}
 	if addon.variables.cooldownViewerWatcher then return end
 
+	EnsureSkyridingStateDriver()
 	local watcher = CreateFrame("Frame")
 	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 	watcher:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
@@ -1814,7 +1842,9 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 
 	if not persistLegacy and incoming == nil then
 		if type(source) == "table" then
-			if source.MOUSEOVER == true or source.ALWAYS_IN_COMBAT == true or source.ALWAYS_OUT_OF_COMBAT == true or source.SKYRIDING_ACTIVE == true then return source end
+			if source.MOUSEOVER == true or source.ALWAYS_IN_COMBAT == true or source.ALWAYS_OUT_OF_COMBAT == true or source.SKYRIDING_ACTIVE == true or source.SKYRIDING_INACTIVE == true then
+				return source
+			end
 			return nil
 		end
 		if source == true then return ACTIONBAR_VISIBILITY_MOUSEOVER_ONLY end
@@ -1827,6 +1857,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			ALWAYS_IN_COMBAT = source.ALWAYS_IN_COMBAT == true,
 			ALWAYS_OUT_OF_COMBAT = source.ALWAYS_OUT_OF_COMBAT == true,
 			SKYRIDING_ACTIVE = source.SKYRIDING_ACTIVE == true,
+			SKYRIDING_INACTIVE = source.SKYRIDING_INACTIVE == true,
 			PLAYER_CASTING = source.PLAYER_CASTING == true,
 			PLAYER_MOUNTED = source.PLAYER_MOUNTED == true,
 			PLAYER_NOT_MOUNTED = source.PLAYER_NOT_MOUNTED == true,
@@ -1839,6 +1870,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			ALWAYS_IN_COMBAT = false,
 			ALWAYS_OUT_OF_COMBAT = false,
 			SKYRIDING_ACTIVE = false,
+			SKYRIDING_INACTIVE = false,
 			PLAYER_CASTING = false,
 			PLAYER_MOUNTED = false,
 			PLAYER_NOT_MOUNTED = false,
@@ -1856,6 +1888,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			or config.ALWAYS_IN_COMBAT
 			or config.ALWAYS_OUT_OF_COMBAT
 			or config.SKYRIDING_ACTIVE
+			or config.SKYRIDING_INACTIVE
 			or config.PLAYER_CASTING
 			or config.PLAYER_MOUNTED
 			or config.PLAYER_NOT_MOUNTED
@@ -1875,6 +1908,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			if config.ALWAYS_IN_COMBAT then stored.ALWAYS_IN_COMBAT = true end
 			if config.ALWAYS_OUT_OF_COMBAT then stored.ALWAYS_OUT_OF_COMBAT = true end
 			if config.SKYRIDING_ACTIVE then stored.SKYRIDING_ACTIVE = true end
+			if config.SKYRIDING_INACTIVE then stored.SKYRIDING_INACTIVE = true end
 			if config.PLAYER_CASTING then stored.PLAYER_CASTING = true end
 			if config.PLAYER_MOUNTED then stored.PLAYER_MOUNTED = true end
 			if config.PLAYER_NOT_MOUNTED then stored.PLAYER_NOT_MOUNTED = true end
@@ -1908,13 +1942,14 @@ local function GetActionBarVisibilityContext(combatOverride)
 		inGroup = IsInGroup and IsInGroup() and true or false,
 		mounted = IsPlayerMounted(),
 		isCasting = IsPlayerCasting(),
+		isSkyriding = addon.variables and addon.variables.isPlayerSkyriding,
 	}
 end
 
 local function ActionBarShouldForceShowByConfig(config, context, combatOverride)
 	if not config then return false end
-	if config.SKYRIDING_ACTIVE and addon.variables and addon.variables.isPlayerSkyriding then return true end
 	local ctx = context or GetActionBarVisibilityContext(combatOverride)
+	if config.SKYRIDING_ACTIVE and ctx.isSkyriding then return true end
 	if config.ALWAYS_IN_COMBAT and ctx.inCombat then return true end
 	if config.ALWAYS_OUT_OF_COMBAT and not ctx.inCombat then return true end
 	if config.PLAYER_CASTING and ctx.isCasting then return true end
@@ -1988,10 +2023,31 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride, skipFa
 		cfg = GetActionBarVisibilityConfig(variable)
 	end
 	if not cfg then return end
+	local ctx = context or GetActionBarVisibilityContext(combatOverride)
 	local useFade = ShouldFadeActionBar(skipFade)
 	local fadedAlpha = GetActionBarFadedAlpha()
 	local baseAlpha = GetActionBarBaseAlpha(cfg, fadedAlpha)
-	if ActionBarShouldForceShowByConfig(cfg, context, combatOverride) then
+	local hasShowRules = cfg.MOUSEOVER
+		or cfg.ALWAYS_IN_COMBAT
+		or cfg.ALWAYS_OUT_OF_COMBAT
+		or cfg.SKYRIDING_ACTIVE
+		or cfg.PLAYER_CASTING
+		or cfg.PLAYER_MOUNTED
+		or cfg.PLAYER_NOT_MOUNTED
+		or cfg.PLAYER_IN_GROUP
+		or cfg.PLAYER_HEALTH_NOT_FULL
+
+	if cfg.SKYRIDING_INACTIVE then
+		if ctx.isSkyriding then
+			ApplyAlphaToRegion(bar, baseAlpha, useFade)
+			return
+		elseif not hasShowRules then
+			ApplyAlphaToRegion(bar, 1, useFade)
+			return
+		end
+	end
+
+	if ActionBarShouldForceShowByConfig(cfg, ctx, combatOverride) then
 		ApplyAlphaToRegion(bar, 1, useFade)
 		return
 	end
@@ -2314,18 +2370,22 @@ end
 addon.functions.RefreshAllActionBarVisibilityAlpha = RefreshAllActionBarVisibilityAlpha
 addon.functions.RequestActionBarRefresh = RefreshAllActionBarVisibilityAlpha
 
-local function EnsureSkyridingStateDriver()
+EnsureSkyridingStateDriver = function()
 	addon.variables = addon.variables or {}
 	if addon.variables.skyridingDriver then return end
 	local driver = CreateFrame("Frame")
 	driver:Hide()
+	local function refreshSkyridingDependents()
+		RefreshAllActionBarVisibilityAlpha()
+		if addon.functions and addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
+	end
 	driver:SetScript("OnShow", function()
 		addon.variables.isPlayerSkyriding = true
-		RefreshAllActionBarVisibilityAlpha()
+		refreshSkyridingDependents()
 	end)
 	driver:SetScript("OnHide", function()
 		addon.variables.isPlayerSkyriding = false
-		RefreshAllActionBarVisibilityAlpha()
+		refreshSkyridingDependents()
 	end)
 	local expr = "[advflyable, mounted] show; [advflyable, stance:3] show; hide"
 	local function registerDriver()
@@ -3649,6 +3709,8 @@ local function initMap()
 	if addon.db["enableWayCommand"] then addon.functions.registerWayCommand() end
 	addon.functions.InitDBValue("enableCooldownManagerSlashCommand", false)
 	if addon.db["enableCooldownManagerSlashCommand"] then addon.functions.registerCooldownManagerSlashCommand() end
+	addon.functions.InitDBValue("enablePullTimerSlashCommand", false)
+	if addon.db["enablePullTimerSlashCommand"] then addon.functions.registerPullTimerSlashCommand() end
 	addon.functions.InitDBValue("enableEditModeSlashCommand", false)
 	if addon.db["enableEditModeSlashCommand"] then addon.functions.registerEditModeSlashCommand() end
 	addon.functions.InitDBValue("enableQuickKeybindSlashCommand", false)
@@ -4076,7 +4138,9 @@ local function initUI()
 			for _, f in ipairs(frames) do
 				if shouldHide then
 					f:Hide()
-				else
+					f._eqolMinimapHidden = true
+				elseif f._eqolMinimapHidden then
+					f._eqolMinimapHidden = nil
 					f:Show()
 				end
 				if not f._eqolMinimapHideHooked then
@@ -5023,6 +5087,9 @@ local function CreateUI()
 		root:CreateButton(L["CooldownPanelEditor"] or "Cooldown Panel Editor", function()
 			if addon.Aura and addon.Aura.CooldownPanels and addon.Aura.CooldownPanels.OpenEditor then addon.Aura.CooldownPanels:OpenEditor() end
 		end)
+		root:CreateButton(L["VisibilityEditor"] or "Visibility Configurator", function()
+			if addon.Visibility and addon.Visibility.OpenEditor then addon.Visibility:OpenEditor() end
+		end)
 
 		DoDevider()
 		root:CreateButton(LFG_LIST_LEGACY .. " " .. SETTINGS, function()
@@ -5372,6 +5439,10 @@ local function setAllHooks()
 	if addon.Tooltip and addon.Tooltip.functions then
 		if addon.Tooltip.functions.InitDB then addon.Tooltip.functions.InitDB() end
 		if addon.Tooltip.functions.InitState then addon.Tooltip.functions.InitState() end
+	end
+	if addon.Visibility and addon.Visibility.functions then
+		if addon.Visibility.functions.InitDB then addon.Visibility.functions.InitDB() end
+		if addon.Visibility.functions.InitState then addon.Visibility.functions.InitState() end
 	end
 	if addon.Vendor and addon.Vendor.functions then
 		if addon.Vendor.functions.InitDB then addon.Vendor.functions.InitDB() end
