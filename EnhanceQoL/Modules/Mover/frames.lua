@@ -198,7 +198,6 @@ local frames = {
 		names = { "CooldownViewerSettings" },
 		addon = "Blizzard_CooldownViewer",
 		defaultEnabled = true,
-		
 	},
 	{
 		id = "InspectFrame",

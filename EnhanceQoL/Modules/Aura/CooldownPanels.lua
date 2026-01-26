@@ -1043,22 +1043,24 @@ function CooldownPanels:RebuildChargesIndex()
 	local root = ensureRoot()
 	local chargesIndex = {}
 	local chargesPanels = {}
-	if root and root.panels and GetSpellChargesInfo then
+	if root and root.panels then
 		for panelId, panel in pairs(root.panels) do
 			if panel and panel.enabled ~= false and panelAllowsSpec(panel) then
 				for _, entry in pairs(panel.entries or {}) do
 					if entry and entry.type == "SPELL" and entry.spellID and entry.showCharges == true then
 						local baseId = tonumber(entry.spellID)
 						if baseId then
+							chargesPanels[panelId] = true
 							local effectiveId = getEffectiveSpellId(baseId) or baseId
-							local info = GetSpellChargesInfo(effectiveId)
-							if type(info) == "table" then
-								chargesIndex[effectiveId] = chargesIndex[effectiveId] or {}
-								chargesIndex[effectiveId][panelId] = true
-								chargesPanels[panelId] = true
-								if effectiveId ~= baseId then
-									chargesIndex[baseId] = chargesIndex[baseId] or {}
-									chargesIndex[baseId][panelId] = true
+							if GetSpellChargesInfo then
+								local info = GetSpellChargesInfo(effectiveId)
+								if type(info) == "table" then
+									chargesIndex[effectiveId] = chargesIndex[effectiveId] or {}
+									chargesIndex[effectiveId][panelId] = true
+									if effectiveId ~= baseId then
+										chargesIndex[baseId] = chargesIndex[baseId] or {}
+										chargesIndex[baseId][panelId] = true
+									end
 								end
 							end
 						end
@@ -5343,6 +5345,8 @@ local function updatePowerStatesForType(powerType)
 	local spells = powerIndex[key]
 	if not spells then return false end
 	runtime.powerInsufficient = runtime.powerInsufficient or {}
+	local panelsToRefresh
+	local spellIndex = runtime and runtime.spellIndex
 	for spellId in pairs(spells) do
 		local _, insufficientPower = IsSpellUsableFn(spellId)
 		if insufficientPower then
@@ -5350,7 +5354,20 @@ local function updatePowerStatesForType(powerType)
 		else
 			runtime.powerInsufficient[spellId] = nil
 		end
-		if refreshPanelsForSpell then refreshPanelsForSpell(spellId) end
+		if spellIndex then
+			local panels = spellIndex[spellId]
+			if panels then
+				panelsToRefresh = panelsToRefresh or {}
+				for panelId in pairs(panels) do
+					panelsToRefresh[panelId] = true
+				end
+			end
+		end
+	end
+	if panelsToRefresh then
+		for panelId in pairs(panelsToRefresh) do
+			if CooldownPanels:GetPanel(panelId) then CooldownPanels:RefreshPanel(panelId) end
+		end
 	end
 	return true
 end
@@ -5506,7 +5523,8 @@ local function ensureUpdateFrame()
 			if refreshPanelsForSpell(...) then return end
 		end
 		if event == "SPELL_UPDATE_CHARGES" then
-			if refreshPanelsForCharges() then return end
+			refreshPanelsForCharges()
+			return
 		end
 		CooldownPanels:RequestUpdate()
 	end)
