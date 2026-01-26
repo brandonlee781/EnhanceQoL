@@ -1462,7 +1462,19 @@ local function computeCooldownViewerTargetAlpha(cfg, state)
 
 	local mounted = (IsMounted and IsMounted()) or IsInDruidTravelForm()
 	local inCombat = (InCombatLockdown and InCombatLockdown()) or (UnitAffectingCombat and UnitAffectingCombat("player"))
+
 	local hovered = state and state.hovered
+	local sharedHover = addon.db and addon.db.cooldownViewerSharedHover
+	local viewerStates = addon.variables and addon.variables.cooldownViewerStates
+	if not hovered and sharedHover and viewerStates then
+		for _, otherState in pairs(addon.variables.cooldownViewerStates) do
+			if otherState.hovered then
+					hovered = true
+					break
+			end
+    end
+	end
+
 	local hasTarget = UnitExists and UnitExists("target")
 	local isCasting = IsPlayerCasting()
 	local inGroup = IsInGroup and IsInGroup() and true or false
