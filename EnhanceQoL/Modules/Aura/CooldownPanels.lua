@@ -191,9 +191,7 @@ local function normalizeId(value)
 end
 
 local function getClassInfoById(classId)
-	if GetClassInfo then
-		return GetClassInfo(classId)
-	end
+	if GetClassInfo then return GetClassInfo(classId) end
 	if C_CreatureInfo and C_CreatureInfo.GetClassInfo then
 		local info = C_CreatureInfo.GetClassInfo(classId)
 		if info then return info.className, info.classFile, info.classID end
@@ -217,15 +215,21 @@ local function getClassSpecMenuData()
 					local specID, specName = GetSpecializationInfoForClassID(classID, specIndex, sex)
 					if specID then specs[#specs + 1] = { id = specID, name = specName or ("Spec " .. tostring(specID)) } end
 				end
-				if #specs > 0 then
-					classes[#classes + 1] = {
-						id = classID,
-						name = className or classTag or tostring(classID),
-						specs = specs,
-					}
-				end
+				if #specs > 0 then classes[#classes + 1] = {
+					id = classID,
+					name = className or classTag or tostring(classID),
+					specs = specs,
+				} end
 			end
 		end
+	end
+	if #classes > 1 then
+		table.sort(classes, function(a, b)
+			local an = a and a.name or ""
+			local bn = b and b.name or ""
+			if strcmputf8i then return strcmputf8i(an, bn) < 0 end
+			return tostring(an):lower() < tostring(bn):lower()
+		end)
 	end
 	return classes
 end
@@ -807,9 +811,7 @@ local function isSpellKnownSafe(spellId)
 		local known = C_SpellBook.IsSpellInSpellBook(spellId)
 		if known then return true end
 		local overrideId = getEffectiveSpellId(spellId)
-		if overrideId and overrideId ~= spellId then
-			return C_SpellBook.IsSpellInSpellBook(overrideId) and true or false
-		end
+		if overrideId and overrideId ~= spellId then return C_SpellBook.IsSpellInSpellBook(overrideId) and true or false end
 		return false
 	end
 	return true
@@ -912,9 +914,7 @@ function CooldownPanels:AddEntry(panelId, entryType, idValue, overrides)
 	if typeKey ~= "SPELL" and typeKey ~= "ITEM" and typeKey ~= "SLOT" then return nil end
 	local numericValue = tonumber(idValue)
 	if not numericValue then return nil end
-	if typeKey == "SPELL" then
-		numericValue = getBaseSpellId(numericValue) or numericValue
-	end
+	if typeKey == "SPELL" then numericValue = getBaseSpellId(numericValue) or numericValue end
 	local entryId = Helper.GetNextNumericId(panel.entries)
 	local entry = Helper.CreateEntry(typeKey, numericValue, root.defaults)
 	entry.id = entryId
@@ -1345,7 +1345,9 @@ local function getEntryKeybindText(entry, layout)
 					end
 				end
 			end
-			if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false)) end
+			if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then
+				text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false))
+			end
 		end
 	elseif entry.type == "ITEM" and entry.itemID then
 		local lookup = buildKeybindLookup()
@@ -1645,6 +1647,17 @@ local function getGridDimensions(count, wrapCount, primaryHorizontal)
 	return 1, count
 end
 
+local function getPanelRowCount(panel, layout)
+	if not panel or not layout then return 1, true end
+	local count = panel.order and #panel.order or 0
+	if count < 1 then count = 1 end
+	local wrapCount = clampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
+	local direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
+	local _, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
+	return rows, primaryHorizontal
+end
+
 local function containsId(list, id)
 	if type(list) ~= "table" then return false end
 	for _, value in ipairs(list) do
@@ -1692,11 +1705,51 @@ local function applyIconLayout(frame, count, layout)
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
 
 	local cols, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
-	local step = iconSize + spacing
-	local width = (cols * iconSize) + ((cols - 1) * spacing)
-	local height = (rows * iconSize) + ((rows - 1) * spacing)
+	local baseIconSize = iconSize
+	local rowSizes = {}
+	local rowOffsets = {}
+	local rowWidths = {}
+	local width = 0
+	local height = 0
 
-	frame:SetSize(width > 0 and width or iconSize, height > 0 and height or iconSize)
+	if primaryHorizontal then
+		local totalHeight = 0
+		for rowIndex = 1, rows do
+			local rowSize = baseIconSize
+			if type(layout.rowSizes) == "table" then
+				local override = tonumber(layout.rowSizes[rowIndex])
+				if override then rowSize = clampInt(override, 12, 128, baseIconSize) end
+			end
+			rowSizes[rowIndex] = rowSize
+			rowOffsets[rowIndex] = totalHeight
+			local rowCols = cols
+			if wrapCount and wrapCount > 0 then
+				local fillIndex = rowIndex
+				if wrapDirection == "UP" then fillIndex = rows - rowIndex + 1 end
+				rowCols = math.min(wrapCount, count - ((fillIndex - 1) * wrapCount))
+				if rowCols < 1 then rowCols = 1 end
+			end
+			local rowWidth = (rowCols * rowSize) + ((rowCols - 1) * spacing)
+			rowWidths[rowIndex] = rowWidth
+			if rowWidth > width then width = rowWidth end
+			totalHeight = totalHeight + rowSize + spacing
+		end
+		if rows > 0 then height = totalHeight - spacing end
+	else
+		local step = baseIconSize + spacing
+		width = (cols * baseIconSize) + ((cols - 1) * spacing)
+		height = (rows * baseIconSize) + ((rows - 1) * spacing)
+		for rowIndex = 1, rows do
+			rowSizes[rowIndex] = baseIconSize
+			rowOffsets[rowIndex] = (rowIndex - 1) * step
+			rowWidths[rowIndex] = width
+		end
+	end
+
+	if width <= 0 then width = baseIconSize end
+	if height <= 0 then height = baseIconSize end
+
+	frame:SetSize(width, height)
 	ensureIconCount(frame, count)
 	local fontPath, fontSize, fontStyle = getCountFontDefaults(frame)
 	local countFontPath = resolveFontPath(layout.stackFont, fontPath)
@@ -1725,23 +1778,20 @@ local function applyIconLayout(frame, count, layout)
 		end
 		return h, v
 	end
-	local function getGrowthOffset(point, gridWidth, gridHeight, size)
+	local function getGrowthOffset(point, gridWidth, gridHeight)
 		local h, v = getAnchorComponents(point)
 		local x = 0
-		if h == "CENTER" then
-			x = -(gridWidth / 2) + (size / 2)
-		elseif h == "RIGHT" then
-			x = -gridWidth + size
-		end
+		if h == "CENTER" then x = -(gridWidth / 2) end
+		if h == "RIGHT" then x = -gridWidth end
 		local y = 0
 		if v == "CENTER" then
-			y = (gridHeight / 2) - (size / 2)
+			y = (gridHeight / 2)
 		elseif v == "BOTTOM" then
-			y = gridHeight - size
+			y = gridHeight
 		end
 		return x, y, h, v
 	end
-	local growthOffsetX, growthOffsetY, anchorH, anchorV = getGrowthOffset(growthPoint, width, height, iconSize)
+	local growthOffsetX, growthOffsetY, anchorH, anchorV = getGrowthOffset(growthPoint, width, height)
 
 	for i = 1, count do
 		local icon = frame.icons[i]
@@ -1754,9 +1804,7 @@ local function applyIconLayout(frame, count, layout)
 
 		local col, row
 		if primaryHorizontal then
-			local rowCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
-			local colOffset = anchorH == "CENTER" and ((cols - rowCount) / 2) or 0
-			col = primaryIndex + colOffset
+			col = primaryIndex
 			row = secondaryIndex
 		else
 			local colCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
@@ -1777,7 +1825,33 @@ local function applyIconLayout(frame, count, layout)
 			if wrapDirection == "LEFT" then col = (cols - 1) - col end
 		end
 
-		icon:SetSize(iconSize, iconSize)
+		local rowIndex = row + 1
+		local rowSize = rowSizes[rowIndex] or baseIconSize
+		local rowOffset = rowOffsets[rowIndex] or (row * (baseIconSize + spacing))
+		local rowWidth = rowWidths[rowIndex] or width
+		local rowAlignOffset = 0
+		if primaryHorizontal then
+			if anchorH == "CENTER" then
+				rowAlignOffset = (width - rowWidth) / 2
+			elseif anchorH == "RIGHT" then
+				rowAlignOffset = width - rowWidth
+			end
+		end
+		local anchorXAdjust = 0
+		if anchorH == "CENTER" then
+			anchorXAdjust = rowSize / 2
+		elseif anchorH == "RIGHT" then
+			anchorXAdjust = rowSize
+		end
+		local anchorYAdjust = 0
+		if anchorV == "CENTER" then
+			anchorYAdjust = -(rowSize / 2)
+		elseif anchorV == "BOTTOM" then
+			anchorYAdjust = -rowSize
+		end
+		local stepX = primaryHorizontal and (rowSize + spacing) or (baseIconSize + spacing)
+
+		icon:SetSize(rowSize, rowSize)
 		if icon._eqolMasqueNeedsReskin then
 			local group = getMasqueGroup()
 			if group and group.ReSkin then group:ReSkin(icon) end
@@ -1802,15 +1876,15 @@ local function applyIconLayout(frame, count, layout)
 		if icon.previewGlow then
 			icon.previewGlow:ClearAllPoints()
 			icon.previewGlow:SetPoint("CENTER", icon, "CENTER", 0, 0)
-			icon.previewGlow:SetSize(iconSize * 1.8, iconSize * 1.8)
+			icon.previewGlow:SetSize(rowSize * 1.8, rowSize * 1.8)
 		end
 		if icon.previewBling then
 			icon.previewBling:ClearAllPoints()
 			icon.previewBling:SetPoint("CENTER", icon, "CENTER", 0, 0)
-			icon.previewBling:SetSize(iconSize * 1.5, iconSize * 1.5)
+			icon.previewBling:SetSize(rowSize * 1.5, rowSize * 1.5)
 		end
 		icon:ClearAllPoints()
-		icon:SetPoint(growthPoint, frame, growthPoint, growthOffsetX + (col * step), growthOffsetY - (row * step))
+		icon:SetPoint(growthPoint, frame, growthPoint, growthOffsetX + anchorXAdjust + rowAlignOffset + (col * stepX), growthOffsetY + anchorYAdjust - rowOffset)
 	end
 end
 
@@ -1954,9 +2028,7 @@ local function createButton(parent, text, width, height)
 	return btn
 end
 
-local function utf8iter(str)
-	return (str or ""):gmatch("[%z\1-\127\194-\244][\128-\191]*")
-end
+local function utf8iter(str) return (str or ""):gmatch("[%z\1-\127\194-\244][\128-\191]*") end
 
 local function utf8len(str)
 	local len = 0
@@ -2121,9 +2193,7 @@ local function showSpecMenu(owner, panelId)
 	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
 		rootDescription:SetTag("MENU_EQOL_COOLDOWN_PANEL_SPECS")
 		rootDescription:CreateTitle(L["CooldownPanelSpecFilter"] or "Show only for spec")
-		rootDescription:CreateCheckbox(L["CooldownPanelSpecAny"] or "All specs", function()
-			return not panelHasSpecFilter(panel)
-		end, function()
+		rootDescription:CreateCheckbox(L["CooldownPanelSpecAny"] or "All specs", function() return not panelHasSpecFilter(panel) end, function()
 			panel.specFilter = {}
 			CooldownPanels:RebuildSpellIndex()
 			CooldownPanels:RefreshPanel(panelId)
@@ -2132,9 +2202,7 @@ local function showSpecMenu(owner, panelId)
 		for _, classData in ipairs(getClassSpecMenuData()) do
 			local classMenu = rootDescription:CreateButton(classData.name)
 			for _, specData in ipairs(classData.specs or {}) do
-				classMenu:CreateCheckbox(specData.name, function()
-					return panel.specFilter and panel.specFilter[specData.id] == true
-				end, function()
+				classMenu:CreateCheckbox(specData.name, function() return panel.specFilter and panel.specFilter[specData.id] == true end, function()
 					panel.specFilter = panel.specFilter or {}
 					if panel.specFilter[specData.id] then
 						panel.specFilter[specData.id] = nil
@@ -2600,9 +2668,7 @@ local function ensureEditor()
 		end
 	end)
 
-panelSpecButton:SetScript("OnClick", function(self)
-	showSpecMenu(self, editor.selectedPanelId)
-end)
+	panelSpecButton:SetScript("OnClick", function(self) showSpecMenu(self, editor.selectedPanelId) end)
 
 	entryIdBox:SetScript("OnEnterPressed", function(self)
 		local panelId = editor.selectedPanelId
@@ -2658,9 +2724,7 @@ end)
 			local entry = panel and panel.entries and panel.entries[entryId]
 			if not entry then return end
 			entry[field] = self:GetChecked() and true or false
-			if field == "showCharges" then
-				CooldownPanels:RebuildChargesIndex()
-			end
+			if field == "showCharges" then CooldownPanels:RebuildChargesIndex() end
 			CooldownPanels:RefreshPanel(panelId)
 			CooldownPanels:RefreshEditor()
 		end)
@@ -2940,7 +3004,16 @@ end
 local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
+	local baseIconSize = clampInt(baseLayout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 	previewLayout.iconSize = PREVIEW_ICON_SIZE
+	if type(baseLayout.rowSizes) == "table" then
+		local scale = baseIconSize > 0 and (PREVIEW_ICON_SIZE / baseIconSize) or 1
+		previewLayout.rowSizes = {}
+		for index, size in pairs(baseLayout.rowSizes) do
+			local num = tonumber(size)
+			if num then previewLayout.rowSizes[index] = clampInt(num * scale, 12, 128, PREVIEW_ICON_SIZE) end
+		end
+	end
 	local stackSize = tonumber(previewLayout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize
 	previewLayout.stackFontSize = math.max(stackSize, PREVIEW_COUNT_FONT_MIN)
 	local chargesSize = tonumber(previewLayout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize
@@ -3158,9 +3231,7 @@ local function layoutInspectorToggles(inspector, entry)
 		end
 	end
 
-	if inspector.soundButton and inspector.soundButton:IsShown() then
-		prev = inspector.soundButton
-	end
+	if inspector.soundButton and inspector.soundButton:IsShown() then prev = inspector.soundButton end
 	if inspector.removeEntry then
 		inspector.removeEntry:ClearAllPoints()
 		if inspector.content and inspector.content.GetTop and prev and prev.GetBottom then
@@ -3975,6 +4046,7 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 	if not panel then return end
 	panel.layout = panel.layout or {}
 	local layout = panel.layout
+	local rowSizeIndex = field and field:match("^rowSize(%d+)$")
 
 	if field == "iconSize" then
 		layout.iconSize = clampInt(value, 12, 128, layout.iconSize)
@@ -4057,11 +4129,34 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.opacityOutOfCombat = normalizeOpacity(value, layout.opacityOutOfCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
 	elseif field == "opacityInCombat" then
 		layout.opacityInCombat = normalizeOpacity(value, layout.opacityInCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat)
+	elseif rowSizeIndex then
+		local index = tonumber(rowSizeIndex)
+		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local newSize = clampInt(value, 12, 128, base)
+		layout.rowSizes = layout.rowSizes or {}
+		if newSize == base then
+			layout.rowSizes[index] = nil
+		else
+			layout.rowSizes[index] = newSize
+		end
+		if not next(layout.rowSizes) then layout.rowSizes = nil end
 	end
 
 	if field == "iconSize" then CooldownPanels:ReskinMasque() end
 
-	syncEditModeValue(panelId, field, layout[field])
+	local syncValue = layout[field]
+	if rowSizeIndex then
+		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local idx = tonumber(rowSizeIndex)
+		syncValue = (layout.rowSizes and layout.rowSizes[idx]) or base
+	end
+	syncEditModeValue(panelId, field, syncValue)
+	if field == "iconSize" then
+		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		for i = 1, 6 do
+			if not layout.rowSizes or layout.rowSizes[i] == nil then syncEditModeValue(panelId, "rowSize" .. i, base) end
+		end
+	end
 
 	if not skipRefresh then
 		CooldownPanels:ApplyLayout(panelId)
@@ -4081,6 +4176,10 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "direction", data.direction, true)
 	applyEditLayout(panelId, "wrapCount", data.wrapCount, true)
 	applyEditLayout(panelId, "wrapDirection", data.wrapDirection, true)
+	for i = 1, 6 do
+		local key = "rowSize" .. i
+		if data[key] ~= nil then applyEditLayout(panelId, key, data[key], true) end
+	end
 	applyEditLayout(panelId, "growthPoint", data.growthPoint, true)
 	applyEditLayout(panelId, "rangeOverlayEnabled", data.rangeOverlayEnabled, true)
 	applyEditLayout(panelId, "rangeOverlayColor", data.rangeOverlayColor, true)
@@ -4142,6 +4241,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 
 	panel.layout = panel.layout or Helper.CopyTableShallow(Helper.PANEL_LAYOUT_DEFAULTS)
 	local layout = panel.layout
+	local baseIconSize = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 	local anchor = ensurePanelAnchor(panel)
 	local panelKey = normalizeId(panelId)
 	local countFontPath, countFontSize, countFontStyle = getCountFontDefaults(frame)
@@ -4207,6 +4307,16 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			a.x = 0
 			a.y = 0
 		end
+	end
+	local function getRowSizeValue(index)
+		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local rowSizes = layout.rowSizes
+		local value = rowSizes and tonumber(rowSizes[index]) or nil
+		return clampInt(value, 12, 128, base)
+	end
+	local function shouldShowRowSize(index)
+		local rows, primaryHorizontal = getPanelRowCount(panel, layout)
+		return primaryHorizontal and rows >= index
 	end
 	local settings
 	if SettingType then
@@ -4488,6 +4598,102 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 						)
 					end
 				end,
+			},
+			{
+				name = L["CooldownPanelRowSizesHeader"] or "Row sizes",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelRowSizes",
+				defaultCollapsed = true,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(1),
+				kind = SettingType.Slider,
+				field = "rowSize1",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(1),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(1) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize1", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(1) end,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(2),
+				kind = SettingType.Slider,
+				field = "rowSize2",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(2),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(2) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize2", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(2) end,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(3),
+				kind = SettingType.Slider,
+				field = "rowSize3",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(3),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(3) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize3", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(3) end,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(4),
+				kind = SettingType.Slider,
+				field = "rowSize4",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(4),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(4) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize4", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(4) end,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(5),
+				kind = SettingType.Slider,
+				field = "rowSize5",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(5),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(5) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize5", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(5) end,
+			},
+			{
+				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(6),
+				kind = SettingType.Slider,
+				field = "rowSize6",
+				parentId = "cooldownPanelRowSizes",
+				default = getRowSizeValue(6),
+				minValue = 12,
+				maxValue = 128,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return getRowSizeValue(6) end,
+				set = function(_, value) applyEditLayout(panelId, "rowSize6", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+				isShown = function() return shouldShowRowSize(6) end,
 			},
 			{
 				name = L["CooldownPanelGrowthPoint"] or "Growth point",
@@ -4979,6 +5185,12 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
 			wrapCount = layout.wrapCount or 0,
 			wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
+			rowSize1 = (layout.rowSizes and layout.rowSizes[1]) or baseIconSize,
+			rowSize2 = (layout.rowSizes and layout.rowSizes[2]) or baseIconSize,
+			rowSize3 = (layout.rowSizes and layout.rowSizes[3]) or baseIconSize,
+			rowSize4 = (layout.rowSizes and layout.rowSizes[4]) or baseIconSize,
+			rowSize5 = (layout.rowSizes and layout.rowSizes[5]) or baseIconSize,
+			rowSize6 = (layout.rowSizes and layout.rowSizes[6]) or baseIconSize,
 			growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
 			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
 			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
