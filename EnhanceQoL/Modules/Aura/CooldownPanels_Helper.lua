@@ -23,6 +23,8 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	strata = "MEDIUM",
 	rangeOverlayEnabled = false,
 	rangeOverlayColor = { 1, 0.1, 0.1, 0.35 },
+	checkPower = false,
+	powerTintColor = { 0.5, 0.5, 1, 1 },
 	opacityOutOfCombat = 1,
 	opacityInCombat = 1,
 	stackAnchor = "BOTTOMRIGHT",
@@ -69,10 +71,16 @@ local function spellHasCharges(spellId)
 	if not spellId then return false end
 	if not (C_Spell and C_Spell.GetSpellCharges) then return false end
 	local info = C_Spell.GetSpellCharges(spellId)
-	if info == nil then return false end
+	if type(info) ~= "table" then return false end
 	local issecretvalue = _G.issecretvalue
-	if issecretvalue and issecretvalue(info) then return false end
-	return true
+	if issecretvalue then
+		if issecretvalue(info) then return false end
+		if info.currentCharges ~= nil and issecretvalue(info.currentCharges) then return false end
+		if info.maxCharges ~= nil and issecretvalue(info.maxCharges) then return false end
+	end
+	local maxCharges = info.maxCharges
+	if type(maxCharges) ~= "number" then return false end
+	return maxCharges > 1
 end
 
 function Helper.CopyTableShallow(source)

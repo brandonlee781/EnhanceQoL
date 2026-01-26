@@ -11,6 +11,9 @@
 - Cooldown Panels: Growth point option to center icon rows/columns.
 - Cooldown Panels: Spell activation overlay glows now shown on matching entries.
 - Cooldown Panels: Optional range overlay with customizable color (spell range checks).
+- Cooldown Panels: Optional power check tint when a spell is unusable due to insufficient resources.
+- Cooldown Panels: Panel spec filter (show only for specific specs).
+- Cooldown Panels: Power tint color can be customized.
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - UF Plus: Highlight dispellable debuffs option for aura icons.
@@ -42,6 +45,8 @@
 ### 🐛 Fixed
 
 - Cooldown Panel glow wasn't working correctly in restricted environment
+- Cooldown Panels: Growth point alignment now uses left/center/right start points to keep the edit mode overlay aligned
+- Cooldown Panels: Track override spell IDs so talent-based replacements update correctly
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
 - Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank

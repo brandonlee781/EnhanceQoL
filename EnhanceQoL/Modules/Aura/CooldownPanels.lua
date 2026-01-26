@@ -143,6 +143,10 @@ local ClearCursor = ClearCursor
 local GetSpellCooldownInfo = C_Spell and C_Spell.GetSpellCooldown or GetSpellCooldown
 local GetSpellCooldownDuration = C_Spell and C_Spell.GetSpellCooldownDuration
 local GetSpellChargesInfo = C_Spell and C_Spell.GetSpellCharges
+local GetBaseSpell = C_Spell and C_Spell.GetBaseSpell
+local GetOverrideSpell = C_Spell and C_Spell.GetOverrideSpell
+local GetSpellPowerCost = C_Spell and C_Spell.GetSpellPowerCost
+local IsSpellUsableFn = C_Spell and C_Spell.IsSpellUsable or IsUsableSpell
 local GetPlayerAuraBySpellID = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
 local IsSpellKnown = C_SpellBook.IsSpellInSpellBook
 local IsEquippedItem = C_Item.IsEquippedItem
@@ -186,6 +190,90 @@ local function normalizeId(value)
 	return value
 end
 
+local function getClassInfoById(classId)
+	if GetClassInfo then
+		return GetClassInfo(classId)
+	end
+	if C_CreatureInfo and C_CreatureInfo.GetClassInfo then
+		local info = C_CreatureInfo.GetClassInfo(classId)
+		if info then return info.className, info.classFile, info.classID end
+	end
+	return nil
+end
+
+local function getClassSpecMenuData()
+	local classes = {}
+	local getSpecCount = (C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID) or GetNumSpecializationsForClassID
+	if not getSpecCount or not GetSpecializationInfoForClassID or not GetNumClasses then return classes end
+	local sex = UnitSex and UnitSex("player") or nil
+	local numClasses = GetNumClasses() or 0
+	for classIndex = 1, numClasses do
+		local className, classTag, classID = getClassInfoById(classIndex)
+		if classID then
+			local specCount = getSpecCount(classID) or 0
+			if specCount > 0 then
+				local specs = {}
+				for specIndex = 1, specCount do
+					local specID, specName = GetSpecializationInfoForClassID(classID, specIndex, sex)
+					if specID then specs[#specs + 1] = { id = specID, name = specName or ("Spec " .. tostring(specID)) } end
+				end
+				if #specs > 0 then
+					classes[#classes + 1] = {
+						id = classID,
+						name = className or classTag or tostring(classID),
+						specs = specs,
+					}
+				end
+			end
+		end
+	end
+	return classes
+end
+
+local function getSpecNameById(specId)
+	if GetSpecializationInfoForSpecID then
+		local _, specName = GetSpecializationInfoForSpecID(specId)
+		if specName and specName ~= "" then return specName end
+	end
+	return tostring(specId or "")
+end
+
+local function getEffectiveSpellId(spellId)
+	local id = tonumber(spellId)
+	if not id then return nil end
+	if GetOverrideSpell then
+		local overrideId = GetOverrideSpell(id)
+		if type(overrideId) == "number" and overrideId > 0 then return overrideId end
+	end
+	return id
+end
+
+local function getBaseSpellId(spellId)
+	local id = tonumber(spellId)
+	if not id then return nil end
+	if GetBaseSpell then
+		local baseId = GetBaseSpell(id)
+		if type(baseId) == "number" and baseId > 0 then return baseId end
+	end
+	return id
+end
+
+local function getSpellPowerCostNames(spellId)
+	if not spellId or not GetSpellPowerCost then return nil end
+	local costs = GetSpellPowerCost(spellId)
+	if type(costs) ~= "table" then return nil end
+	local names, seen = {}, {}
+	for _, info in ipairs(costs) do
+		local name = info and info.name
+		if type(name) == "string" and name ~= "" and not seen[name] then
+			seen[name] = true
+			names[#names + 1] = name
+		end
+	end
+	if #names == 0 then return nil end
+	return names
+end
+
 local function getRuntime(panelId)
 	local runtime = CooldownPanels.runtime[panelId]
 	if not runtime then
@@ -194,6 +282,8 @@ local function getRuntime(panelId)
 	end
 	return runtime
 end
+
+local updatePowerEventRegistration
 
 local function refreshEditModeSettingValues()
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
@@ -542,7 +632,10 @@ end
 
 local function getEntryIcon(entry)
 	if not entry or type(entry) ~= "table" then return PREVIEW_ICON end
-	if entry.type == "SPELL" and entry.spellID then return (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.spellID)) or PREVIEW_ICON end
+	if entry.type == "SPELL" and entry.spellID then
+		local spellId = getEffectiveSpellId(entry.spellID) or entry.spellID
+		return (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)) or PREVIEW_ICON
+	end
 	if entry.type == "ITEM" and entry.itemID then
 		if GetItemIconByID then
 			local icon = GetItemIconByID(entry.itemID)
@@ -642,7 +735,8 @@ end
 local function getEntryName(entry)
 	if not entry then return "" end
 	if entry.type == "SPELL" then
-		local name = getSpellName(entry.spellID)
+		local spellId = getEffectiveSpellId(entry.spellID) or entry.spellID
+		local name = getSpellName(spellId)
 		return name or ("Spell " .. tostring(entry.spellID or ""))
 	end
 	if entry.type == "ITEM" then
@@ -661,11 +755,62 @@ local function getEntryTypeLabel(entryType)
 	return entryType or ""
 end
 
+local function getPlayerSpecId()
+	if not GetSpecialization then return nil end
+	local specIndex = GetSpecialization()
+	if not specIndex then return nil end
+	if GetSpecializationInfo then
+		local specId = GetSpecializationInfo(specIndex)
+		if specId then return specId end
+	end
+	if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
+		local info = C_SpecializationInfo.GetSpecializationInfo(specIndex)
+		if type(info) == "table" and info.specID then return info.specID end
+		if type(info) == "number" then return info end
+	end
+	return nil
+end
+
+local function panelHasSpecFilter(panel)
+	local filter = panel and panel.specFilter
+	if type(filter) ~= "table" then return false end
+	for _, enabled in pairs(filter) do
+		if enabled then return true end
+	end
+	return false
+end
+
+local function panelAllowsSpec(panel)
+	if not panelHasSpecFilter(panel) then return true end
+	local specId = getPlayerSpecId()
+	if not specId then return false end
+	local filter = panel and panel.specFilter
+	return filter and filter[specId] == true
+end
+
+local function getSpecFilterLabel(panel)
+	if not panelHasSpecFilter(panel) then return L["CooldownPanelSpecAny"] or "All specs" end
+	local labels = {}
+	if panel and panel.specFilter then
+		for specId, enabled in pairs(panel.specFilter) do
+			if enabled then labels[#labels + 1] = getSpecNameById(specId) end
+		end
+	end
+	table.sort(labels)
+	if #labels == 0 then return L["CooldownPanelSpecAny"] or "All specs" end
+	return table.concat(labels, ", ")
+end
+
 local function isSpellKnownSafe(spellId)
 	if not spellId then return false end
 	if C_SpellBook and C_SpellBook.IsSpellInSpellBook then
 		local known = C_SpellBook.IsSpellInSpellBook(spellId)
-		return known and true or false
+		if known then return true end
+		local overrideId = getEffectiveSpellId(spellId)
+		if overrideId and overrideId ~= spellId then
+			return C_SpellBook.IsSpellInSpellBook(overrideId) and true or false
+		end
+		return false
 	end
 	return true
 end
@@ -767,6 +912,9 @@ function CooldownPanels:AddEntry(panelId, entryType, idValue, overrides)
 	if typeKey ~= "SPELL" and typeKey ~= "ITEM" and typeKey ~= "SLOT" then return nil end
 	local numericValue = tonumber(idValue)
 	if not numericValue then return nil end
+	if typeKey == "SPELL" then
+		numericValue = getBaseSpellId(numericValue) or numericValue
+	end
 	local entryId = Helper.GetNextNumericId(panel.entries)
 	local entry = Helper.CreateEntry(typeKey, numericValue, root.defaults)
 	entry.id = entryId
@@ -815,12 +963,19 @@ function CooldownPanels:RebuildSpellIndex()
 	local index = {}
 	if root and root.panels then
 		for panelId, panel in pairs(root.panels) do
-			for _, entry in pairs(panel.entries or {}) do
-				if entry and entry.type == "SPELL" and entry.spellID then
-					local spellId = tonumber(entry.spellID)
-					if spellId then
-						index[spellId] = index[spellId] or {}
-						index[spellId][panelId] = true
+			if panel and panel.enabled ~= false and panelAllowsSpec(panel) then
+				for _, entry in pairs(panel.entries or {}) do
+					if entry and entry.type == "SPELL" and entry.spellID then
+						local spellId = tonumber(entry.spellID)
+						if spellId then
+							index[spellId] = index[spellId] or {}
+							index[spellId][panelId] = true
+							local overrideId = getEffectiveSpellId(spellId)
+							if overrideId and overrideId ~= spellId then
+								index[overrideId] = index[overrideId] or {}
+								index[overrideId][panelId] = true
+							end
+						end
 					end
 				end
 			end
@@ -828,7 +983,94 @@ function CooldownPanels:RebuildSpellIndex()
 	end
 	self.runtime = self.runtime or {}
 	self.runtime.spellIndex = index
+	self:RebuildPowerIndex()
+	self:RebuildChargesIndex()
 	return index
+end
+
+function CooldownPanels:RebuildPowerIndex()
+	local root = ensureRoot()
+	local powerIndex = {}
+	local powerCostNames = {}
+	local powerCheckActive = false
+	if root and root.panels then
+		for _, panel in pairs(root.panels) do
+			local layout = panel.layout or {}
+			if layout.checkPower == true and panel.enabled ~= false and panelAllowsSpec(panel) then
+				powerCheckActive = true
+				for _, entry in pairs(panel.entries or {}) do
+					if entry and entry.type == "SPELL" and entry.spellID then
+						local baseId = tonumber(entry.spellID)
+						if baseId then
+							local effectiveId = getEffectiveSpellId(baseId) or baseId
+							local names = getSpellPowerCostNames(effectiveId)
+							if names then
+								powerCostNames[baseId] = names
+								for _, name in ipairs(names) do
+									local key = string.upper(name)
+									if key ~= "" then
+										powerIndex[key] = powerIndex[key] or {}
+										powerIndex[key][effectiveId] = true
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	if powerCheckActive and not next(powerIndex) then powerCheckActive = false end
+	self.runtime = self.runtime or {}
+	local runtime = self.runtime
+	runtime.powerIndex = powerIndex
+	runtime.powerCostNames = powerCostNames
+	runtime.powerCheckActive = powerCheckActive == true
+	runtime.powerInsufficient = runtime.powerInsufficient or {}
+	wipe(runtime.powerInsufficient)
+	updatePowerEventRegistration()
+	if IsSpellUsableFn then
+		for _, spells in pairs(powerIndex) do
+			for spellId in pairs(spells) do
+				local _, insufficientPower = IsSpellUsableFn(spellId)
+				if insufficientPower then runtime.powerInsufficient[spellId] = true end
+			end
+		end
+	end
+end
+
+function CooldownPanels:RebuildChargesIndex()
+	local root = ensureRoot()
+	local chargesIndex = {}
+	local chargesPanels = {}
+	if root and root.panels and GetSpellChargesInfo then
+		for panelId, panel in pairs(root.panels) do
+			if panel and panel.enabled ~= false and panelAllowsSpec(panel) then
+				for _, entry in pairs(panel.entries or {}) do
+					if entry and entry.type == "SPELL" and entry.spellID and entry.showCharges == true then
+						local baseId = tonumber(entry.spellID)
+						if baseId then
+							local effectiveId = getEffectiveSpellId(baseId) or baseId
+							local info = GetSpellChargesInfo(effectiveId)
+							if type(info) == "table" then
+								chargesIndex[effectiveId] = chargesIndex[effectiveId] or {}
+								chargesIndex[effectiveId][panelId] = true
+								chargesPanels[panelId] = true
+								if effectiveId ~= baseId then
+									chargesIndex[baseId] = chargesIndex[baseId] or {}
+									chargesIndex[baseId][panelId] = true
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	self.runtime = self.runtime or {}
+	self.runtime.chargesIndex = chargesIndex
+	self.runtime.chargesPanels = chargesPanels
+	self.runtime.chargesActive = next(chargesIndex) and true or false
 end
 
 function CooldownPanels:NormalizeAll()
@@ -851,15 +1093,19 @@ end
 function CooldownPanels:AddEntrySafe(panelId, entryType, idValue, overrides)
 	local typeKey = entryType and tostring(entryType):upper() or nil
 	local numericValue = tonumber(idValue)
-	if typeKey == "SPELL" and numericValue and not isSpellKnownSafe(numericValue) then
-		showErrorMessage(SPELL_FAILED_NOT_KNOWN or "Spell not known.")
-		return nil
+	local baseValue = numericValue
+	if typeKey == "SPELL" and numericValue then
+		baseValue = getBaseSpellId(numericValue) or numericValue
+		if not isSpellKnownSafe(numericValue) and not isSpellKnownSafe(baseValue) then
+			showErrorMessage(SPELL_FAILED_NOT_KNOWN or "Spell not known.")
+			return nil
+		end
 	end
-	if self:FindEntryByValue(panelId, typeKey, numericValue) then
+	if self:FindEntryByValue(panelId, typeKey, baseValue) then
 		showErrorMessage(L["CooldownPanelEntry"] and (L["CooldownPanelEntry"] .. " already exists.") or "Entry already exists.")
 		return nil
 	end
-	return self:AddEntry(panelId, typeKey, numericValue, overrides)
+	return self:AddEntry(panelId, typeKey, baseValue, overrides)
 end
 
 function CooldownPanels:HandleCursorDrop(panelId)
@@ -916,7 +1162,7 @@ local function showIconTooltip(self)
 
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 	if entry.type == "SPELL" and entry.spellID and GameTooltip.SetSpellByID then
-		GameTooltip:SetSpellByID(entry.spellID)
+		GameTooltip:SetSpellByID(getEffectiveSpellId(entry.spellID) or entry.spellID)
 	elseif entry.type == "ITEM" and entry.itemID and GameTooltip.SetItemByID then
 		GameTooltip:SetItemByID(entry.itemID)
 	elseif entry.type == "SLOT" and entry.slotID then
@@ -1071,14 +1317,16 @@ local function getEntryKeybindText(entry, layout)
 	runtime._eqolKeybindCache = runtime._eqolKeybindCache or {}
 	local slotItemId
 	if entry.type == "SLOT" and entry.slotID then slotItemId = GetInventoryItemID and GetInventoryItemID("player", entry.slotID) end
-	local cacheKey = tostring(entry.type) .. ":" .. tostring(entry.spellID or entry.itemID or entry.slotID or "") .. ":" .. tostring(slotItemId or "")
+	local effectiveSpellId = entry.type == "SPELL" and getEffectiveSpellId(entry.spellID) or nil
+	local cacheKey = tostring(entry.type) .. ":" .. tostring(effectiveSpellId or entry.spellID or entry.itemID or entry.slotID or "") .. ":" .. tostring(slotItemId or "")
 	local cached = runtime._eqolKeybindCache[cacheKey]
 	if cached ~= nil then return cached or nil end
 
 	local text
 	if entry.type == "SPELL" and entry.spellID then
+		local spellId = effectiveSpellId or entry.spellID
 		if C_ActionBar and C_ActionBar.FindSpellActionButtons then
-			local slots = C_ActionBar.FindSpellActionButtons(entry.spellID)
+			local slots = C_ActionBar.FindSpellActionButtons(spellId)
 			if type(slots) == "table" then
 				for _, slot in ipairs(slots) do
 					text = getBindingTextForActionSlot(slot)
@@ -1086,7 +1334,19 @@ local function getEntryKeybindText(entry, layout)
 				end
 			end
 		end
-		if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false)) end
+		if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(spellId, false, false)) end
+		if not text and effectiveSpellId and effectiveSpellId ~= entry.spellID then
+			if C_ActionBar and C_ActionBar.FindSpellActionButtons then
+				local slots = C_ActionBar.FindSpellActionButtons(entry.spellID)
+				if type(slots) == "table" then
+					for _, slot in ipairs(slots) do
+						text = getBindingTextForActionSlot(slot)
+						if text then break end
+					end
+				end
+			end
+			if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false)) end
+		end
 	elseif entry.type == "ITEM" and entry.itemID then
 		local lookup = buildKeybindLookup()
 		text = lookup.item and lookup.item[entry.itemID]
@@ -1694,6 +1954,86 @@ local function createButton(parent, text, width, height)
 	return btn
 end
 
+local function utf8iter(str)
+	return (str or ""):gmatch("[%z\1-\127\194-\244][\128-\191]*")
+end
+
+local function utf8len(str)
+	local len = 0
+	for _ in utf8iter(str) do
+		len = len + 1
+	end
+	return len
+end
+
+local function utf8sub(str, i, j)
+	str = str or ""
+	if str == "" then return "" end
+	i = i or 1
+	j = j or -1
+	if i < 1 then i = 1 end
+	local len = utf8len(str)
+	if j < 0 then j = len + j + 1 end
+	if j > len then j = len end
+	if i > j then return "" end
+	local pos = 1
+	local startByte, endByte
+	local idx = 0
+	for char in utf8iter(str) do
+		idx = idx + 1
+		if idx == i then startByte = pos end
+		if idx == j then
+			endByte = pos + #char - 1
+			break
+		end
+		pos = pos + #char
+	end
+	return str:sub(startByte or 1, endByte or #str)
+end
+
+local function ellipsizeFontString(fontString, text, maxWidth)
+	if not fontString or maxWidth <= 0 then return text end
+	text = text or ""
+	fontString:SetText(text)
+	if fontString:GetStringWidth() <= maxWidth then return text end
+	local ellipsis = "..."
+	fontString:SetText(ellipsis)
+	if fontString:GetStringWidth() > maxWidth then return ellipsis end
+	local length = utf8len(text)
+	local low, high = 1, length
+	local best = ellipsis
+	while low <= high do
+		local mid = math.floor((low + high) / 2)
+		local candidate = utf8sub(text, 1, mid) .. ellipsis
+		fontString:SetText(candidate)
+		if fontString:GetStringWidth() <= maxWidth then
+			best = candidate
+			low = mid + 1
+		else
+			high = mid - 1
+		end
+	end
+	return best
+end
+
+local function setButtonTextEllipsized(button, text)
+	if not button then return end
+	local fontString = button.Text or button:GetFontString()
+	if not fontString then
+		button:SetText(text or "")
+		return
+	end
+	local maxWidth = (button:GetWidth() or 0) - 12
+	if maxWidth <= 0 then
+		button:SetText(text or "")
+		return
+	end
+	fontString:SetWidth(maxWidth)
+	if fontString.SetMaxLines then fontString:SetMaxLines(1) end
+	if fontString.SetWordWrap then fontString:SetWordWrap(false) end
+	button:SetText(ellipsizeFontString(fontString, text or "", maxWidth))
+end
+
 local function createEditBox(parent, width, height)
 	local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
 	box:SetSize(width or 120, height or 22)
@@ -1770,6 +2110,42 @@ local function showSlotMenu(owner, panelId)
 				CooldownPanels:AddEntrySafe(panelId, "SLOT", slot.id)
 				CooldownPanels:RefreshEditor()
 			end)
+		end
+	end)
+end
+
+local function showSpecMenu(owner, panelId)
+	if not panelId or not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	local panel = CooldownPanels:GetPanel(panelId)
+	if not panel then return end
+	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+		rootDescription:SetTag("MENU_EQOL_COOLDOWN_PANEL_SPECS")
+		rootDescription:CreateTitle(L["CooldownPanelSpecFilter"] or "Show only for spec")
+		rootDescription:CreateCheckbox(L["CooldownPanelSpecAny"] or "All specs", function()
+			return not panelHasSpecFilter(panel)
+		end, function()
+			panel.specFilter = {}
+			CooldownPanels:RebuildSpellIndex()
+			CooldownPanels:RefreshPanel(panelId)
+			CooldownPanels:RefreshEditor()
+		end)
+		for _, classData in ipairs(getClassSpecMenuData()) do
+			local classMenu = rootDescription:CreateButton(classData.name)
+			for _, specData in ipairs(classData.specs or {}) do
+				classMenu:CreateCheckbox(specData.name, function()
+					return panel.specFilter and panel.specFilter[specData.id] == true
+				end, function()
+					panel.specFilter = panel.specFilter or {}
+					if panel.specFilter[specData.id] then
+						panel.specFilter[specData.id] = nil
+					else
+						panel.specFilter[specData.id] = true
+					end
+					CooldownPanels:RebuildSpellIndex()
+					CooldownPanels:RefreshPanel(panelId)
+					CooldownPanels:RefreshEditor()
+				end)
+			end
 		end
 	end)
 end
@@ -1904,75 +2280,91 @@ local function ensureEditor()
 	applyInsetBorder(right, -4)
 	frame.right = right
 
-	local panelHeader = createLabel(right, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
-	panelHeader:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -12)
+	local rightScroll = CreateFrame("ScrollFrame", nil, right, "UIPanelScrollFrameTemplate")
+	rightScroll:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -10)
+	rightScroll:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", -28, 12)
+	local rightContent = CreateFrame("Frame", nil, rightScroll)
+	rightContent:SetSize(1, 1)
+	rightScroll:SetScrollChild(rightContent)
+	rightContent:SetWidth(rightScroll:GetWidth() or 1)
+	rightScroll:SetScript("OnSizeChanged", function(self) rightContent:SetWidth(self:GetWidth() or 1) end)
+
+	local panelHeader = createLabel(rightContent, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
+	panelHeader:SetPoint("TOPLEFT", rightContent, "TOPLEFT", 2, -2)
 	panelHeader:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local panelNameLabel = createLabel(right, L["CooldownPanelPanelName"] or "Panel name", 11, "OUTLINE")
+	local panelNameLabel = createLabel(rightContent, L["CooldownPanelPanelName"] or "Panel name", 11, "OUTLINE")
 	panelNameLabel:SetPoint("TOPLEFT", panelHeader, "BOTTOMLEFT", 0, -8)
 	panelNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local panelNameBox = createEditBox(right, 200, 20)
+	local panelNameBox = createEditBox(rightContent, 200, 20)
 	panelNameBox:SetPoint("TOPLEFT", panelNameLabel, "BOTTOMLEFT", 0, -4)
 
-	local panelEnabled = createCheck(right, L["CooldownPanelEnabled"] or "Enabled")
+	local panelEnabled = createCheck(rightContent, L["CooldownPanelEnabled"] or "Enabled")
 	panelEnabled:SetPoint("TOPLEFT", panelNameBox, "BOTTOMLEFT", -2, -6)
 
-	local entryHeader = createLabel(right, L["CooldownPanelEntry"] or "Entry", 12, "OUTLINE")
-	entryHeader:SetPoint("TOPLEFT", panelEnabled, "BOTTOMLEFT", 2, -16)
+	local panelSpecLabel = createLabel(rightContent, L["CooldownPanelSpecFilter"] or "Show only for spec", 11, "OUTLINE")
+	panelSpecLabel:SetPoint("TOPLEFT", panelEnabled, "BOTTOMLEFT", 2, -8)
+	panelSpecLabel:SetTextColor(0.9, 0.9, 0.9, 1)
+
+	local panelSpecButton = createButton(rightContent, L["CooldownPanelSpecAny"] or "All specs", 200, 20)
+	panelSpecButton:SetPoint("TOPLEFT", panelSpecLabel, "BOTTOMLEFT", 0, -4)
+
+	local entryHeader = createLabel(rightContent, L["CooldownPanelEntry"] or "Entry", 12, "OUTLINE")
+	entryHeader:SetPoint("TOPLEFT", panelSpecButton, "BOTTOMLEFT", 2, -16)
 	entryHeader:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local entryIcon = right:CreateTexture(nil, "ARTWORK")
+	local entryIcon = rightContent:CreateTexture(nil, "ARTWORK")
 	entryIcon:SetSize(36, 36)
 	entryIcon:SetPoint("TOPLEFT", entryHeader, "BOTTOMLEFT", 0, -6)
 	entryIcon:SetTexture(PREVIEW_ICON)
 
-	local entryName = right:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	local entryName = rightContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	entryName:SetPoint("LEFT", entryIcon, "RIGHT", 8, 8)
 	entryName:SetWidth(180)
 	entryName:SetJustifyH("LEFT")
 	entryName:SetTextColor(1, 1, 1, 1)
 
-	local entryType = right:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	local entryType = rightContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	entryType:SetPoint("TOPLEFT", entryName, "BOTTOMLEFT", 0, -2)
 	entryType:SetJustifyH("LEFT")
 
-	local entryIdBox = createEditBox(right, 120, 20)
+	local entryIdBox = createEditBox(rightContent, 120, 20)
 	entryIdBox:SetPoint("TOPLEFT", entryIcon, "BOTTOMLEFT", 0, -8)
 	entryIdBox:SetNumeric(true)
 
-	local cbCooldownText = createCheck(right, L["CooldownPanelShowCooldownText"] or "Show cooldown text")
+	local cbCooldownText = createCheck(rightContent, L["CooldownPanelShowCooldownText"] or "Show cooldown text")
 	cbCooldownText:SetPoint("TOPLEFT", entryIdBox, "BOTTOMLEFT", -2, -6)
 
-	local cbCharges = createCheck(right, L["CooldownPanelShowCharges"] or "Show charges")
+	local cbCharges = createCheck(rightContent, L["CooldownPanelShowCharges"] or "Show charges")
 	cbCharges:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
-	local cbStacks = createCheck(right, L["CooldownPanelShowStacks"] or "Show stack count")
+	local cbStacks = createCheck(rightContent, L["CooldownPanelShowStacks"] or "Show stack count")
 	cbStacks:SetPoint("TOPLEFT", cbCharges, "BOTTOMLEFT", 0, -4)
 
-	local cbItemCount = createCheck(right, L["CooldownPanelShowItemCount"] or "Show item count")
+	local cbItemCount = createCheck(rightContent, L["CooldownPanelShowItemCount"] or "Show item count")
 	cbItemCount:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
-	local cbShowWhenEmpty = createCheck(right, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
+	local cbShowWhenEmpty = createCheck(rightContent, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
 	cbShowWhenEmpty:SetPoint("TOPLEFT", cbItemCount, "BOTTOMLEFT", 0, -4)
 
-	local cbShowWhenNoCooldown = createCheck(right, L["CooldownPanelShowWhenNoCooldown"] or "Show even without cooldown")
+	local cbShowWhenNoCooldown = createCheck(rightContent, L["CooldownPanelShowWhenNoCooldown"] or "Show even without cooldown")
 	cbShowWhenNoCooldown:SetPoint("TOPLEFT", cbShowWhenEmpty, "BOTTOMLEFT", 0, -4)
 
-	local cbGlow = createCheck(right, L["CooldownPanelGlowReady"] or "Glow when ready")
+	local cbGlow = createCheck(rightContent, L["CooldownPanelGlowReady"] or "Glow when ready")
 	cbGlow:SetPoint("TOPLEFT", cbStacks, "BOTTOMLEFT", 0, -4)
 
-	local glowDuration = createSlider(right, 180, 0, 30, 1)
+	local glowDuration = createSlider(rightContent, 180, 0, 30, 1)
 	glowDuration:SetPoint("TOPLEFT", cbGlow, "BOTTOMLEFT", 18, -8)
 
-	local cbSound = createCheck(right, L["CooldownPanelSoundReady"] or "Sound when ready")
+	local cbSound = createCheck(rightContent, L["CooldownPanelSoundReady"] or "Sound when ready")
 	cbSound:SetPoint("TOPLEFT", glowDuration, "BOTTOMLEFT", -18, -6)
 
-	local soundButton = createButton(right, "", 180, 20)
+	local soundButton = createButton(rightContent, "", 180, 20)
 	soundButton:SetPoint("TOPLEFT", cbSound, "BOTTOMLEFT", 18, -6)
 
-	local removeEntry = createButton(right, L["CooldownPanelRemoveEntry"] or "Remove entry", 180, 22)
-	removeEntry:SetPoint("BOTTOM", right, "BOTTOM", 0, 14)
+	local removeEntry = createButton(rightContent, L["CooldownPanelRemoveEntry"] or "Remove entry", 180, 22)
+	removeEntry:SetPoint("TOP", cbSound, "BOTTOM", 0, -12)
 
 	local middle = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 	middle:SetPoint("TOPLEFT", left, "TOPRIGHT", 16, 0)
@@ -2118,8 +2510,13 @@ local function ensureEditor()
 		addItemBox = addItemBox,
 		slotButton = slotButton,
 		inspector = {
+			scroll = rightScroll,
+			content = rightContent,
+			panelHeader = panelHeader,
 			panelName = panelNameBox,
 			panelEnabled = panelEnabled,
+			panelSpecLabel = panelSpecLabel,
+			panelSpecButton = panelSpecButton,
 			entryIcon = entryIcon,
 			entryName = entryName,
 			entryType = entryType,
@@ -2197,10 +2594,15 @@ local function ensureEditor()
 		local panel = panelId and CooldownPanels:GetPanel(panelId)
 		if panel then
 			panel.enabled = self:GetChecked() and true or false
+			CooldownPanels:RebuildSpellIndex()
 			CooldownPanels:RefreshPanel(panelId)
 			CooldownPanels:RefreshEditor()
 		end
 	end)
+
+panelSpecButton:SetScript("OnClick", function(self)
+	showSpecMenu(self, editor.selectedPanelId)
+end)
 
 	entryIdBox:SetScript("OnEnterPressed", function(self)
 		local panelId = editor.selectedPanelId
@@ -2213,13 +2615,18 @@ local function ensureEditor()
 			CooldownPanels:RefreshEditor()
 			return
 		end
-		if entry.type == "SPELL" and not isSpellKnownSafe(value) then
-			showErrorMessage(SPELL_FAILED_NOT_KNOWN or "Spell not known.")
-			self:ClearFocus()
-			CooldownPanels:RefreshEditor()
-			return
+		local newValue = value
+		if entry.type == "SPELL" then
+			local baseValue = getBaseSpellId(value) or value
+			if not isSpellKnownSafe(value) and not isSpellKnownSafe(baseValue) then
+				showErrorMessage(SPELL_FAILED_NOT_KNOWN or "Spell not known.")
+				self:ClearFocus()
+				CooldownPanels:RefreshEditor()
+				return
+			end
+			newValue = baseValue
 		end
-		local existingId = CooldownPanels:FindEntryByValue(panelId, entry.type, value)
+		local existingId = CooldownPanels:FindEntryByValue(panelId, entry.type, newValue)
 		if existingId and existingId ~= entryId then
 			showErrorMessage("Entry already exists.")
 			self:ClearFocus()
@@ -2227,11 +2634,11 @@ local function ensureEditor()
 			return
 		end
 		if entry.type == "SPELL" then
-			entry.spellID = value
+			entry.spellID = newValue
 		elseif entry.type == "ITEM" then
-			entry.itemID = value
+			entry.itemID = newValue
 		elseif entry.type == "SLOT" then
-			entry.slotID = value
+			entry.slotID = newValue
 		end
 		self:ClearFocus()
 		CooldownPanels:RebuildSpellIndex()
@@ -2251,6 +2658,9 @@ local function ensureEditor()
 			local entry = panel and panel.entries and panel.entries[entryId]
 			if not entry then return end
 			entry[field] = self:GetChecked() and true or false
+			if field == "showCharges" then
+				CooldownPanels:RebuildChargesIndex()
+			end
 			CooldownPanels:RefreshPanel(panelId)
 			CooldownPanels:RefreshEditor()
 		end)
@@ -2327,6 +2737,21 @@ local function updateRowVisual(row, selected)
 	end
 end
 
+local function movePanelInOrder(root, panelId, targetPanelId)
+	if not root or not root.order then return false end
+	if not panelId or not targetPanelId or panelId == targetPanelId then return false end
+	local fromIndex, toIndex
+	for i, id in ipairs(root.order) do
+		if id == panelId then fromIndex = i end
+		if id == targetPanelId then toIndex = i end
+	end
+	if not fromIndex or not toIndex then return false end
+	table.remove(root.order, fromIndex)
+	if fromIndex < toIndex then toIndex = toIndex - 1 end
+	table.insert(root.order, toIndex, panelId)
+	return true
+end
+
 local function refreshPanelList(editor, root)
 	local list = editor.panelList
 	if not list then return end
@@ -2348,6 +2773,42 @@ local function refreshPanelList(editor, root)
 
 				row.count = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 				row.count:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+				row:RegisterForDrag("LeftButton")
+				row:SetScript("OnDragStart", function(self)
+					editor.dragPanelId = self.panelId
+					editor.dragTargetPanelId = nil
+					editor.draggingPanel = true
+					showEditorDragIcon(editor, PREVIEW_ICON)
+					self:SetAlpha(0.6)
+				end)
+				row:SetScript("OnDragStop", function(self)
+					self:SetAlpha(1)
+					if not editor.draggingPanel then return end
+					editor.draggingPanel = nil
+					hideEditorDragIcon(editor)
+					local fromId = editor.dragPanelId
+					local targetId = editor.dragTargetPanelId
+					editor.dragPanelId = nil
+					editor.dragTargetPanelId = nil
+					if not fromId or not targetId or fromId == targetId then
+						CooldownPanels:RefreshEditor()
+						return
+					end
+					if movePanelInOrder(root, fromId, targetId) then
+						CooldownPanels:RefreshEditor()
+					else
+						CooldownPanels:RefreshEditor()
+					end
+				end)
+				row:SetScript("OnEnter", function(self)
+					if editor.draggingPanel then
+						editor.dragTargetPanelId = self.panelId
+						if self.bg then self.bg:SetColorTexture(0.2, 0.7, 0.2, 0.35) end
+					end
+				end)
+				row:SetScript("OnLeave", function(self)
+					if editor.draggingPanel then updateRowVisual(self, self.panelId == editor.selectedPanelId) end
+				end)
 				editor.panelRows[index] = row
 			end
 			row:ClearAllPoints()
@@ -2620,6 +3081,10 @@ local function layoutInspectorToggles(inspector, entry)
 		hideToggle(inspector.cbSound)
 		hideControl(inspector.glowDuration)
 		hideControl(inspector.soundButton)
+		if inspector.content and inspector.scroll then
+			local height = inspector.scroll:GetHeight() or 1
+			inspector.content:SetHeight(height)
+		end
 		return
 	end
 
@@ -2627,7 +3092,7 @@ local function layoutInspectorToggles(inspector, entry)
 	local function place(control, show, offsetX, offsetY)
 		if not control then return end
 		control:ClearAllPoints()
-		control:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", offsetX or -2, offsetY or -6)
+		control:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", offsetX or 0, offsetY or -6)
 		if show then
 			control:Show()
 			if control.Enable then control:Enable() end
@@ -2638,7 +3103,7 @@ local function layoutInspectorToggles(inspector, entry)
 		end
 	end
 
-	place(inspector.cbCooldownText, true)
+	place(inspector.cbCooldownText, true, -2)
 	if entry.type == "SPELL" then
 		place(inspector.cbCharges, true)
 		place(inspector.cbStacks, true)
@@ -2677,7 +3142,7 @@ local function layoutInspectorToggles(inspector, entry)
 			inspector.glowDuration:Disable()
 		end
 	end
-	local soundOffsetX = -2
+	local soundOffsetX = 0
 	if inspector.glowDuration and entry.glowReady then soundOffsetX = -20 end
 	place(inspector.cbSound, true, soundOffsetX, -6)
 	if inspector.soundButton then
@@ -2692,6 +3157,38 @@ local function layoutInspectorToggles(inspector, entry)
 			inspector.soundButton:Disable()
 		end
 	end
+
+	if inspector.soundButton and inspector.soundButton:IsShown() then
+		prev = inspector.soundButton
+	end
+	if inspector.removeEntry then
+		inspector.removeEntry:ClearAllPoints()
+		if inspector.content and inspector.content.GetTop and prev and prev.GetBottom then
+			local top = inspector.content:GetTop()
+			local bottom = prev:GetBottom()
+			if top and bottom then
+				inspector.removeEntry:SetPoint("TOP", inspector.content, "TOP", 0, (bottom - top) - 12)
+			else
+				inspector.removeEntry:SetPoint("TOP", prev, "BOTTOM", 0, -12)
+			end
+		else
+			inspector.removeEntry:SetPoint("TOP", prev, "BOTTOM", 0, -12)
+		end
+		inspector.removeEntry:Show()
+		if inspector.removeEntry.Enable then inspector.removeEntry:Enable() end
+	end
+
+	if inspector.content and inspector.panelHeader and inspector.removeEntry then
+		local top = inspector.panelHeader:GetTop()
+		local bottom = inspector.removeEntry:GetBottom()
+		if top and bottom then
+			local height = (top - bottom) + 20
+			local minHeight = inspector.scroll and inspector.scroll:GetHeight() or 1
+			if height < minHeight then height = minHeight end
+			if height < 1 then height = 1 end
+			inspector.content:SetHeight(height)
+		end
+	end
 end
 
 local function refreshInspector(editor, panel, entry)
@@ -2703,11 +3200,21 @@ local function refreshInspector(editor, panel, entry)
 		inspector.panelEnabled:SetChecked(panel.enabled ~= false)
 		inspector.panelName:Enable()
 		inspector.panelEnabled:Enable()
+		if inspector.panelSpecButton then
+			setButtonTextEllipsized(inspector.panelSpecButton, getSpecFilterLabel(panel))
+			inspector.panelSpecButton:Enable()
+		end
+		if inspector.panelSpecLabel then inspector.panelSpecLabel:Show() end
 	else
 		inspector.panelName:SetText("")
 		inspector.panelName:Disable()
 		inspector.panelEnabled:SetChecked(false)
 		inspector.panelEnabled:Disable()
+		if inspector.panelSpecButton then
+			setButtonTextEllipsized(inspector.panelSpecButton, L["CooldownPanelSpecAny"] or "All specs")
+			inspector.panelSpecButton:Disable()
+		end
+		if inspector.panelSpecLabel then inspector.panelSpecLabel:Hide() end
 	end
 
 	if entry then
@@ -2892,6 +3399,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		local showStacks = entry and entry.type == "SPELL" and entry.showStacks == true
 		local showItemCount = entry and entry.type == "ITEM" and entry.showItemCount ~= false
 		icon.texture:SetTexture(getEntryIcon(entry))
+		icon.texture:SetVertexColor(1, 1, 1)
 		icon.cooldown:SetHideCountdownNumbers(not showCooldownText)
 		icon.cooldown:Clear()
 		if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
@@ -2952,6 +3460,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
+	local checkPower = layout.checkPower == true
+	local powerTintColor = normalizeColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
 	local rangeOverlayEnabled = layout.rangeOverlayEnabled == true
 	local rangeOverlayColor = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	local drawEdge = layout.cooldownDrawEdge ~= false
@@ -2988,10 +3498,18 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local soundReady = entry.soundReady == true
 			local soundName = normalizeSoundName(entry.soundReadyFile)
 			local shared = CooldownPanels.runtime -- Root runtime (global state)
+			local baseSpellId = entry.type == "SPELL" and entry.spellID or nil
+			local effectiveSpellId = baseSpellId and getEffectiveSpellId(baseSpellId) or nil
+			local function isSpellFlagged(map)
+				if not map then return false end
+				if effectiveSpellId and map[effectiveSpellId] == true then return true end
+				if baseSpellId and map[baseSpellId] == true then return true end
+				return false
+			end
 
-			local overlayGlow = entry.type == "SPELL" and shared.overlayGlowSpells and shared.overlayGlowSpells[entry.spellID] == true
-
-			local rangeOverlay = rangeOverlayEnabled and entry.type == "SPELL" and shared.rangeOverlaySpells and shared.rangeOverlaySpells[entry.spellID] == true
+			local overlayGlow = entry.type == "SPELL" and isSpellFlagged(shared.overlayGlowSpells)
+			local powerInsufficient = checkPower and entry.type == "SPELL" and isSpellFlagged(shared.powerInsufficient)
+			local rangeOverlay = rangeOverlayEnabled and entry.type == "SPELL" and isSpellFlagged(shared.rangeOverlaySpells)
 
 			local iconTexture = getEntryIcon(entry)
 			local stackCount
@@ -3004,13 +3522,14 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local cooldownEnabledOk = true
 			local emptyItem = false
 
-			if entry.type == "SPELL" and entry.spellID then
-				if IsSpellKnown and not IsSpellKnown(entry.spellID) then
+			if entry.type == "SPELL" and baseSpellId then
+				local spellId = effectiveSpellId or baseSpellId
+				if IsSpellKnown and not IsSpellKnown(spellId) then
 					show = false
 				else
-					if showCharges and GetSpellChargesInfo then chargesInfo = GetSpellChargesInfo(entry.spellID) end
+					if showCharges and GetSpellChargesInfo then chargesInfo = GetSpellChargesInfo(spellId) end
 					if showCooldown then
-						cooldownDurationObject = getSpellCooldownDurationObject(entry.spellID)
+						cooldownDurationObject = getSpellCooldownDurationObject(spellId)
 						cooldownRemaining = getDurationRemaining(cooldownDurationObject)
 						if cooldownRemaining ~= nil and cooldownRemaining <= 0 then
 							cooldownDurationObject = nil
@@ -3018,12 +3537,12 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 						end
 					end
 					if (showCooldown or (showCharges and chargesInfo)) and not cooldownDurationObject then
-						cooldownStart, cooldownDuration, cooldownEnabled, cooldownRate, cooldownGCD = getSpellCooldownInfo(entry.spellID)
+						cooldownStart, cooldownDuration, cooldownEnabled, cooldownRate, cooldownGCD = getSpellCooldownInfo(spellId)
 					elseif cooldownDurationObject then
-						_, _, _, _, cooldownGCD = getSpellCooldownInfo(entry.spellID)
+						_, _, _, _, cooldownGCD = getSpellCooldownInfo(spellId)
 					end
 					if showStacks and GetPlayerAuraBySpellID then
-						local aura = GetPlayerAuraBySpellID(entry.spellID)
+						local aura = GetPlayerAuraBySpellID(spellId)
 						if aura and isSafeGreaterThan(aura.applications, 1) then stackCount = aura.applications end
 					end
 					cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
@@ -3087,6 +3606,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.entry = entry
 				data.entryId = entryId
 				data.overlayGlow = overlayGlow
+				data.powerInsufficient = powerInsufficient
+				data.powerTintColor = powerTintColor
 				data.rangeOverlay = rangeOverlay
 				data.rangeOverlayColor = rangeOverlayColor
 				data.glowReady = glowReady
@@ -3196,8 +3717,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 				setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 				if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", onCooldownDone) end
-				local CCD = C_Spell.GetSpellChargeDuration(data.entry.spellID)
-				local SCD = C_Spell.GetSpellCooldownDuration(data.entry.spellID)
+				local entrySpellId = data.entry and data.entry.spellID
+				local effectiveId = entrySpellId and getEffectiveSpellId(entrySpellId) or entrySpellId
+				local CCD = effectiveId and C_Spell.GetSpellChargeDuration(effectiveId)
+				local SCD = effectiveId and C_Spell.GetSpellCooldownDuration(effectiveId)
 				-- only when you have zero charges SCD will be true CCD is always true when one charge is missing
 				if CCD and SCD then
 					if data.cooldownGCD then
@@ -3239,6 +3762,12 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 		end
 		icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1)
+		if data.powerInsufficient then
+			local col = data.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor or { 0.5, 0.5, 1, 1 }
+			icon.texture:SetVertexColor(col[1] or 0.5, col[2] or 0.5, col[3] or 1)
+		else
+			icon.texture:SetVertexColor(1, 1, 1)
+		end
 
 		if data.showItemCount and data.itemCount ~= nil then
 			icon.count:SetText(data.itemCount)
@@ -3346,6 +3875,7 @@ function CooldownPanels:IsInEditMode() return EditMode and EditMode.IsInEditMode
 function CooldownPanels:ShouldShowPanel(panelId)
 	local panel = self:GetPanel(panelId)
 	if not panel or panel.enabled == false then return false end
+	if not panelAllowsSpec(panel) then return false end
 	if self:IsInEditMode() == true then return true end
 	local runtime = getRuntime(panelId)
 	return runtime.visibleCount and runtime.visibleCount > 0
@@ -3462,6 +3992,11 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.rangeOverlayEnabled = value == true
 	elseif field == "rangeOverlayColor" then
 		layout.rangeOverlayColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
+	elseif field == "checkPower" then
+		layout.checkPower = value == true
+		CooldownPanels:RebuildPowerIndex()
+	elseif field == "powerTintColor" then
+		layout.powerTintColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
 	elseif field == "strata" then
 		layout.strata = normalizeStrata(value, layout.strata)
 	elseif field == "stackAnchor" then
@@ -3549,6 +4084,8 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "growthPoint", data.growthPoint, true)
 	applyEditLayout(panelId, "rangeOverlayEnabled", data.rangeOverlayEnabled, true)
 	applyEditLayout(panelId, "rangeOverlayColor", data.rangeOverlayColor, true)
+	applyEditLayout(panelId, "checkPower", data.checkPower, true)
+	applyEditLayout(panelId, "powerTintColor", data.powerTintColor, true)
 	applyEditLayout(panelId, "strata", data.strata, true)
 	applyEditLayout(panelId, "stackAnchor", data.stackAnchor, true)
 	applyEditLayout(panelId, "stackX", data.stackX, true)
@@ -3987,24 +4524,6 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				end,
 			},
 			{
-				name = L["CooldownPanelRangeOverlayHeader"] or "Range overlay",
-				kind = SettingType.Collapsible,
-				id = "cooldownPanelRangeOverlay",
-				defaultCollapsed = true,
-			},
-			{
-				name = L["CooldownPanelRangeOverlay"] or "Range overlay",
-				kind = SettingType.CheckboxColor,
-				parentId = "cooldownPanelRangeOverlay",
-				default = layout.rangeOverlayEnabled == true,
-				get = function() return layout.rangeOverlayEnabled == true end,
-				set = function(_, value) applyEditLayout(panelId, "rangeOverlayEnabled", value) end,
-				colorDefault = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor),
-				colorGet = function() return layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor end,
-				colorSet = function(_, value) applyEditLayout(panelId, "rangeOverlayColor", value) end,
-				hasOpacity = true,
-			},
-			{
 				name = L["CooldownPanelShowTooltips"] or "Show tooltips",
 				kind = SettingType.Checkbox,
 				field = "showTooltips",
@@ -4043,6 +4562,35 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 					local num = tonumber(value) or 0
 					return tostring(math.floor((num * 100) + 0.5)) .. "%"
 				end,
+			},
+			{
+				name = L["CooldownPanelOverlaysHeader"] or "Overlays",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelOverlays",
+				defaultCollapsed = true,
+			},
+			{
+				name = L["CooldownPanelRangeOverlay"] or "Range overlay",
+				kind = SettingType.CheckboxColor,
+				parentId = "cooldownPanelOverlays",
+				default = layout.rangeOverlayEnabled == true,
+				get = function() return layout.rangeOverlayEnabled == true end,
+				set = function(_, value) applyEditLayout(panelId, "rangeOverlayEnabled", value) end,
+				colorDefault = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor),
+				colorGet = function() return layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor end,
+				colorSet = function(_, value) applyEditLayout(panelId, "rangeOverlayColor", value) end,
+				hasOpacity = true,
+			},
+			{
+				name = L["CooldownPanelPowerTint"] or "Check power",
+				kind = SettingType.CheckboxColor,
+				parentId = "cooldownPanelOverlays",
+				default = layout.checkPower == true,
+				get = function() return layout.checkPower == true end,
+				set = function(_, value) applyEditLayout(panelId, "checkPower", value) end,
+				colorDefault = normalizeColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor),
+				colorGet = function() return layout.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor end,
+				colorSet = function(_, value) applyEditLayout(panelId, "powerTintColor", value) end,
 			},
 			{
 				name = L["CooldownPanelStacksHeader"] or "Stacks / Item Count",
@@ -4434,6 +4982,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
 			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
 			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
+			checkPower = layout.checkPower == true,
+			powerTintColor = layout.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor,
 			strata = normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata),
 			stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor),
 			stackX = layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX,
@@ -4527,6 +5077,55 @@ refreshPanelsForSpell = function(spellId)
 	end
 	return true
 end
+
+local function refreshPanelsForCharges()
+	local runtime = CooldownPanels.runtime
+	local chargesPanels = runtime and runtime.chargesPanels
+	if not chargesPanels then return false end
+	local refreshed = false
+	for panelId in pairs(chargesPanels) do
+		if CooldownPanels:GetPanel(panelId) then
+			CooldownPanels:RefreshPanel(panelId)
+			refreshed = true
+		end
+	end
+	return refreshed
+end
+
+local function updatePowerStatesForType(powerType)
+	if not IsSpellUsableFn then return false end
+	local runtime = CooldownPanels.runtime
+	local powerIndex = runtime and runtime.powerIndex
+	if not powerIndex or not runtime.powerCheckActive or type(powerType) ~= "string" or powerType == "" then return false end
+	local key = string.upper(powerType)
+	local spells = powerIndex[key]
+	if not spells then return false end
+	runtime.powerInsufficient = runtime.powerInsufficient or {}
+	for spellId in pairs(spells) do
+		local _, insufficientPower = IsSpellUsableFn(spellId)
+		if insufficientPower then
+			runtime.powerInsufficient[spellId] = true
+		else
+			runtime.powerInsufficient[spellId] = nil
+		end
+		if refreshPanelsForSpell then refreshPanelsForSpell(spellId) end
+	end
+	return true
+end
+
+updatePowerEventRegistration = function()
+	local runtime = CooldownPanels.runtime
+	local frame = runtime and runtime.updateFrame
+	if not frame or not frame.RegisterUnitEvent then return end
+	local enable = runtime and runtime.powerCheckActive
+	if enable and not runtime.powerEventRegistered then
+		frame:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+		runtime.powerEventRegistered = true
+	elseif not enable and runtime.powerEventRegistered then
+		frame:UnregisterEvent("UNIT_POWER_UPDATE")
+		runtime.powerEventRegistered = nil
+	end
+end
 local function clearReadyGlowForSpell(spellId)
 	local id = tonumber(spellId)
 	if not id then return false end
@@ -4540,11 +5139,14 @@ local function clearReadyGlowForSpell(spellId)
 			runtime.readyAt = runtime.readyAt or {}
 			runtime.glowTimers = runtime.glowTimers or {}
 			for entryId, entry in pairs(panel.entries) do
-				if entry and entry.type == "SPELL" and entry.spellID == id then
-					runtime.readyAt[entryId] = nil
-					local t = runtime.glowTimers[entryId]
-					if t and t.Cancel then t:Cancel() end
-					runtime.glowTimers[entryId] = nil
+				if entry and entry.type == "SPELL" then
+					local effectiveId = entry.spellID and getEffectiveSpellId(entry.spellID) or nil
+					if entry.spellID == id or effectiveId == id then
+						runtime.readyAt[entryId] = nil
+						local t = runtime.glowTimers[entryId]
+						if t and t.Cancel then t:Cancel() end
+						runtime.glowTimers[entryId] = nil
+					end
 				end
 			end
 		end
@@ -4619,7 +5221,23 @@ local function ensureUpdateFrame()
 			setRangeOverlayForSpell(spellId, inRange, checksRange)
 			return
 		end
+		if event == "UNIT_POWER_UPDATE" then
+			local unit, powerType = ...
+			if unit ~= "player" then return end
+			updatePowerStatesForType(powerType)
+			return
+		end
 		if event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_MACROS" then invalidateKeybindCache() end
+		if event == "SPELLS_CHANGED" then
+			CooldownPanels:RebuildSpellIndex()
+			invalidateKeybindCache()
+			CooldownPanels:RequestUpdate()
+		end
+		if event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_TALENT_UPDATE" then
+			CooldownPanels:RebuildSpellIndex()
+			invalidateKeybindCache()
+			CooldownPanels:RequestUpdate()
+		end
 		if event == "UNIT_AURA" then
 			local unit = ...
 			if unit ~= "player" then return end
@@ -4632,8 +5250,11 @@ local function ensureUpdateFrame()
 				end
 			end
 		end
-		if event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES" then
+		if event == "SPELL_UPDATE_COOLDOWN" then
 			if refreshPanelsForSpell(...) then return end
+		end
+		if event == "SPELL_UPDATE_CHARGES" then
+			if refreshPanelsForCharges() then return end
 		end
 		CooldownPanels:RequestUpdate()
 	end)
@@ -4643,6 +5264,8 @@ local function ensureUpdateFrame()
 	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:RegisterEvent("SPELL_UPDATE_CHARGES")
 	frame:RegisterEvent("SPELLS_CHANGED")
+	frame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+	frame:RegisterEvent("PLAYER_TALENT_UPDATE")
 	frame:RegisterEvent("UNIT_AURA")
 	frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 	frame:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -4660,6 +5283,7 @@ local function ensureUpdateFrame()
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 	CooldownPanels.runtime = CooldownPanels.runtime or {}
 	CooldownPanels.runtime.updateFrame = frame
+	updatePowerEventRegistration()
 end
 
 function CooldownPanels:RequestUpdate()
