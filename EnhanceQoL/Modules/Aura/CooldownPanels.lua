@@ -229,6 +229,7 @@ function CooldownPanels:ReskinMasque()
 end
 
 local getEditor
+local refreshPanelsForSpell
 
 local function clampNumber(value, minValue, maxValue, fallback)
 	local num = tonumber(value)
@@ -260,6 +261,39 @@ local function normalizeStrata(strata, fallback)
 		if VALID_STRATA[upper] then return upper end
 	end
 	return "MEDIUM"
+end
+
+local function normalizeColor(value, fallback)
+	local ref = fallback or { 1, 1, 1, 1 }
+	if type(value) ~= "table" then return { ref[1], ref[2], ref[3], ref[4] } end
+	local r = value.r or value[1] or ref[1] or 1
+	local g = value.g or value[2] or ref[2] or 1
+	local b = value.b or value[3] or ref[3] or 1
+	local a = value.a
+	if a == nil then a = value[4] end
+	if a == nil then a = ref[4] end
+	if a == nil then a = 1 end
+	if r < 0 then
+		r = 0
+	elseif r > 1 then
+		r = 1
+	end
+	if g < 0 then
+		g = 0
+	elseif g > 1 then
+		g = 1
+	end
+	if b < 0 then
+		b = 0
+	elseif b > 1 then
+		b = 1
+	end
+	if a < 0 then
+		a = 0
+	elseif a > 1 then
+		a = 1
+	end
+	return { r, g, b, a }
 end
 
 local function normalizeAnchor(anchor, fallback)
@@ -929,6 +963,7 @@ end
 local function invalidateKeybindCache()
 	if not CooldownPanels.runtime then return end
 	CooldownPanels.runtime._eqolActionButtonSlotMap = nil
+	CooldownPanels.runtime._eqolKeybindLookup = nil
 	CooldownPanels.runtime._eqolKeybindCache = nil
 end
 
@@ -939,6 +974,13 @@ local function getBindingTextForButton(button)
 	if not key and button.GetName then key = GetBindingKey("CLICK " .. button:GetName() .. ":LeftButton") end
 	local text = key and GetBindingText and GetBindingText(key, 1)
 	if text == "" then text = nil end
+	return text
+end
+
+local function formatKeybindText(text)
+	if type(text) ~= "string" or text == "" then return text end
+	local labels = addon and addon.ActionBarLabels
+	if labels and labels.ShortenHotkeyText then return labels.ShortenHotkeyText(text) end
 	return text
 end
 
@@ -958,34 +1000,90 @@ local function getBindingTextForActionSlot(slot)
 	return nil
 end
 
-local function getEntryKeybindText(entry)
+local function buildKeybindLookup()
+	local runtime = CooldownPanels.runtime or {}
+	if runtime._eqolKeybindLookup then return runtime._eqolKeybindLookup end
+	local lookup = {
+		item = {},
+	}
+	local buttonNames = (ActionButtonUtil and ActionButtonUtil.ActionBarButtonNames) or DEFAULT_ACTION_BUTTON_NAMES
+	local buttonCount = NUM_ACTIONBAR_BUTTONS or 12
+	local getMacroSpell = GetMacroSpell
+	local getMacroItem = GetMacroItem
+
+	for _, prefix in ipairs(buttonNames) do
+		for i = 1, buttonCount do
+			local btn = _G[prefix .. i]
+			local slot = btn and btn.action
+			if slot then
+				local keyText = getBindingTextForButton(btn)
+				if not keyText and GetBindingKey then
+					local buttons = NUM_ACTIONBAR_BUTTONS or 12
+					local index = ((slot - 1) % buttons) + 1
+					local key = GetBindingKey("ACTIONBUTTON" .. index)
+					keyText = key and GetBindingText and GetBindingText(key, 1)
+					if keyText == "" then keyText = nil end
+				end
+				if keyText and GetActionInfo then
+					local actionType, actionId = GetActionInfo(slot)
+					if actionType == "item" and actionId then
+						if not lookup.item[actionId] then lookup.item[actionId] = keyText end
+					elseif actionType == "macro" and actionId then
+						if getMacroItem then
+							local macroItem = getMacroItem(actionId)
+							if macroItem then
+								local itemId
+								if type(macroItem) == "number" then
+									itemId = macroItem
+								elseif GetItemInfoInstantFn then
+									itemId = GetItemInfoInstantFn(macroItem)
+								end
+								if itemId and not lookup.item[itemId] then lookup.item[itemId] = keyText end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	runtime._eqolKeybindLookup = lookup
+	CooldownPanels.runtime = runtime
+	return lookup
+end
+
+local function getEntryKeybindText(entry, layout)
 	if not entry then return nil end
+	if layout and layout.keybindsIgnoreItems == true and (entry.type == "ITEM" or entry.type == "SLOT") then return nil end
 	local runtime = CooldownPanels.runtime or {}
 	runtime._eqolKeybindCache = runtime._eqolKeybindCache or {}
-	local cacheKey = tostring(entry.type) .. ":" .. tostring(entry.spellID or entry.itemID or entry.slotID or "")
+	local slotItemId
+	if entry.type == "SLOT" and entry.slotID then slotItemId = GetInventoryItemID and GetInventoryItemID("player", entry.slotID) end
+	local cacheKey = tostring(entry.type) .. ":" .. tostring(entry.spellID or entry.itemID or entry.slotID or "") .. ":" .. tostring(slotItemId or "")
 	local cached = runtime._eqolKeybindCache[cacheKey]
 	if cached ~= nil then return cached or nil end
 
-	local slots
-	if entry.type == "SPELL" and entry.spellID and C_ActionBar and C_ActionBar.FindSpellActionButtons then
-		slots = C_ActionBar.FindSpellActionButtons(entry.spellID)
-	elseif entry.type == "ITEM" and entry.itemID and C_ActionBar and C_ActionBar.FindItemActionButtons then
-		slots = C_ActionBar.FindItemActionButtons(entry.itemID)
-	elseif entry.type == "SLOT" and entry.slotID then
-		local itemId = GetInventoryItemID and GetInventoryItemID("player", entry.slotID)
-		if itemId and C_ActionBar and C_ActionBar.FindItemActionButtons then slots = C_ActionBar.FindItemActionButtons(itemId) end
+	local text
+	if entry.type == "SPELL" and entry.spellID then
+		if C_ActionBar and C_ActionBar.FindSpellActionButtons then
+			local slots = C_ActionBar.FindSpellActionButtons(entry.spellID)
+			if type(slots) == "table" then
+				for _, slot in ipairs(slots) do
+					text = getBindingTextForActionSlot(slot)
+					if text then break end
+				end
+			end
+		end
+		if not text and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false)) end
+	elseif entry.type == "ITEM" and entry.itemID then
+		local lookup = buildKeybindLookup()
+		text = lookup.item and lookup.item[entry.itemID]
+	elseif entry.type == "SLOT" and slotItemId then
+		local lookup = buildKeybindLookup()
+		text = lookup.item and lookup.item[slotItemId]
 	end
 
-	local text
-	if type(slots) == "table" then
-		for _, slot in ipairs(slots) do
-			text = getBindingTextForActionSlot(slot)
-			if text then break end
-		end
-	end
-	if not text and entry.type == "SPELL" and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then
-		text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false))
-	end
+	text = formatKeybindText(text)
 	runtime._eqolKeybindCache[cacheKey] = text or false
 	CooldownPanels.runtime = runtime
 	return text
@@ -1018,6 +1116,10 @@ local function createIconFrame(parent)
 	icon.charges = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
 	icon.charges:SetPoint("TOP", icon.overlay, "TOP", 0, -1)
 	icon.charges:Hide()
+
+	icon.rangeOverlay = icon.overlay:CreateTexture(nil, "BACKGROUND")
+	icon.rangeOverlay:SetAllPoints(icon.overlay)
+	icon.rangeOverlay:Hide()
 
 	icon.keybind = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
 	icon.keybind:SetPoint("TOPLEFT", icon.overlay, "TOPLEFT", 2, -2)
@@ -1302,6 +1404,7 @@ local function applyIconLayout(frame, count, layout)
 	local direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
 	local wrapCount = clampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 	local wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
+	local growthPoint = normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
 	local stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
 	local stackX = clampInt(layout.stackX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackX)
@@ -1335,6 +1438,21 @@ local function applyIconLayout(frame, count, layout)
 	local keybindFontSize = clampInt(layout.keybindFontSize, 6, 64, Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or math.min(countFontSize, 10))
 	local keybindFontStyle = normalizeFontStyle(layout.keybindFontStyle, countFontStyle)
 
+	local function getGrowthOffset(point, gridWidth, gridHeight)
+		if point == "TOP" then return -(gridWidth / 2), 0 end
+		if point == "TOPRIGHT" then return -gridWidth, 0 end
+		if point == "LEFT" then return 0, (gridHeight / 2) end
+		if point == "CENTER" then return -(gridWidth / 2), (gridHeight / 2) end
+		if point == "RIGHT" then return -gridWidth, (gridHeight / 2) end
+		if point == "BOTTOMLEFT" then return 0, gridHeight end
+		if point == "BOTTOM" then return -(gridWidth / 2), gridHeight end
+		if point == "BOTTOMRIGHT" then return -gridWidth, gridHeight end
+		return 0, 0
+	end
+	local function isHorizontalCenter(point) return point == "TOP" or point == "CENTER" or point == "BOTTOM" end
+	local function isVerticalCenter(point) return point == "LEFT" or point == "CENTER" or point == "RIGHT" end
+	local growthOffsetX, growthOffsetY = getGrowthOffset(growthPoint, width, height)
+
 	for i = 1, count do
 		local icon = frame.icons[i]
 		local primaryIndex = i - 1
@@ -1346,10 +1464,14 @@ local function applyIconLayout(frame, count, layout)
 
 		local col, row
 		if primaryHorizontal then
-			col = primaryIndex
+			local rowCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
+			local colOffset = isHorizontalCenter(growthPoint) and ((cols - rowCount) / 2) or 0
+			col = primaryIndex + colOffset
 			row = secondaryIndex
 		else
-			row = primaryIndex
+			local colCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
+			local rowOffset = isVerticalCenter(growthPoint) and ((rows - colCount) / 2) or 0
+			row = primaryIndex + rowOffset
 			col = secondaryIndex
 		end
 
@@ -1398,7 +1520,7 @@ local function applyIconLayout(frame, count, layout)
 			icon.previewBling:SetSize(iconSize * 1.5, iconSize * 1.5)
 		end
 		icon:ClearAllPoints()
-		icon:SetPoint("TOPLEFT", frame, "TOPLEFT", col * step, -row * step)
+		icon:SetPoint(growthPoint, frame, growthPoint, growthOffsetX + (col * step), growthOffsetY - (row * step))
 	end
 end
 
@@ -2401,6 +2523,7 @@ local function refreshPreview(editor, panel)
 		icon.entryId = entryId
 		icon.count:Hide()
 		icon.charges:Hide()
+		if icon.rangeOverlay then icon.rangeOverlay:Hide() end
 		if icon.keybind then icon.keybind:Hide() end
 		if icon.previewGlow then icon.previewGlow:Hide() end
 		if icon.previewSoundBorder then icon.previewSoundBorder:Hide() end
@@ -2421,9 +2544,14 @@ local function refreshPreview(editor, panel)
 				end
 			end
 			if showKeybinds and icon.keybind then
-				local keyText = getEntryKeybindText(entry) or "K"
-				icon.keybind:SetText(keyText)
-				icon.keybind:Show()
+				local keyText = getEntryKeybindText(entry, layout)
+				if not keyText and entry and entry.type == "SPELL" then keyText = "K" end
+				if keyText then
+					icon.keybind:SetText(keyText)
+					icon.keybind:Show()
+				else
+					icon.keybind:Hide()
+				end
 			elseif icon.keybind then
 				icon.keybind:Hide()
 			end
@@ -2739,6 +2867,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 		icon.count:Hide()
 		icon.charges:Hide()
+		if icon.rangeOverlay then icon.rangeOverlay:Hide() end
 		if icon.keybind then icon.keybind:Hide() end
 		if icon.previewGlow then icon.previewGlow:Hide() end
 		if icon.previewBling then icon.previewBling:Hide() end
@@ -2770,9 +2899,14 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 			icon.count:Show()
 		end
 		if showKeybinds and entry and icon.keybind then
-			local keyText = getEntryKeybindText(entry) or "K"
-			icon.keybind:SetText(keyText)
-			icon.keybind:Show()
+			local keyText = getEntryKeybindText(entry, layout)
+			if not keyText and entry and entry.type == "SPELL" then keyText = "K" end
+			if keyText then
+				icon.keybind:SetText(keyText)
+				icon.keybind:Show()
+			else
+				icon.keybind:Hide()
+			end
 		end
 		applyIconTooltip(icon, entry, showTooltips)
 	end
@@ -2788,6 +2922,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
+	local rangeOverlayEnabled = layout.rangeOverlayEnabled == true
+	local rangeOverlayColor = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -2821,6 +2957,11 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local glowDuration = clampInt(entry.glowDuration, 0, 30, 0)
 			local soundReady = entry.soundReady == true
 			local soundName = normalizeSoundName(entry.soundReadyFile)
+			local shared = CooldownPanels.runtime -- Root runtime (global state)
+
+			local overlayGlow = entry.type == "SPELL" and shared.overlayGlowSpells and shared.overlayGlowSpells[entry.spellID] == true
+
+			local rangeOverlay = rangeOverlayEnabled and entry.type == "SPELL" and shared.rangeOverlaySpells and shared.rangeOverlaySpells[entry.spellID] == true
 
 			local iconTexture = getEntryIcon(entry)
 			local stackCount
@@ -2912,9 +3053,12 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.showStacks = showStacks
 				data.showItemCount = showItemCount
 				data.showKeybinds = showKeybinds
-				data.keybindText = showKeybinds and getEntryKeybindText(entry) or nil
+				data.keybindText = showKeybinds and getEntryKeybindText(entry, layout) or nil
 				data.entry = entry
 				data.entryId = entryId
+				data.overlayGlow = overlayGlow
+				data.rangeOverlay = rangeOverlay
+				data.rangeOverlayColor = rangeOverlayColor
 				data.glowReady = glowReady
 				data.glowDuration = glowDuration
 				data.soundReady = soundReady
@@ -3064,7 +3208,17 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				icon.keybind:Hide()
 			end
 		end
+		if icon.rangeOverlay then
+			if data.rangeOverlay then
+				local col = data.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor or { 1, 0.1, 0.1, 0.35 }
+				icon.rangeOverlay:SetColorTexture(col[1] or 1, col[2] or 0.1, col[3] or 0.1, col[4] or 0.35)
+				icon.rangeOverlay:Show()
+			else
+				icon.rangeOverlay:Hide()
+			end
+		end
 
+		local overlayGlow = data.overlayGlow == true
 		if data.glowReady then
 			local ready = false
 			local duration = tonumber(data.glowDuration) or 0
@@ -3077,9 +3231,9 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				end
 			end
 
-			setGlow(icon, ready)
+			setGlow(icon, overlayGlow or ready)
 		else
-			setGlow(icon, false)
+			setGlow(icon, overlayGlow)
 		end
 	end
 
@@ -3093,6 +3247,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			if icon.cooldown.Resume then icon.cooldown:Resume() end
 			icon.count:Hide()
 			icon.charges:Hide()
+			if icon.rangeOverlay then icon.rangeOverlay:Hide() end
 			if icon.keybind then icon.keybind:Hide() end
 			if icon.previewBling then icon.previewBling:Hide() end
 			icon.texture:SetDesaturated(false)
@@ -3252,6 +3407,12 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.wrapCount = clampInt(value, 0, 40, layout.wrapCount)
 	elseif field == "wrapDirection" then
 		layout.wrapDirection = normalizeDirection(value, layout.wrapDirection)
+	elseif field == "growthPoint" then
+		layout.growthPoint = normalizeAnchor(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+	elseif field == "rangeOverlayEnabled" then
+		layout.rangeOverlayEnabled = value == true
+	elseif field == "rangeOverlayColor" then
+		layout.rangeOverlayColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	elseif field == "strata" then
 		layout.strata = normalizeStrata(value, layout.strata)
 	elseif field == "stackAnchor" then
@@ -3280,6 +3441,8 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.chargesFontStyle = normalizeFontStyleChoice(value, layout.chargesFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontStyle)
 	elseif field == "keybindsEnabled" then
 		layout.keybindsEnabled = value == true
+	elseif field == "keybindsIgnoreItems" then
+		layout.keybindsIgnoreItems = value == true
 	elseif field == "keybindAnchor" then
 		layout.keybindAnchor = normalizeAnchor(value, layout.keybindAnchor or Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
 	elseif field == "keybindX" then
@@ -3334,6 +3497,9 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "direction", data.direction, true)
 	applyEditLayout(panelId, "wrapCount", data.wrapCount, true)
 	applyEditLayout(panelId, "wrapDirection", data.wrapDirection, true)
+	applyEditLayout(panelId, "growthPoint", data.growthPoint, true)
+	applyEditLayout(panelId, "rangeOverlayEnabled", data.rangeOverlayEnabled, true)
+	applyEditLayout(panelId, "rangeOverlayColor", data.rangeOverlayColor, true)
 	applyEditLayout(panelId, "strata", data.strata, true)
 	applyEditLayout(panelId, "stackAnchor", data.stackAnchor, true)
 	applyEditLayout(panelId, "stackX", data.stackX, true)
@@ -3348,6 +3514,7 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "chargesFontSize", data.chargesFontSize, true)
 	applyEditLayout(panelId, "chargesFontStyle", data.chargesFontStyle, true)
 	applyEditLayout(panelId, "keybindsEnabled", data.keybindsEnabled, true)
+	applyEditLayout(panelId, "keybindsIgnoreItems", data.keybindsIgnoreItems, true)
 	applyEditLayout(panelId, "keybindAnchor", data.keybindAnchor, true)
 	applyEditLayout(panelId, "keybindX", data.keybindX, true)
 	applyEditLayout(panelId, "keybindY", data.keybindY, true)
@@ -3737,6 +3904,23 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				end,
 			},
 			{
+				name = L["CooldownPanelGrowthPoint"] or "Growth point",
+				kind = SettingType.Dropdown,
+				field = "growthPoint",
+				height = 160,
+				get = function() return normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
+				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(anchorOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
+							function() applyEditLayout(panelId, "growthPoint", option.value) end
+						)
+					end
+				end,
+			},
+			{
 				name = "Strata",
 				kind = SettingType.Dropdown,
 				field = "strata",
@@ -3752,6 +3936,24 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 						)
 					end
 				end,
+			},
+			{
+				name = L["CooldownPanelRangeOverlayHeader"] or "Range overlay",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelRangeOverlay",
+				defaultCollapsed = true,
+			},
+			{
+				name = L["CooldownPanelRangeOverlay"] or "Range overlay",
+				kind = SettingType.CheckboxColor,
+				parentId = "cooldownPanelRangeOverlay",
+				default = layout.rangeOverlayEnabled == true,
+				get = function() return layout.rangeOverlayEnabled == true end,
+				set = function(_, value) applyEditLayout(panelId, "rangeOverlayEnabled", value) end,
+				colorDefault = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor),
+				colorGet = function() return layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor end,
+				colorSet = function(_, value) applyEditLayout(panelId, "rangeOverlayColor", value) end,
+				hasOpacity = true,
 			},
 			{
 				name = L["CooldownPanelShowTooltips"] or "Show tooltips",
@@ -4003,6 +4205,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				set = function(_, value) applyEditLayout(panelId, "keybindsEnabled", value) end,
 			},
 			{
+				name = L["CooldownPanelKeybindsIgnoreItems"] or "Ignore items",
+				kind = SettingType.Checkbox,
+				field = "keybindsIgnoreItems",
+				parentId = "cooldownPanelKeybinds",
+				default = layout.keybindsIgnoreItems == true,
+				get = function() return layout.keybindsIgnoreItems == true end,
+				set = function(_, value) applyEditLayout(panelId, "keybindsIgnoreItems", value) end,
+			},
+			{
 				name = L["CooldownPanelKeybindsAnchor"] or "Keybind anchor",
 				kind = SettingType.Dropdown,
 				field = "keybindAnchor",
@@ -4056,7 +4267,11 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				set = function(_, value) applyEditLayout(panelId, "keybindFont", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(fontOptions) do
-						root:CreateRadio(option.label, function() return (layout.keybindFont or countFontPath) == option.value end, function() applyEditLayout(panelId, "keybindFont", option.value) end)
+						root:CreateRadio(
+							option.label,
+							function() return (layout.keybindFont or countFontPath) == option.value end,
+							function() applyEditLayout(panelId, "keybindFont", option.value) end
+						)
 					end
 				end,
 			},
@@ -4167,6 +4382,9 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
 			wrapCount = layout.wrapCount or 0,
 			wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
+			growthPoint = normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
+			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
+			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
 			strata = normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata),
 			stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor),
 			stackX = layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX,
@@ -4181,6 +4399,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			chargesFontSize = layout.chargesFontSize or chargesFontSize or 12,
 			chargesFontStyle = normalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle),
 			keybindsEnabled = layout.keybindsEnabled == true,
+			keybindsIgnoreItems = layout.keybindsIgnoreItems == true,
 			keybindAnchor = normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor),
 			keybindX = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX,
 			keybindY = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY,
@@ -4248,7 +4467,7 @@ local function registerEditModeCallbacks()
 	editModeCallbacksRegistered = true
 end
 
-local function refreshPanelsForSpell(spellId)
+refreshPanelsForSpell = function(spellId)
 	local id = tonumber(spellId)
 	if not id then return false end
 	local index = CooldownPanels.runtime and CooldownPanels.runtime.spellIndex
@@ -4284,6 +4503,39 @@ local function clearReadyGlowForSpell(spellId)
 	return true
 end
 
+local function setOverlayGlowForSpell(spellId, enabled)
+	local id = tonumber(spellId)
+	if not id then return false end
+	CooldownPanels.runtime = CooldownPanels.runtime or {}
+	local runtime = CooldownPanels.runtime
+	runtime.overlayGlowSpells = runtime.overlayGlowSpells or {}
+	if enabled then
+		runtime.overlayGlowSpells[id] = true
+	else
+		runtime.overlayGlowSpells[id] = nil
+	end
+	if refreshPanelsForSpell and refreshPanelsForSpell(id) then return true end
+	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate() end
+	return true
+end
+
+local function setRangeOverlayForSpell(spellIdentifier, isInRange, checksRange)
+	local id = tonumber(spellIdentifier)
+	if not id and type(spellIdentifier) == "string" then id = C_Spell.GetSpellIDForSpellIdentifier(spellIdentifier) end
+	if not id then return false end
+	CooldownPanels.runtime = CooldownPanels.runtime or {}
+	local runtime = CooldownPanels.runtime
+	runtime.rangeOverlaySpells = runtime.rangeOverlaySpells or {}
+	if checksRange and isInRange == false then
+		runtime.rangeOverlaySpells[id] = true
+	else
+		runtime.rangeOverlaySpells[id] = nil
+	end
+	if refreshPanelsForSpell and refreshPanelsForSpell(id) then return true end
+	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate() end
+	return true
+end
+
 local function ensureUpdateFrame()
 	if CooldownPanels.runtime and CooldownPanels.runtime.updateFrame then return end
 	local frame = CreateFrame("Frame")
@@ -4303,7 +4555,22 @@ local function ensureUpdateFrame()
 			if anchorHelper and anchorHelper.HandlePlayerLogin then anchorHelper:HandlePlayerLogin() end
 			return
 		end
-		if event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" then invalidateKeybindCache() end
+		if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
+			local spellId = ...
+			setOverlayGlowForSpell(spellId, true)
+			return
+		end
+		if event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+			local spellId = ...
+			setOverlayGlowForSpell(spellId, false)
+			return
+		end
+		if event == "SPELL_RANGE_CHECK_UPDATE" then
+			local spellId, inRange, checksRange = ...
+			setRangeOverlayForSpell(spellId, inRange, checksRange)
+			return
+		end
+		if event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_MACROS" then invalidateKeybindCache() end
 		if event == "UNIT_AURA" then
 			local unit = ...
 			if unit ~= "player" then return end
@@ -4333,8 +4600,12 @@ local function ensureUpdateFrame()
 	frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 	frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
 	frame:RegisterEvent("UPDATE_BINDINGS")
+	frame:RegisterEvent("UPDATE_MACROS")
 	frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 	frame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+	frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
+	frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+	frame:RegisterEvent("SPELL_RANGE_CHECK_UPDATE")
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")

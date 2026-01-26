@@ -8,6 +8,9 @@
 - Cooldown Viewer: Separate fade amount slider for “Show when” visibility rules.
 - Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
 - Cooldown Panels: Panel-level keybind display settings in Edit Mode (enable, anchor, offsets, font).
+- Cooldown Panels: Growth point option to center icon rows/columns.
+- Cooldown Panels: Spell activation overlay glows now shown on matching entries.
+- Cooldown Panels: Optional range overlay with customizable color (spell range checks).
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - UF Plus: Highlight dispellable debuffs option for aura icons.
