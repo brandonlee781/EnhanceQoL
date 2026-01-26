@@ -82,8 +82,6 @@ function LibEQOL_InputControlMixin:OnLoad()
 
 	self.ScrollFrame = CreateFrame("ScrollFrame", nil, self, "InputScrollFrameTemplate")
 	self.ScrollFrame.hideCharCount = true
-	self.ScrollFrame:SetPoint("TOPLEFT", self, "CENTER", -80, 6)
-	self.ScrollFrame:SetPoint("BOTTOMRIGHT", self, "RIGHT", -12, -6)
 	self.ScrollFrame:SetScript("OnSizeChanged", function()
 		self:UpdateScrollFrameWidth()
 	end)
@@ -147,6 +145,31 @@ function LibEQOL_InputControlMixin:ApplyLayout()
 		self.ScrollFrame:Show()
 		local height = tonumber(self.multilineHeight) or 80
 		self:SetHeight(height)
+		self.ScrollFrame:ClearAllPoints()
+		local inputWidth = self.inputWidth
+		local totalWidth = self:GetWidth() or 0
+		local leftOffset = -80
+		local rightPadding = 24
+		local leftX = totalWidth * 0.5 + leftOffset
+		local available = totalWidth - leftX - rightPadding
+		if available < 1 then
+			available = 1
+		end
+		if inputWidth and inputWidth > 0 then
+			local width = inputWidth
+			if width > available then
+				width = available
+			end
+			if width > DEFAULT_INPUT_MAX_WIDTH then
+				width = DEFAULT_INPUT_MAX_WIDTH
+			end
+			self.ScrollFrame:SetPoint("TOPLEFT", self, "TOP", leftOffset, -6)
+			self.ScrollFrame:SetPoint("BOTTOMLEFT", self, "BOTTOM", leftOffset, 6)
+			self.ScrollFrame:SetWidth(width)
+		else
+			self.ScrollFrame:SetPoint("TOPLEFT", self, "TOP", leftOffset, -6)
+			self.ScrollFrame:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -rightPadding, 6)
+		end
 		self:UpdateScrollFrameWidth()
 		if InputScrollFrame_SetInstructions then
 			InputScrollFrame_SetInstructions(self.ScrollFrame, self.placeholder or "")
@@ -161,7 +184,7 @@ function LibEQOL_InputControlMixin:ApplyLayout()
 		local totalWidth = self:GetWidth() or 0
 		if totalWidth > 0 then
 			local leftOffset = -80
-			local rightPadding = 12
+			local rightPadding = 24
 			local leftX = totalWidth * 0.5 + leftOffset
 			local available = totalWidth - leftX - rightPadding
 			if available < 1 then

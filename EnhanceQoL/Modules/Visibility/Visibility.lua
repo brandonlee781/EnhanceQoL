@@ -316,19 +316,31 @@ function Visibility:RequestUpdate()
 	end)
 end
 
-local function ensureMouseoverHook(state)
-	if not state or not state.frame or state.mouseHooked then return end
-	local frame = state.frame
-	if not frame.HookScript then return end
-	state.mouseHooked = true
-	frame:HookScript("OnEnter", function()
-		state.isMouseOver = true
-		Visibility:RequestUpdate()
+local function ensureMouseoverWatcher(runtime)
+	if runtime.mouseoverWatcher then return end
+	local watcher = CreateFrame("Frame")
+	watcher.elapsed = 0
+	watcher:SetScript("OnUpdate", function(self, elapsed)
+		local state = Visibility.runtime
+		if not state or not state.mouseoverActive then return end
+		self.elapsed = (self.elapsed or 0) + (elapsed or 0)
+		if self.elapsed < 0.05 then return end
+		self.elapsed = 0
+		local changed = false
+		for _, entry in ipairs(state.mouseoverStates or {}) do
+			local frame = entry and entry.frame
+			local over = false
+			if frame and frame.IsShown and frame:IsShown() then
+				over = MouseIsOver and MouseIsOver(frame) or false
+			end
+			if over ~= entry.isMouseOver then
+				entry.isMouseOver = over
+				changed = true
+			end
+		end
+		if changed then Visibility:RequestUpdate() end
 	end)
-	frame:HookScript("OnLeave", function()
-		state.isMouseOver = false
-		Visibility:RequestUpdate()
-	end)
+	runtime.mouseoverWatcher = watcher
 end
 
 local function applyFrameConfig(state, config, context)
@@ -339,6 +351,12 @@ local function applyFrameConfig(state, config, context)
 	if type(baseAlpha) ~= "number" then
 		baseAlpha = frame:GetAlpha() or 1
 		state.baseAlpha = baseAlpha
+	end
+	local issecretvalue = _G.issecretvalue
+	if issecretvalue and issecretvalue(baseAlpha) then
+		applyAlphaToRegion(frame, baseAlpha, false)
+		state.lastAlpha = baseAlpha
+		return
 	end
 
 	local fadeAlpha = Helper.ClampAlpha(config.fadeAlpha) or 0
@@ -370,6 +388,7 @@ function Visibility:ApplyAll()
 
 	local runtime = self.runtime
 	runtime.frameStates = runtime.frameStates or {}
+	local mouseoverStates = {}
 
 	local context = Helper.BuildContext(runtime)
 	local managed = {}
@@ -391,8 +410,8 @@ function Visibility:ApplyAll()
 					state.isMouseOver = state.isMouseOver or false
 					state.usesMouseover = Helper.RuleUsesMouseover(config.rules)
 					if state.usesMouseover then
-						ensureMouseoverHook(state)
 						state.isMouseOver = MouseIsOver and MouseIsOver(frame)
+						mouseoverStates[#mouseoverStates + 1] = state
 					else
 						state.isMouseOver = false
 					end
@@ -412,6 +431,10 @@ function Visibility:ApplyAll()
 			runtime.frameStates[name] = nil
 		end
 	end
+
+	runtime.mouseoverStates = mouseoverStates
+	runtime.mouseoverActive = #mouseoverStates > 0
+	if runtime.mouseoverActive then ensureMouseoverWatcher(runtime) end
 end
 
 local function ensureSkyridingDriver()
@@ -729,6 +752,22 @@ local function showJoinMenu(owner, current, onSelect)
 	end)
 end
 
+local function getSortedRuleDefinitions()
+	local defs = {}
+	for _, def in ipairs(Helper.RULE_DEFINITIONS) do
+		defs[#defs + 1] = def
+	end
+	table.sort(defs, function(a, b)
+		local la = (a.label or a.key or ""):lower()
+		local lb = (b.label or b.key or ""):lower()
+		if la == lb then
+			return (a.key or "") < (b.key or "")
+		end
+		return la < lb
+	end)
+	return defs
+end
+
 local function addFramesToConfig(frameEntries)
 	local editor = getEditor()
 	local configId = editor and editor.selectedConfigId
@@ -775,6 +814,14 @@ local function addFramesToConfig(frameEntries)
 	Visibility:RefreshEditor()
 end
 
+local function hasConditionInGroup(group, key, exclude)
+	if not group or type(group.children) ~= "table" then return false end
+	for _, child in ipairs(group.children) do
+		if child ~= exclude and child.key == key then return true end
+	end
+	return false
+end
+
 local function showKnownFramesMenu(owner)
 	if not MenuUtil or not MenuUtil.CreateContextMenu then return end
 	local rootData = ensureRoot()
@@ -815,7 +862,7 @@ local function showAddMenu(owner, canAddGroup, onAddGroup, onAddCondition)
 		end)
 		if not canAddGroup and groupButton.SetEnabled then groupButton:SetEnabled(false) end
 		local submenu = root:CreateButton(L["VisibilityConditions"] or "Conditions")
-		for _, def in ipairs(Helper.RULE_DEFINITIONS) do
+		for _, def in ipairs(getSortedRuleDefinitions()) do
 			submenu:CreateButton(def.label, function()
 				if onAddCondition then onAddCondition(def.key) end
 			end)
@@ -828,7 +875,7 @@ local function showConditionMenu(owner, onSelect)
 	MenuUtil.CreateContextMenu(owner, function(_, root)
 		root:SetTag("MENU_EQOL_VISIBILITY_COND")
 		root:CreateTitle(L["VisibilityAddCondition"] or "Add condition")
-		for _, def in ipairs(Helper.RULE_DEFINITIONS) do
+		for _, def in ipairs(getSortedRuleDefinitions()) do
 			root:CreateButton(def.label, function() onSelect(def.key) end)
 		end
 	end)
@@ -1427,7 +1474,7 @@ local function ensureEditor()
 		local pct = tonumber(value) or 0
 		if pct < 0 then pct = 0 end
 		if pct > 100 then pct = 100 end
-		cfg.fadeAlpha = pct / 100
+		cfg.fadeAlpha = 1 - (pct / 100)
 		if self.Text then self.Text:SetText(string.format("%d%%", pct)) end
 		Visibility:RequestUpdate()
 	end)
@@ -1504,8 +1551,11 @@ function Visibility:RefreshEditor()
 		local modeLabel = cfg.mode == Helper.MODES.HIDE and (L["VisibilityModeHide"] or "Hide when") or (L["VisibilityModeShow"] or "Show when")
 		editor.modeButton:SetText(modeLabel)
 		editor.modeButton:Enable()
-		editor.fadeSlider:SetValue((cfg.fadeAlpha or 0) * 100)
-		if editor.fadeSlider.Text then editor.fadeSlider.Text:SetText(string.format("%d%%", math.floor((cfg.fadeAlpha or 0) * 100 + 0.5))) end
+		local fadePct = 100 - math.floor((cfg.fadeAlpha or 0) * 100 + 0.5)
+		if fadePct < 0 then fadePct = 0 end
+		if fadePct > 100 then fadePct = 100 end
+		editor.fadeSlider:SetValue(fadePct)
+		if editor.fadeSlider.Text then editor.fadeSlider.Text:SetText(string.format("%d%%", fadePct)) end
 		editor.fadeSlider:Enable()
 	else
 		if editor.configNameBox then
@@ -1679,6 +1729,10 @@ function Visibility:RefreshEditor()
 					Visibility:RequestUpdate()
 					Visibility:RefreshEditor()
 				end, function(key)
+					if hasConditionInGroup(node, key) then
+						setStatus(editor, L["VisibilityDuplicateCondition"] or "Condition already exists in this group.", 1, 0.5, 0.3)
+						return
+					end
 					node.children = node.children or {}
 					node.children[#node.children + 1] = { key = key }
 					Visibility:RequestUpdate()
@@ -1711,6 +1765,11 @@ function Visibility:RefreshEditor()
 			row.labelButton:Show()
 			row.labelButton:SetScript("OnClick", function(self)
 				showConditionMenu(self, function(key)
+					if node.key == key then return end
+					if parent and hasConditionInGroup(parent, key, node) then
+						setStatus(editor, L["VisibilityDuplicateCondition"] or "Condition already exists in this group.", 1, 0.5, 0.3)
+						return
+					end
 					node.key = key
 					Visibility:RequestUpdate()
 					Visibility:RefreshEditor()

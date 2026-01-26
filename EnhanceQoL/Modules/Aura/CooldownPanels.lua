@@ -897,6 +897,100 @@ local function applyIconTooltip(icon, entry, enabled)
 	end
 end
 
+local DEFAULT_ACTION_BUTTON_NAMES = {
+	"ActionButton",
+	"MultiBarBottomLeftButton",
+	"MultiBarBottomRightButton",
+	"MultiBarLeftButton",
+	"MultiBarRightButton",
+	"MultiBar5Button",
+	"MultiBar6Button",
+	"MultiBar7Button",
+}
+
+local function getActionButtonSlotMap()
+	local runtime = CooldownPanels.runtime or {}
+	if runtime._eqolActionButtonSlotMap then return runtime._eqolActionButtonSlotMap end
+	local map = {}
+	local buttonNames = (ActionButtonUtil and ActionButtonUtil.ActionBarButtonNames) or DEFAULT_ACTION_BUTTON_NAMES
+	local buttonCount = NUM_ACTIONBAR_BUTTONS or 12
+	for _, prefix in ipairs(buttonNames) do
+		for i = 1, buttonCount do
+			local btn = _G[prefix .. i]
+			local action = btn and btn.action
+			if action and map[action] == nil then map[action] = btn end
+		end
+	end
+	runtime._eqolActionButtonSlotMap = map
+	CooldownPanels.runtime = runtime
+	return map
+end
+
+local function invalidateKeybindCache()
+	if not CooldownPanels.runtime then return end
+	CooldownPanels.runtime._eqolActionButtonSlotMap = nil
+	CooldownPanels.runtime._eqolKeybindCache = nil
+end
+
+local function getBindingTextForButton(button)
+	if not button or not GetBindingKey then return nil end
+	local key = nil
+	if button.bindingAction then key = GetBindingKey(button.bindingAction) end
+	if not key and button.GetName then key = GetBindingKey("CLICK " .. button:GetName() .. ":LeftButton") end
+	local text = key and GetBindingText and GetBindingText(key, 1)
+	if text == "" then text = nil end
+	return text
+end
+
+local function getBindingTextForActionSlot(slot)
+	if not slot then return nil end
+	local map = getActionButtonSlotMap()
+	local text = map and getBindingTextForButton(map[slot])
+	if text then return text end
+	if GetBindingKey then
+		local buttons = NUM_ACTIONBAR_BUTTONS or 12
+		local index = ((slot - 1) % buttons) + 1
+		local key = GetBindingKey("ACTIONBUTTON" .. index)
+		text = key and GetBindingText and GetBindingText(key, 1)
+		if text == "" then text = nil end
+		return text
+	end
+	return nil
+end
+
+local function getEntryKeybindText(entry)
+	if not entry then return nil end
+	local runtime = CooldownPanels.runtime or {}
+	runtime._eqolKeybindCache = runtime._eqolKeybindCache or {}
+	local cacheKey = tostring(entry.type) .. ":" .. tostring(entry.spellID or entry.itemID or entry.slotID or "")
+	local cached = runtime._eqolKeybindCache[cacheKey]
+	if cached ~= nil then return cached or nil end
+
+	local slots
+	if entry.type == "SPELL" and entry.spellID and C_ActionBar and C_ActionBar.FindSpellActionButtons then
+		slots = C_ActionBar.FindSpellActionButtons(entry.spellID)
+	elseif entry.type == "ITEM" and entry.itemID and C_ActionBar and C_ActionBar.FindItemActionButtons then
+		slots = C_ActionBar.FindItemActionButtons(entry.itemID)
+	elseif entry.type == "SLOT" and entry.slotID then
+		local itemId = GetInventoryItemID and GetInventoryItemID("player", entry.slotID)
+		if itemId and C_ActionBar and C_ActionBar.FindItemActionButtons then slots = C_ActionBar.FindItemActionButtons(itemId) end
+	end
+
+	local text
+	if type(slots) == "table" then
+		for _, slot in ipairs(slots) do
+			text = getBindingTextForActionSlot(slot)
+			if text then break end
+		end
+	end
+	if not text and entry.type == "SPELL" and ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then
+		text = getBindingTextForButton(ActionButtonUtil.GetActionButtonBySpellID(entry.spellID, false, false))
+	end
+	runtime._eqolKeybindCache[cacheKey] = text or false
+	CooldownPanels.runtime = runtime
+	return text
+end
+
 local function createIconFrame(parent)
 	local icon = CreateFrame("Frame", nil, parent)
 	icon:Hide()
@@ -924,6 +1018,10 @@ local function createIconFrame(parent)
 	icon.charges = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
 	icon.charges:SetPoint("TOP", icon.overlay, "TOP", 0, -1)
 	icon.charges:Hide()
+
+	icon.keybind = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+	icon.keybind:SetPoint("TOPLEFT", icon.overlay, "TOPLEFT", 2, -2)
+	icon.keybind:Hide()
 
 	icon.msqNormal = icon:CreateTexture(nil, "OVERLAY")
 	icon.msqNormal:SetAllPoints(icon)
@@ -1020,12 +1118,8 @@ local function triggerReadyGlow(panelId, entryId, glowDuration)
 	if duration > 0 and C_Timer and C_Timer.NewTimer then
 		glowTimers[entryId] = C_Timer.NewTimer(duration, function()
 			local rt = getRuntime(panelId)
-			if rt and rt.readyAt and rt.readyAt[entryId] == now then
-				rt.readyAt[entryId] = nil
-			end
-			if rt and rt.glowTimers then
-				rt.glowTimers[entryId] = nil
-			end
+			if rt and rt.readyAt and rt.readyAt[entryId] == now then rt.readyAt[entryId] = nil end
+			if rt and rt.glowTimers then rt.glowTimers[entryId] = nil end
 			if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate() end
 		end)
 	end
@@ -1045,9 +1139,7 @@ local function onCooldownDone(self)
 		end
 
 		-- Glow trigger is purely event-driven (robust in secret environments).
-		if self._eqolGlowReady then
-			triggerReadyGlow(self._eqolPanelId, self._eqolEntryId, self._eqolGlowDuration)
-		end
+		if self._eqolGlowReady then triggerReadyGlow(self._eqolPanelId, self._eqolEntryId, self._eqolGlowDuration) end
 	end
 
 	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate() end
@@ -1217,6 +1309,9 @@ local function applyIconLayout(frame, count, layout)
 	local chargesAnchor = normalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
 	local chargesX = clampInt(layout.chargesX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesX)
 	local chargesY = clampInt(layout.chargesY, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesY)
+	local keybindAnchor = normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
+	local keybindX = clampInt(layout.keybindX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
+	local keybindY = clampInt(layout.keybindY, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -1236,6 +1331,9 @@ local function applyIconLayout(frame, count, layout)
 	local chargesPath = resolveFontPath(layout.chargesFont, chargesFontPath)
 	local chargesSize = clampInt(layout.chargesFontSize, 6, 64, chargesFontSize or 12)
 	local chargesStyle = normalizeFontStyle(layout.chargesFontStyle, chargesFontStyle)
+	local keybindFontPath = resolveFontPath(layout.keybindFont, countFontPath)
+	local keybindFontSize = clampInt(layout.keybindFontSize, 6, 64, Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or math.min(countFontSize, 10))
+	local keybindFontStyle = normalizeFontStyle(layout.keybindFontStyle, countFontStyle)
 
 	for i = 1, count do
 		local icon = frame.icons[i]
@@ -1282,6 +1380,11 @@ local function applyIconLayout(frame, count, layout)
 			icon.charges:ClearAllPoints()
 			icon.charges:SetPoint(chargesAnchor, icon, chargesAnchor, chargesX, chargesY)
 			icon.charges:SetFont(chargesPath, chargesSize, chargesStyle)
+		end
+		if icon.keybind then
+			icon.keybind:ClearAllPoints()
+			icon.keybind:SetPoint(keybindAnchor, icon, keybindAnchor, keybindX, keybindY)
+			icon.keybind:SetFont(keybindFontPath, keybindFontSize, keybindFontStyle)
 		end
 		setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 		if icon.previewGlow then
@@ -2229,6 +2332,8 @@ local function getPreviewLayout(panel, previewFrame, count)
 	previewLayout.stackFontSize = math.max(stackSize, PREVIEW_COUNT_FONT_MIN)
 	local chargesSize = tonumber(previewLayout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize
 	previewLayout.chargesFontSize = math.max(chargesSize, PREVIEW_COUNT_FONT_MIN)
+	local keybindSize = tonumber(previewLayout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize
+	previewLayout.keybindFontSize = math.max(keybindSize, PREVIEW_COUNT_FONT_MIN)
 
 	if not previewFrame or not count or count < 1 then return previewLayout end
 
@@ -2285,6 +2390,7 @@ local function refreshPreview(editor, panel)
 	applyIconLayout(canvas, count, layout)
 	canvas:ClearAllPoints()
 	canvas:SetPoint("CENTER", preview, "CENTER")
+	local showKeybinds = layout.keybindsEnabled == true
 
 	preview.entryByIndex = preview.entryByIndex or {}
 	for i = 1, count do
@@ -2295,6 +2401,7 @@ local function refreshPreview(editor, panel)
 		icon.entryId = entryId
 		icon.count:Hide()
 		icon.charges:Hide()
+		if icon.keybind then icon.keybind:Hide() end
 		if icon.previewGlow then icon.previewGlow:Hide() end
 		if icon.previewSoundBorder then icon.previewSoundBorder:Hide() end
 		if entry then
@@ -2312,6 +2419,13 @@ local function refreshPreview(editor, panel)
 					icon.count:SetText("20")
 					icon.count:Show()
 				end
+			end
+			if showKeybinds and icon.keybind then
+				local keyText = getEntryKeybindText(entry) or "K"
+				icon.keybind:SetText(keyText)
+				icon.keybind:Show()
+			elseif icon.keybind then
+				icon.keybind:Hide()
 			end
 			if entry.glowReady and icon.previewGlow then icon.previewGlow:Show() end
 			if entry.soundReady and icon.previewSoundBorder then icon.previewSoundBorder:Show() end
@@ -2606,6 +2720,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 	panel.layout = panel.layout or Helper.CopyTableShallow(Helper.PANEL_LAYOUT_DEFAULTS)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
+	local showKeybinds = layout.keybindsEnabled == true
 	local count = countOverride or getPreviewCount(panel)
 	ensureIconCount(frame, count)
 
@@ -2624,6 +2739,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 		icon.count:Hide()
 		icon.charges:Hide()
+		if icon.keybind then icon.keybind:Hide() end
 		if icon.previewGlow then icon.previewGlow:Hide() end
 		if icon.previewBling then icon.previewBling:Hide() end
 		setGlow(icon, false)
@@ -2653,6 +2769,11 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 			end
 			icon.count:Show()
 		end
+		if showKeybinds and entry and icon.keybind then
+			local keyText = getEntryKeybindText(entry) or "K"
+			icon.keybind:SetText(keyText)
+			icon.keybind:Show()
+		end
 		applyIconTooltip(icon, entry, showTooltips)
 	end
 end
@@ -2666,6 +2787,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	panel.layout = panel.layout or Helper.CopyTableShallow(Helper.PANEL_LAYOUT_DEFAULTS)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
+	local showKeybinds = layout.keybindsEnabled == true
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -2789,6 +2911,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.showCharges = showCharges
 				data.showStacks = showStacks
 				data.showItemCount = showItemCount
+				data.showKeybinds = showKeybinds
+				data.keybindText = showKeybinds and getEntryKeybindText(entry) or nil
 				data.entry = entry
 				data.entryId = entryId
 				data.glowReady = glowReady
@@ -2932,6 +3056,14 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		else
 			icon.count:Hide()
 		end
+		if icon.keybind then
+			if data.showKeybinds and data.keybindText then
+				icon.keybind:SetText(data.keybindText)
+				icon.keybind:Show()
+			else
+				icon.keybind:Hide()
+			end
+		end
 
 		if data.glowReady then
 			local ready = false
@@ -2961,6 +3093,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			if icon.cooldown.Resume then icon.cooldown:Resume() end
 			icon.count:Hide()
 			icon.charges:Hide()
+			if icon.keybind then icon.keybind:Hide() end
 			if icon.previewBling then icon.previewBling:Hide() end
 			icon.texture:SetDesaturated(false)
 			icon.texture:SetAlpha(1)
@@ -3145,6 +3278,20 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.chargesFontSize = clampInt(value, 6, 64, layout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize)
 	elseif field == "chargesFontStyle" then
 		layout.chargesFontStyle = normalizeFontStyleChoice(value, layout.chargesFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontStyle)
+	elseif field == "keybindsEnabled" then
+		layout.keybindsEnabled = value == true
+	elseif field == "keybindAnchor" then
+		layout.keybindAnchor = normalizeAnchor(value, layout.keybindAnchor or Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
+	elseif field == "keybindX" then
+		layout.keybindX = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
+	elseif field == "keybindY" then
+		layout.keybindY = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
+	elseif field == "keybindFont" then
+		if type(value) == "string" and value ~= "" then layout.keybindFont = value end
+	elseif field == "keybindFontSize" then
+		layout.keybindFontSize = clampInt(value, 6, 64, layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize)
+	elseif field == "keybindFontStyle" then
+		layout.keybindFontStyle = normalizeFontStyleChoice(value, layout.keybindFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontStyle)
 	elseif field == "cooldownDrawEdge" then
 		layout.cooldownDrawEdge = value ~= false
 	elseif field == "cooldownDrawBling" then
@@ -3200,6 +3347,13 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "chargesFont", data.chargesFont, true)
 	applyEditLayout(panelId, "chargesFontSize", data.chargesFontSize, true)
 	applyEditLayout(panelId, "chargesFontStyle", data.chargesFontStyle, true)
+	applyEditLayout(panelId, "keybindsEnabled", data.keybindsEnabled, true)
+	applyEditLayout(panelId, "keybindAnchor", data.keybindAnchor, true)
+	applyEditLayout(panelId, "keybindX", data.keybindX, true)
+	applyEditLayout(panelId, "keybindY", data.keybindY, true)
+	applyEditLayout(panelId, "keybindFont", data.keybindFont, true)
+	applyEditLayout(panelId, "keybindFontSize", data.keybindFontSize, true)
+	applyEditLayout(panelId, "keybindFontStyle", data.keybindFontStyle, true)
 	applyEditLayout(panelId, "cooldownDrawEdge", data.cooldownDrawEdge, true)
 	applyEditLayout(panelId, "cooldownDrawBling", data.cooldownDrawBling, true)
 	applyEditLayout(panelId, "cooldownDrawSwipe", data.cooldownDrawSwipe, true)
@@ -3834,6 +3988,110 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
 			},
 			{
+				name = L["CooldownPanelKeybindsHeader"] or "Keybinds",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelKeybinds",
+				defaultCollapsed = true,
+			},
+			{
+				name = L["CooldownPanelShowKeybinds"] or "Show keybinds",
+				kind = SettingType.Checkbox,
+				field = "keybindsEnabled",
+				parentId = "cooldownPanelKeybinds",
+				default = layout.keybindsEnabled == true,
+				get = function() return layout.keybindsEnabled == true end,
+				set = function(_, value) applyEditLayout(panelId, "keybindsEnabled", value) end,
+			},
+			{
+				name = L["CooldownPanelKeybindsAnchor"] or "Keybind anchor",
+				kind = SettingType.Dropdown,
+				field = "keybindAnchor",
+				parentId = "cooldownPanelKeybinds",
+				height = 160,
+				get = function() return normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) end,
+				set = function(_, value) applyEditLayout(panelId, "keybindAnchor", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(anchorOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) == option.value end,
+							function() applyEditLayout(panelId, "keybindAnchor", option.value) end
+						)
+					end
+				end,
+			},
+			{
+				name = L["CooldownPanelKeybindsOffsetX"] or "Keybind X",
+				kind = SettingType.Slider,
+				field = "keybindX",
+				parentId = "cooldownPanelKeybinds",
+				default = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX,
+				minValue = -OFFSET_RANGE,
+				maxValue = OFFSET_RANGE,
+				valueStep = 1,
+				get = function() return layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX end,
+				set = function(_, value) applyEditLayout(panelId, "keybindX", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+			},
+			{
+				name = L["CooldownPanelKeybindsOffsetY"] or "Keybind Y",
+				kind = SettingType.Slider,
+				field = "keybindY",
+				parentId = "cooldownPanelKeybinds",
+				default = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY,
+				minValue = -OFFSET_RANGE,
+				maxValue = OFFSET_RANGE,
+				valueStep = 1,
+				get = function() return layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY end,
+				set = function(_, value) applyEditLayout(panelId, "keybindY", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+			},
+			{
+				name = L["Font"] or "Font",
+				kind = SettingType.Dropdown,
+				field = "keybindFont",
+				parentId = "cooldownPanelKeybinds",
+				height = 220,
+				get = function() return layout.keybindFont or countFontPath end,
+				set = function(_, value) applyEditLayout(panelId, "keybindFont", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(fontOptions) do
+						root:CreateRadio(option.label, function() return (layout.keybindFont or countFontPath) == option.value end, function() applyEditLayout(panelId, "keybindFont", option.value) end)
+					end
+				end,
+			},
+			{
+				name = L["CooldownPanelFontStyle"] or "Font style",
+				kind = SettingType.Dropdown,
+				field = "keybindFontStyle",
+				parentId = "cooldownPanelKeybinds",
+				height = 120,
+				get = function() return normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) end,
+				set = function(_, value) applyEditLayout(panelId, "keybindFontStyle", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(fontStyleOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) == option.value end,
+							function() applyEditLayout(panelId, "keybindFontStyle", option.value) end
+						)
+					end
+				end,
+			},
+			{
+				name = L["FontSize"] or "Font size",
+				kind = SettingType.Slider,
+				field = "keybindFontSize",
+				parentId = "cooldownPanelKeybinds",
+				default = layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or 10,
+				minValue = 6,
+				maxValue = 64,
+				valueStep = 1,
+				get = function() return layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or 10 end,
+				set = function(_, value) applyEditLayout(panelId, "keybindFontSize", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+			},
+			{
 				name = L["CooldownPanelCooldownHeader"] or "Cooldown",
 				kind = SettingType.Collapsible,
 				id = "cooldownPanelCooldown",
@@ -3922,6 +4180,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			chargesFont = layout.chargesFont or chargesFontPath,
 			chargesFontSize = layout.chargesFontSize or chargesFontSize or 12,
 			chargesFontStyle = normalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle),
+			keybindsEnabled = layout.keybindsEnabled == true,
+			keybindAnchor = normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor),
+			keybindX = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX,
+			keybindY = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY,
+			keybindFont = layout.keybindFont or countFontPath,
+			keybindFontSize = layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or 10,
+			keybindFontStyle = normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle),
 			cooldownDrawEdge = layout.cooldownDrawEdge ~= false,
 			cooldownDrawBling = layout.cooldownDrawBling ~= false,
 			cooldownDrawSwipe = layout.cooldownDrawSwipe ~= false,
@@ -3954,6 +4219,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 		allowDrag = function() return anchorUsesUIParent(ensureAnchorTable()) end,
 		settings = settings,
 		showOutsideEditMode = true,
+		settingsMaxHeight = 900,
 	})
 
 	runtime.editModeRegistered = true
@@ -4018,7 +4284,6 @@ local function clearReadyGlowForSpell(spellId)
 	return true
 end
 
-
 local function ensureUpdateFrame()
 	if CooldownPanels.runtime and CooldownPanels.runtime.updateFrame then return end
 	local frame = CreateFrame("Frame")
@@ -4038,6 +4303,7 @@ local function ensureUpdateFrame()
 			if anchorHelper and anchorHelper.HandlePlayerLogin then anchorHelper:HandlePlayerLogin() end
 			return
 		end
+		if event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" then invalidateKeybindCache() end
 		if event == "UNIT_AURA" then
 			local unit = ...
 			if unit ~= "player" then return end
@@ -4066,6 +4332,9 @@ local function ensureUpdateFrame()
 	frame:RegisterEvent("BAG_UPDATE_DELAYED")
 	frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 	frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+	frame:RegisterEvent("UPDATE_BINDINGS")
+	frame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+	frame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
 	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 	frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")

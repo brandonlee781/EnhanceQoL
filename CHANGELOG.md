@@ -7,6 +7,7 @@
 - Mount Keybinding: Option to disable shifting into Travel/Cat Form while mounted for druids using random mount.
 - Cooldown Viewer: Separate fade amount slider for “Show when” visibility rules.
 - Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
+- Cooldown Panels: Panel-level keybind display settings in Edit Mode (enable, anchor, offsets, font).
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - UF Plus: Highlight dispellable debuffs option for aura icons.
@@ -40,6 +41,7 @@
 - Cooldown Panel glow wasn't working correctly in restricted environment
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
+- Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank
 
 ---
 

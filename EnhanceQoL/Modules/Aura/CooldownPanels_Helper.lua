@@ -32,6 +32,12 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	chargesY = -1,
 	chargesFontSize = 12,
 	chargesFontStyle = "OUTLINE",
+	keybindsEnabled = false,
+	keybindAnchor = "TOPLEFT",
+	keybindX = 2,
+	keybindY = -2,
+	keybindFontSize = 10,
+	keybindFontStyle = "OUTLINE",
 	cooldownDrawEdge = true,
 	cooldownDrawBling = true,
 	cooldownDrawSwipe = true,
@@ -141,6 +147,7 @@ function Helper.NormalizePanel(panel, defaults)
 	defaults = defaults or {}
 	local layoutDefaults = defaults.layout or Helper.PANEL_LAYOUT_DEFAULTS
 	if type(panel.layout) ~= "table" then panel.layout = {} end
+	local hadKeybindsEnabled = panel.layout.keybindsEnabled
 	for key, value in pairs(layoutDefaults) do
 		if panel.layout[key] == nil then panel.layout[key] = value end
 	end
@@ -161,6 +168,14 @@ function Helper.NormalizePanel(panel, defaults)
 	if type(panel.order) ~= "table" then panel.order = {} end
 	if panel.enabled == nil then panel.enabled = true end
 	if type(panel.name) ~= "string" or panel.name == "" then panel.name = "Cooldown Panel" end
+	if hadKeybindsEnabled == nil then
+		for _, entry in pairs(panel.entries) do
+			if entry and entry.showKeybinds == true then
+				panel.layout.keybindsEnabled = true
+				break
+			end
+		end
+	end
 end
 
 function Helper.NormalizeEntry(entry, defaults)

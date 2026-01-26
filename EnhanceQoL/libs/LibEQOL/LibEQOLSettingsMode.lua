@@ -657,6 +657,20 @@ function lib:CreateInput(cat, data)
 	initializer.data.placeholder = data.placeholder
 	initializer.data.justifyH = data.justifyH
 
+	if initializer.data.multiline then
+		local extent = tonumber(initializer.data.multilineHeight) or 80
+		initializer.GetExtent = function()
+			return extent
+		end
+	elseif data.height then
+		local extent = tonumber(data.height)
+		if extent then
+			initializer.GetExtent = function()
+				return extent
+			end
+		end
+	end
+
 	Settings.RegisterInitializer(cat, initializer)
 	applyParentInitializer(initializer, data.parent, data.parentCheck)
 	applyModifyPredicate(initializer, data)

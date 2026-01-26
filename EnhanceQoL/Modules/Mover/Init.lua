@@ -368,8 +368,10 @@ local function findScaleTargetUnderMouse()
 		local isMoveHandle = moveHandles and moveHandles[focus]
 		if not active and not isMoveHandle then
 			if focus.IsForbidden and focus:IsForbidden() then return nil end
+			if IsFrameHandle and IsFrameHandle(focus) then return nil end
 			local hasWheel = focus.IsMouseWheelEnabled and focus:IsMouseWheelEnabled()
 			local hasClick = focus.IsMouseClickEnabled and focus:IsMouseClickEnabled()
+			if issecretvalue and (issecretvalue(hasWheel) or issecretvalue(hasClick)) then return nil end
 			if hasWheel or hasClick then return nil end
 		end
 	end

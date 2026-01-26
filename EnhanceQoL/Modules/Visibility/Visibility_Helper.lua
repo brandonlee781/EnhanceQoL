@@ -32,9 +32,7 @@ Helper.RULE_DEFINITIONS = {
 	{ key = "INSTANCE_ARENA", label = L["VisibilityCondInstanceArena"] or "Instance: Arena" },
 	{ key = "INSTANCE_SCENARIO", label = L["VisibilityCondInstanceScenario"] or "Instance: Scenario" },
 	{ key = "MOUNTED", label = L["VisibilityCondMounted"] or "Mounted" },
-	{ key = "NOT_MOUNTED", label = L["VisibilityCondNotMounted"] or "Not mounted" },
 	{ key = "SKYRIDING", label = L["VisibilityCondSkyriding"] or "Skyriding" },
-	{ key = "NOT_SKYRIDING", label = L["VisibilityCondNotSkyriding"] or "Not skyriding" },
 	{ key = "HAS_TARGET", label = L["VisibilityCondHasTarget"] or "Has target" },
 	{ key = "CASTING", label = L["VisibilityCondCasting"] or "Casting" },
 	{ key = "MOUSEOVER", label = L["VisibilityCondMouseover"] or "Mouseover" },
@@ -110,7 +108,15 @@ local function normalizeRuleNode(node)
 		if type(node.key) ~= "string" or node.key == "" then return nil end
 		if node.negate == nil and node["not"] ~= nil then node.negate = node["not"] end
 		node["not"] = nil
-		node.negate = node.negate and true or false
+		local negate = node.negate and true or false
+		if node.key == "NOT_MOUNTED" then
+			node.key = "MOUNTED"
+			negate = not negate
+		elseif node.key == "NOT_SKYRIDING" then
+			node.key = "SKYRIDING"
+			negate = not negate
+		end
+		node.negate = negate
 		return node
 	end
 	if type(node.op) ~= "string" then
