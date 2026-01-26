@@ -168,6 +168,11 @@ local anchorOptions = {
 	{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
 	{ value = "BOTTOMRIGHT", label = L["Bottom Right"] or "Bottom Right" },
 }
+local growthPointOptions = {
+	{ value = "TOPLEFT", label = L["Left"] or "Left" },
+	{ value = "TOP", label = L["Center"] or "Center" },
+	{ value = "TOPRIGHT", label = L["Right"] or "Right" },
+}
 local fontStyleOptions = {
 	{ value = "NONE", label = L["None"] or "None" },
 	{ value = "OUTLINE", label = L["Outline"] or "Outline" },
@@ -300,6 +305,13 @@ local function normalizeAnchor(anchor, fallback)
 	if anchor and VALID_ANCHORS[anchor] then return anchor end
 	if fallback and VALID_ANCHORS[fallback] then return fallback end
 	return "CENTER"
+end
+
+local function normalizeGrowthPoint(value, fallback)
+	local anchor = normalizeAnchor(value, fallback)
+	if anchor == "TOP" or anchor == "CENTER" or anchor == "BOTTOM" then return "TOP" end
+	if anchor == "TOPRIGHT" or anchor == "RIGHT" or anchor == "BOTTOMRIGHT" then return "TOPRIGHT" end
+	return "TOPLEFT"
 end
 
 local function normalizeRelativeFrameName(value)
@@ -1404,7 +1416,7 @@ local function applyIconLayout(frame, count, layout)
 	local direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
 	local wrapCount = clampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 	local wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
-	local growthPoint = normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+	local growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
 	local stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
 	local stackX = clampInt(layout.stackX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackX)
@@ -1438,20 +1450,38 @@ local function applyIconLayout(frame, count, layout)
 	local keybindFontSize = clampInt(layout.keybindFontSize, 6, 64, Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or math.min(countFontSize, 10))
 	local keybindFontStyle = normalizeFontStyle(layout.keybindFontStyle, countFontStyle)
 
-	local function getGrowthOffset(point, gridWidth, gridHeight)
-		if point == "TOP" then return -(gridWidth / 2), 0 end
-		if point == "TOPRIGHT" then return -gridWidth, 0 end
-		if point == "LEFT" then return 0, (gridHeight / 2) end
-		if point == "CENTER" then return -(gridWidth / 2), (gridHeight / 2) end
-		if point == "RIGHT" then return -gridWidth, (gridHeight / 2) end
-		if point == "BOTTOMLEFT" then return 0, gridHeight end
-		if point == "BOTTOM" then return -(gridWidth / 2), gridHeight end
-		if point == "BOTTOMRIGHT" then return -gridWidth, gridHeight end
-		return 0, 0
+	local function getAnchorComponents(point)
+		local h = "CENTER"
+		if point and point:find("LEFT") then
+			h = "LEFT"
+		elseif point and point:find("RIGHT") then
+			h = "RIGHT"
+		end
+		local v = "CENTER"
+		if point and point:find("TOP") then
+			v = "TOP"
+		elseif point and point:find("BOTTOM") then
+			v = "BOTTOM"
+		end
+		return h, v
 	end
-	local function isHorizontalCenter(point) return point == "TOP" or point == "CENTER" or point == "BOTTOM" end
-	local function isVerticalCenter(point) return point == "LEFT" or point == "CENTER" or point == "RIGHT" end
-	local growthOffsetX, growthOffsetY = getGrowthOffset(growthPoint, width, height)
+	local function getGrowthOffset(point, gridWidth, gridHeight, size)
+		local h, v = getAnchorComponents(point)
+		local x = 0
+		if h == "CENTER" then
+			x = -(gridWidth / 2) + (size / 2)
+		elseif h == "RIGHT" then
+			x = -gridWidth + size
+		end
+		local y = 0
+		if v == "CENTER" then
+			y = (gridHeight / 2) - (size / 2)
+		elseif v == "BOTTOM" then
+			y = gridHeight - size
+		end
+		return x, y, h, v
+	end
+	local growthOffsetX, growthOffsetY, anchorH, anchorV = getGrowthOffset(growthPoint, width, height, iconSize)
 
 	for i = 1, count do
 		local icon = frame.icons[i]
@@ -1465,12 +1495,12 @@ local function applyIconLayout(frame, count, layout)
 		local col, row
 		if primaryHorizontal then
 			local rowCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
-			local colOffset = isHorizontalCenter(growthPoint) and ((cols - rowCount) / 2) or 0
+			local colOffset = anchorH == "CENTER" and ((cols - rowCount) / 2) or 0
 			col = primaryIndex + colOffset
 			row = secondaryIndex
 		else
 			local colCount = wrapCount and wrapCount > 0 and math.min(wrapCount, count - (secondaryIndex * wrapCount)) or count
-			local rowOffset = isVerticalCenter(growthPoint) and ((rows - colCount) / 2) or 0
+			local rowOffset = anchorV == "CENTER" and ((rows - colCount) / 2) or 0
 			row = primaryIndex + rowOffset
 			col = secondaryIndex
 		end
@@ -3142,9 +3172,15 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				if isSafeNumber(data.chargesInfo.currentCharges) then
 					desaturate = data.chargesInfo.currentCharges == 0
 				else
-					-- TODO need to find a way for charges = 0 in secret to make it desaturated
-					-- print(data.chargesInfo.currentCharges, issecretvalue(data.chargesInfo.currentCharges))
-					-- icon.texture:SetDesaturation(data.chargesInfo.currentCharges)
+					-- local CCD = C_Spell.GetSpellChargeDuration(data.entry.spellID)
+					-- local SCD = C_Spell.GetSpellCooldownDuration(data.entry.spellID)
+					-- if CCD and SCD then
+					-- 	-- desaturate = true
+					-- 	-- icon.texture:SetDesaturation(SCD:GetRemainingDuration())
+					-- else
+					-- 	-- desaturate = false
+					-- 	-- icon.texture:SetDesaturated(false)
+					-- end
 				end
 			end
 		else
@@ -3160,6 +3196,19 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 				setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 				if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", onCooldownDone) end
+				local CCD = C_Spell.GetSpellChargeDuration(data.entry.spellID)
+				local SCD = C_Spell.GetSpellCooldownDuration(data.entry.spellID)
+				-- only when you have zero charges SCD will be true CCD is always true when one charge is missing
+				if CCD and SCD then
+					if data.cooldownGCD then
+						-- icon.texture:SetDesaturation(0)
+						-- desaturate = false
+						-- setCooldownDrawState(icon.cooldown, gcdDrawEdge, gcdDrawBling, gcdDrawSwipe)
+					else
+						setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
+						icon.texture:SetDesaturation(SCD:EvaluateRemainingDuration(curveDesat))
+					end
+				end
 			elseif durationActive then
 				icon.cooldown:SetCooldownFromDurationObject(cooldownDurationObject)
 				if data.cooldownGCD then
@@ -3408,7 +3457,7 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 	elseif field == "wrapDirection" then
 		layout.wrapDirection = normalizeDirection(value, layout.wrapDirection)
 	elseif field == "growthPoint" then
-		layout.growthPoint = normalizeAnchor(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+		layout.growthPoint = normalizeGrowthPoint(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	elseif field == "rangeOverlayEnabled" then
 		layout.rangeOverlayEnabled = value == true
 	elseif field == "rangeOverlayColor" then
@@ -3907,14 +3956,14 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = L["CooldownPanelGrowthPoint"] or "Growth point",
 				kind = SettingType.Dropdown,
 				field = "growthPoint",
-				height = 160,
-				get = function() return normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
+				height = 90,
+				get = function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
 				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
 				generator = function(_, root)
-					for _, option in ipairs(anchorOptions) do
+					for _, option in ipairs(growthPointOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
+							function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
 							function() applyEditLayout(panelId, "growthPoint", option.value) end
 						)
 					end
@@ -4382,7 +4431,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
 			wrapCount = layout.wrapCount or 0,
 			wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
-			growthPoint = normalizeAnchor(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
+			growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
 			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
 			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
 			strata = normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata),
