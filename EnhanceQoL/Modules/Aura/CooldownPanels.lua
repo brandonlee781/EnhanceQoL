@@ -4530,9 +4530,16 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				default = 0,
 			},
 			{
+				name = L["CooldownPanelLayoutHeader"] or "Layout",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelLayout",
+				defaultCollapsed = false,
+			},
+			{
 				name = "Icon size",
 				kind = SettingType.Slider,
 				field = "iconSize",
+				parentId = "cooldownPanelLayout",
 				default = layout.iconSize,
 				minValue = 12,
 				maxValue = 128,
@@ -4545,6 +4552,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = "Spacing",
 				kind = SettingType.Slider,
 				field = "spacing",
+				parentId = "cooldownPanelLayout",
 				default = layout.spacing,
 				minValue = 0,
 				maxValue = 50,
@@ -4557,6 +4565,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = "Direction",
 				kind = SettingType.Dropdown,
 				field = "direction",
+				parentId = "cooldownPanelLayout",
 				height = 120,
 				get = function() return normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) end,
 				set = function(_, value) applyEditLayout(panelId, "direction", value) end,
@@ -4574,6 +4583,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = "Wrap",
 				kind = SettingType.Slider,
 				field = "wrapCount",
+				parentId = "cooldownPanelLayout",
 				default = layout.wrapCount or 0,
 				minValue = 0,
 				maxValue = 40,
@@ -4586,6 +4596,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = "Wrap direction",
 				kind = SettingType.Dropdown,
 				field = "wrapDirection",
+				parentId = "cooldownPanelLayout",
 				height = 120,
 				get = function() return normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") end,
 				set = function(_, value) applyEditLayout(panelId, "wrapDirection", value) end,
@@ -4600,9 +4611,46 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				end,
 			},
 			{
+				name = L["CooldownPanelGrowthPoint"] or "Growth point",
+				kind = SettingType.Dropdown,
+				field = "growthPoint",
+				parentId = "cooldownPanelLayout",
+				height = 90,
+				get = function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
+				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(growthPointOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
+							function() applyEditLayout(panelId, "growthPoint", option.value) end
+						)
+					end
+				end,
+			},
+			{
+				name = "Strata",
+				kind = SettingType.Dropdown,
+				field = "strata",
+				parentId = "cooldownPanelLayout",
+				height = 200,
+				get = function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) end,
+				set = function(_, value) applyEditLayout(panelId, "strata", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(STRATA_ORDER) do
+						root:CreateRadio(
+							option,
+							function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) == option end,
+							function() applyEditLayout(panelId, "strata", option) end
+						)
+					end
+				end,
+			},
+			{
 				name = L["CooldownPanelRowSizesHeader"] or "Row sizes",
 				kind = SettingType.Collapsible,
 				id = "cooldownPanelRowSizes",
+				parentId = "cooldownPanelLayout",
 				defaultCollapsed = true,
 			},
 			{
@@ -4696,43 +4744,16 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				isShown = function() return shouldShowRowSize(6) end,
 			},
 			{
-				name = L["CooldownPanelGrowthPoint"] or "Growth point",
-				kind = SettingType.Dropdown,
-				field = "growthPoint",
-				height = 90,
-				get = function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
-				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
-				generator = function(_, root)
-					for _, option in ipairs(growthPointOptions) do
-						root:CreateRadio(
-							option.label,
-							function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
-							function() applyEditLayout(panelId, "growthPoint", option.value) end
-						)
-					end
-				end,
-			},
-			{
-				name = "Strata",
-				kind = SettingType.Dropdown,
-				field = "strata",
-				height = 200,
-				get = function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) end,
-				set = function(_, value) applyEditLayout(panelId, "strata", value) end,
-				generator = function(_, root)
-					for _, option in ipairs(STRATA_ORDER) do
-						root:CreateRadio(
-							option,
-							function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) == option end,
-							function() applyEditLayout(panelId, "strata", option) end
-						)
-					end
-				end,
+				name = L["CooldownPanelDisplayHeader"] or "Display",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelDisplay",
+				defaultCollapsed = true,
 			},
 			{
 				name = L["CooldownPanelShowTooltips"] or "Show tooltips",
 				kind = SettingType.Checkbox,
 				field = "showTooltips",
+				parentId = "cooldownPanelDisplay",
 				default = layout.showTooltips == true,
 				get = function() return layout.showTooltips == true end,
 				set = function(_, value) applyEditLayout(panelId, "showTooltips", value) end,
@@ -4741,6 +4762,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = L["CooldownPanelOpacityOutOfCombat"] or "Opacity (out of combat)",
 				kind = SettingType.Slider,
 				field = "opacityOutOfCombat",
+				parentId = "cooldownPanelDisplay",
 				default = normalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
 				minValue = 0,
 				maxValue = 1,
@@ -4757,6 +4779,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				name = L["CooldownPanelOpacityInCombat"] or "Opacity (in combat)",
 				kind = SettingType.Slider,
 				field = "opacityInCombat",
+				parentId = "cooldownPanelDisplay",
 				default = normalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
 				minValue = 0,
 				maxValue = 1,

@@ -2688,7 +2688,7 @@ local function buildSlider()
 		Mixin(frame, mixin)
 
 		frame:SetHeight(DEFAULT_SLIDER_HEIGHT)
-		frame.Slider:SetWidth(167)
+		frame.Slider:SetWidth(160)
 		frame.Slider.MinText:Hide()
 		frame.Slider.MaxText:Hide()
 		frame.Label:SetPoint("LEFT")
