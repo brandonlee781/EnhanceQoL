@@ -59,6 +59,7 @@ Helper.ENTRY_DEFAULTS = {
 	showCooldownText = true,
 	showCharges = false,
 	showStacks = false,
+	showItemUses = false,
 	showWhenEmpty = false,
 	showWhenNoCooldown = false,
 	glowReady = false,

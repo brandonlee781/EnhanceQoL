@@ -131,7 +131,12 @@ local GENERIC_ANCHOR_BY_FRAME = {
 local GetItemInfoInstantFn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 local GetItemIconByID = C_Item and C_Item.GetItemIconByID
 local GetItemCooldownFn = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
-local GetItemCountFn = (C_Item and C_Item.GetItemCount) or GetItemCount
+local function getItemCount(itemID, includeBank, includeUses, includeReagentBank, includeAccountBank)
+	if not itemID then return 0 end
+	if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(itemID, includeBank, includeUses, includeReagentBank, includeAccountBank) end
+	if GetItemCount then return GetItemCount(itemID, includeBank) end
+	return 0
+end
 local GetItemSpell = C_Item and C_Item.GetItemSpell
 local GetInventoryItemID = GetInventoryItemID
 local GetInventoryItemCooldown = GetInventoryItemCooldown
@@ -1581,10 +1586,8 @@ end
 local function hasItem(itemID)
 	if not itemID then return false end
 	if IsEquippedItem and IsEquippedItem(itemID) then return true end
-	if GetItemCountFn then
-		local count = GetItemCountFn(itemID, true)
-		if count and count > 0 then return true end
-	end
+	local count = getItemCount(itemID, true, false)
+	if count and count > 0 then return true end
 	return false
 end
 
@@ -2417,8 +2420,11 @@ local function ensureEditor()
 	local cbItemCount = createCheck(rightContent, L["CooldownPanelShowItemCount"] or "Show item count")
 	cbItemCount:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
+	local cbItemUses = createCheck(rightContent, L["CooldownPanelShowItemUses"] or "Show item uses")
+	cbItemUses:SetPoint("TOPLEFT", cbItemCount, "BOTTOMLEFT", 0, -4)
+
 	local cbShowWhenEmpty = createCheck(rightContent, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
-	cbShowWhenEmpty:SetPoint("TOPLEFT", cbItemCount, "BOTTOMLEFT", 0, -4)
+	cbShowWhenEmpty:SetPoint("TOPLEFT", cbItemUses, "BOTTOMLEFT", 0, -4)
 
 	local cbShowWhenNoCooldown = createCheck(rightContent, L["CooldownPanelShowWhenNoCooldown"] or "Show even without cooldown")
 	cbShowWhenNoCooldown:SetPoint("TOPLEFT", cbShowWhenEmpty, "BOTTOMLEFT", 0, -4)
@@ -2597,6 +2603,7 @@ local function ensureEditor()
 			cbCharges = cbCharges,
 			cbStacks = cbStacks,
 			cbItemCount = cbItemCount,
+			cbItemUses = cbItemUses,
 			cbShowWhenEmpty = cbShowWhenEmpty,
 			cbShowWhenNoCooldown = cbShowWhenNoCooldown,
 			cbGlow = cbGlow,
@@ -2753,6 +2760,7 @@ local function ensureEditor()
 	bindEntryToggle(cbStacks, "showStacks")
 	bindEntryToggle(cbCooldownText, "showCooldownText")
 	bindEntryToggle(cbItemCount, "showItemCount")
+	bindEntryToggle(cbItemUses, "showItemUses")
 	bindEntryToggle(cbShowWhenEmpty, "showWhenEmpty")
 	bindEntryToggle(cbShowWhenNoCooldown, "showWhenNoCooldown")
 	bindEntryToggle(cbGlow, "glowReady")
@@ -3152,6 +3160,7 @@ local function layoutInspectorToggles(inspector, entry)
 		hideToggle(inspector.cbCharges)
 		hideToggle(inspector.cbStacks)
 		hideToggle(inspector.cbItemCount)
+		hideToggle(inspector.cbItemUses)
 		hideToggle(inspector.cbShowWhenEmpty)
 		hideToggle(inspector.cbShowWhenNoCooldown)
 		hideToggle(inspector.cbGlow)
@@ -3185,24 +3194,28 @@ local function layoutInspectorToggles(inspector, entry)
 		place(inspector.cbCharges, true)
 		place(inspector.cbStacks, true)
 		place(inspector.cbItemCount, false)
+		place(inspector.cbItemUses, false)
 		place(inspector.cbShowWhenEmpty, false)
 		place(inspector.cbShowWhenNoCooldown, false)
 	elseif entry.type == "ITEM" then
 		place(inspector.cbCharges, false)
 		place(inspector.cbStacks, false)
 		place(inspector.cbItemCount, true)
+		place(inspector.cbItemUses, true)
 		place(inspector.cbShowWhenEmpty, true)
 		place(inspector.cbShowWhenNoCooldown, false)
 	elseif entry.type == "SLOT" then
 		place(inspector.cbCharges, false)
 		place(inspector.cbStacks, false)
 		place(inspector.cbItemCount, false)
+		place(inspector.cbItemUses, false)
 		place(inspector.cbShowWhenEmpty, false)
 		place(inspector.cbShowWhenNoCooldown, true)
 	else
 		place(inspector.cbCharges, false)
 		place(inspector.cbStacks, false)
 		place(inspector.cbItemCount, false)
+		place(inspector.cbItemUses, false)
 		place(inspector.cbShowWhenEmpty, false)
 		place(inspector.cbShowWhenNoCooldown, false)
 	end
@@ -3302,6 +3315,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.cbCharges:SetChecked(entry.showCharges and true or false)
 		inspector.cbStacks:SetChecked(entry.showStacks and true or false)
 		inspector.cbItemCount:SetChecked(entry.type == "ITEM" and entry.showItemCount ~= false)
+		inspector.cbItemUses:SetChecked(entry.type == "ITEM" and entry.showItemUses == true)
 		inspector.cbShowWhenEmpty:SetChecked(entry.type == "ITEM" and entry.showWhenEmpty == true)
 		inspector.cbShowWhenNoCooldown:SetChecked(entry.type == "SLOT" and entry.showWhenNoCooldown == true)
 		inspector.cbGlow:SetChecked(entry.glowReady and true or false)
@@ -3473,6 +3487,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		local showCharges = entry and entry.type == "SPELL" and entry.showCharges == true
 		local showStacks = entry and entry.type == "SPELL" and entry.showStacks == true
 		local showItemCount = entry and entry.type == "ITEM" and entry.showItemCount ~= false
+		local showItemUses = entry and entry.type == "ITEM" and entry.showItemUses == true
 		icon.texture:SetTexture(getEntryIcon(entry))
 		icon.texture:SetVertexColor(1, 1, 1)
 		icon.cooldown:SetHideCountdownNumbers(not showCooldownText)
@@ -3497,13 +3512,22 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		if showCharges then
 			icon.charges:SetText("2")
 			icon.charges:Show()
+		elseif showItemUses then
+			local usesValue
+			if entry and entry.itemID then usesValue = getItemCount(entry.itemID, true, true) end
+			if isSafeGreaterThan(usesValue, 0) then
+				icon.charges:SetText(usesValue)
+			else
+				icon.charges:SetText("5")
+			end
+			icon.charges:Show()
 		end
 		if showStacks then
 			icon.count:SetText("3")
 			icon.count:Show()
 		elseif showItemCount then
 			local countValue
-			if entry and entry.itemID and GetItemCountFn then countValue = GetItemCountFn(entry.itemID, true) end
+			if entry and entry.itemID then countValue = getItemCount(entry.itemID, true, false) end
 			if isSafeGreaterThan(countValue, 0) then
 				icon.count:SetText(countValue)
 			else
@@ -3570,6 +3594,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local showCharges = entry.showCharges == true
 			local showStacks = entry.showStacks == true
 			local showItemCount = entry.type == "ITEM" and entry.showItemCount ~= false
+			local showItemUses = entry.type == "ITEM" and entry.showItemUses == true
 			local showWhenEmpty = entry.type == "ITEM" and entry.showWhenEmpty == true
 			local showWhenNoCooldown = entry.type == "SLOT" and entry.showWhenNoCooldown == true
 			local alwaysShow = entry.alwaysShow ~= false
@@ -3594,6 +3619,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local iconTexture = getEntryIcon(entry)
 			local stackCount
 			local itemCount
+			local itemUses
 			local chargesInfo
 			local cooldownDurationObject
 			local cooldownRemaining
@@ -3639,12 +3665,20 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					if showCooldown and ownsItem then
 						cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(entry.itemID)
 					end
-					if showItemCount and GetItemCountFn then
-						local count = GetItemCountFn(entry.itemID, true) or 0
+					if showItemCount then
+						local count = getItemCount(entry.itemID, true, false) or 0
 						if isSafeGreaterThan(count, 0) then
 							itemCount = count
 						elseif showWhenEmpty then
 							itemCount = 0
+						end
+					end
+					if showItemUses then
+						local uses = getItemCount(entry.itemID, true, true) or 0
+						if isSafeGreaterThan(uses, 0) then
+							itemUses = uses
+						elseif showWhenEmpty then
+							itemUses = 0
 						end
 					end
 					cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
@@ -3681,6 +3715,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.showCharges = showCharges
 				data.showStacks = showStacks
 				data.showItemCount = showItemCount
+				data.showItemUses = showItemUses
 				data.showKeybinds = showKeybinds
 				data.keybindText = showKeybinds and getEntryKeybindText(entry, layout) or nil
 				data.entry = entry
@@ -3697,6 +3732,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.readyAt = runtime.readyAt[entryId]
 				data.stackCount = stackCount
 				data.itemCount = itemCount
+				data.itemUses = itemUses
 				data.emptyItem = emptyItem
 				data.chargesInfo = chargesInfo
 				data.cooldownDurationObject = cooldownDurationObject
@@ -3786,6 +3822,15 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			end
 		else
 			icon.charges:Hide()
+		end
+
+		if data.showItemUses then
+			if data.itemUses ~= nil then
+				icon.charges:SetText(data.itemUses)
+				icon.charges:Show()
+			else
+				icon.charges:Hide()
+			end
 		end
 
 		if data.emptyItem then desaturate = true end
