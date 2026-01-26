@@ -18,12 +18,11 @@ local Helper = Visibility.helper
 if not Helper then return end
 
 local math = math
+local getEditor
 
 local FADE_DURATION = 0.15
 local FADE_THRESHOLD = 0.01
 local MAX_GROUP_DEPTH = 3
-local FIXED_ACTIONBAR_KEY = "ACTIONBARS"
-local FIXED_ACTIONBAR_LABEL = L["visibilityKindActionBars"] or "Action Bars"
 local IGNORE_FRAME_NAMES = {
 	UIParent = true,
 	WorldFrame = true,
@@ -43,11 +42,7 @@ local function isIgnoredFrameName(name)
 	return false
 end
 
-local function isFixedConfig(cfg)
-	return type(cfg) == "table" and cfg.fixedKey ~= nil
-end
-
-local function getActionBarFrameNames()
+local function getActionBarFrameEntries()
 	local list = {}
 	local seen = {}
 	local entries = addon.variables and addon.variables.actionBarNames
@@ -56,95 +51,83 @@ local function getActionBarFrameNames()
 			local name = info and info.name
 			if type(name) == "string" and name ~= "" and not seen[name] then
 				seen[name] = true
-				list[#list + 1] = name
+				list[#list + 1] = { name = name, label = info.text or name, allowMissing = true }
 			end
 		end
 	end
 	return list
 end
 
-local function findFixedConfig(root, fixedKey)
-	for id, cfg in pairs(root.configs or {}) do
-		if type(cfg) == "table" and cfg.fixedKey == fixedKey then
-			return id, cfg
-		end
-	end
-	return nil
-end
-
-local function findConfigWithFrames(root, frameSet)
-	local bestId, bestCfg, bestCount = nil, nil, 0
-	for id, cfg in pairs(root.configs or {}) do
-		if type(cfg) == "table" and type(cfg.frames) == "table" then
-			local count = 0
-			for _, name in ipairs(cfg.frames) do
-				if frameSet[name] then count = count + 1 end
-			end
-			if count > bestCount then
-				bestCount = count
-				bestId = id
-				bestCfg = cfg
+local function getUnitFrameEntries()
+	local list = {}
+	local seen = {}
+	local entries = addon.variables and addon.variables.unitFrameNames
+	if type(entries) == "table" then
+		for _, info in ipairs(entries) do
+			local name = info and info.name
+			if type(name) == "string" and name ~= "" and not seen[name] then
+				seen[name] = true
+				list[#list + 1] = { name = name, label = info.text or name, allowMissing = true }
 			end
 		end
 	end
-	if bestCount > 0 then
-		return bestId, bestCfg
-	end
-	return nil
+	return list
 end
 
-local function ensureConfigOrder(root, configId)
-	if not root or not configId then return end
-	root.order = root.order or {}
-	for _, id in ipairs(root.order) do
-		if id == configId then return end
-	end
-	table.insert(root.order, 1, configId)
-end
-
-local function ensureFixedActionBarConfig(root)
-	local frames = getActionBarFrameNames()
-	if #frames == 0 then return end
-	local frameSet = {}
-	for _, name in ipairs(frames) do frameSet[name] = true end
-
-	local configId, cfg = findFixedConfig(root, FIXED_ACTIONBAR_KEY)
-	if not cfg then
-		local candidateId, candidateCfg = findConfigWithFrames(root, frameSet)
-		if candidateCfg then
-			configId, cfg = candidateId, candidateCfg
-		else
-			configId = Helper.GetNextNumericId(root.configs)
-			cfg = Helper.CopyTableShallow(Helper.CONFIG_DEFAULTS)
-			cfg.frames = {}
-			cfg.rules = { op = "AND", children = {} }
-			root.configs[configId] = cfg
-			root.order[#root.order + 1] = configId
+local function getCooldownViewerEntries()
+	local list = {}
+	local frames = (addon.constants and addon.constants.COOLDOWN_VIEWER_FRAMES) or {
+		"EssentialCooldownViewer",
+		"UtilityCooldownViewer",
+		"BuffBarCooldownViewer",
+		"BuffIconCooldownViewer",
+	}
+	local labels = {
+		EssentialCooldownViewer = L["cooldownViewerEssential"] or "Essential Cooldown Viewer",
+		UtilityCooldownViewer = L["cooldownViewerUtility"] or "Utility Cooldown Viewer",
+		BuffBarCooldownViewer = L["cooldownViewerBuffBar"] or "Buff Bar Cooldowns",
+		BuffIconCooldownViewer = L["cooldownViewerBuffIcon"] or "Buff Icon Cooldowns",
+	}
+	local seen = {}
+	for _, name in ipairs(frames) do
+		if type(name) == "string" and name ~= "" and not seen[name] then
+			seen[name] = true
+			list[#list + 1] = { name = name, label = labels[name] or name, allowMissing = true }
 		end
 	end
+	return list
+end
 
-	cfg.fixedKey = FIXED_ACTIONBAR_KEY
-	cfg.name = FIXED_ACTIONBAR_LABEL
-	cfg.frames = frames
-	cfg.rules = Helper.NormalizeRules(cfg.rules)
-
-	for id, other in pairs(root.configs or {}) do
-		if id ~= configId and type(other) == "table" and type(other.frames) == "table" then
-			local cleaned = {}
-			local changed = false
-			for _, name in ipairs(other.frames) do
-				if frameSet[name] then
-					changed = true
-				else
-					cleaned[#cleaned + 1] = name
-				end
+local function getResourceBarEntries()
+	local list = {}
+	if not (addon and addon.db and addon.db.enableResourceFrame == true) then return list end
+	local rb = addon.Aura and addon.Aura.ResourceBars
+	if not rb then return list end
+	local seen = {}
+	local function add(name, label)
+		if type(name) ~= "string" or name == "" or seen[name] then return end
+		seen[name] = true
+		list[#list + 1] = { name = name, label = label or name, allowMissing = true }
+	end
+	add("EQOLHealthBar", HEALTH or "Health")
+	local class = addon.variables and addon.variables.unitClass
+	local spec = addon.variables and addon.variables.unitSpec
+	local allowed = rb.powertypeClasses and class and spec and rb.powertypeClasses[class] and rb.powertypeClasses[class][spec] or nil
+	local function isAllowed(pType)
+		if not allowed then return true end
+		if allowed.MAIN and pType == allowed.MAIN then return true end
+		return allowed[pType] == true
+	end
+	if rb.classPowerTypes then
+		for _, pType in ipairs(rb.classPowerTypes) do
+			if isAllowed(pType) then
+				local frameName = "EQOL" .. tostring(pType) .. "Bar"
+				local label = (rb.PowerLabels and rb.PowerLabels[pType]) or _G["POWER_TYPE_" .. tostring(pType)] or tostring(pType)
+				add(frameName, label)
 			end
-			if changed then other.frames = cleaned end
 		end
 	end
-
-	ensureConfigOrder(root, configId)
-	Helper.RebuildFrameIndex(root)
+	return list
 end
 
 local function stopFade(target)
@@ -280,7 +263,6 @@ end
 function Visibility:DeleteConfig(configId)
 	local root = ensureRoot()
 	if not root or not root.configs or not root.configs[configId] then return false end
-	if isFixedConfig(root.configs[configId]) then return false end
 	local config = root.configs[configId]
 	if config and config.frames then
 		for _, name in ipairs(config.frames) do
@@ -308,7 +290,6 @@ end
 function Visibility:AddFrame(configId, name)
 	local root = ensureRoot()
 	if not root then return false, "missing" end
-	if isFixedConfig(root.configs and root.configs[configId]) then return false, "fixed" end
 	if not resolveFrameByName(name) then return false, "invalid" end
 	local ok, reason = Helper.AddFrameToConfig(root, configId, name)
 	if ok then self:RequestUpdate() end
@@ -318,7 +299,6 @@ end
 function Visibility:RemoveFrame(configId, name)
 	local root = ensureRoot()
 	if not root then return false end
-	if isFixedConfig(root.configs and root.configs[configId]) then return false end
 	local ok = Helper.RemoveFrameFromConfig(root, configId, name)
 	if ok then self:RequestUpdate() end
 	return ok
@@ -514,19 +494,14 @@ local function ensureWatcher()
 end
 
 function Visibility:Init()
-	local root = ensureRoot()
-	if root then
-		ensureFixedActionBarConfig(root)
-	end
+	ensureRoot()
 	ensureWatcher()
 	Visibility:RequestUpdate()
 end
 
-Visibility.functions.InitState = function()
-	Visibility:Init()
-end
+Visibility.functions.InitState = function() Visibility:Init() end
 
-local function getEditor()
+getEditor = function()
 	local runtime = Visibility.runtime
 	return runtime and runtime.editor or nil
 end
@@ -739,12 +714,8 @@ local function showModeMenu(owner, current, onSelect)
 	MenuUtil.CreateContextMenu(owner, function(_, root)
 		root:SetTag("MENU_EQOL_VISIBILITY_MODE")
 		root:CreateTitle(L["VisibilityMode"] or "Mode")
-		root:CreateRadio(L["VisibilityModeShow"] or "Show when", function() return current == Helper.MODES.SHOW end, function()
-			onSelect(Helper.MODES.SHOW)
-		end)
-		root:CreateRadio(L["VisibilityModeHide"] or "Hide when", function() return current == Helper.MODES.HIDE end, function()
-			onSelect(Helper.MODES.HIDE)
-		end)
+		root:CreateRadio(L["VisibilityModeShow"] or "Show when", function() return current == Helper.MODES.SHOW end, function() onSelect(Helper.MODES.SHOW) end)
+		root:CreateRadio(L["VisibilityModeHide"] or "Hide when", function() return current == Helper.MODES.HIDE end, function() onSelect(Helper.MODES.HIDE) end)
 	end)
 end
 
@@ -758,6 +729,83 @@ local function showJoinMenu(owner, current, onSelect)
 	end)
 end
 
+local function addFramesToConfig(frameEntries)
+	local editor = getEditor()
+	local configId = editor and editor.selectedConfigId
+	if not configId then
+		configId = Visibility:CreateConfig(L["VisibilityNewConfig"] or "New Visibility Config")
+		Visibility:SetSelectedConfig(configId)
+	end
+	local root = ensureRoot()
+	local cfg = configId and Visibility:GetConfig(configId)
+	if not root or not cfg then return end
+	local added, assigned, exists, invalid = 0, 0, 0, 0
+	local changed = false
+	for _, entry in ipairs(frameEntries or {}) do
+		local name = entry and (entry.name or entry)
+		local ok, reason
+		if type(name) == "string" and name ~= "" then
+			ok, reason = Helper.AddFrameToConfig(root, configId, name)
+		end
+		if ok then
+			added = added + 1
+			changed = true
+		elseif reason == "assigned" then
+			assigned = assigned + 1
+		elseif reason == "exists" then
+			exists = exists + 1
+		elseif reason then
+			invalid = invalid + 1
+		end
+	end
+	if changed then Visibility:RequestUpdate() end
+	if editor then
+		if added > 0 then
+			setStatus(editor, string.format(L["VisibilityFramesAdded"] or "Added %d frames.", added), 0.6, 0.9, 0.6)
+		elseif assigned > 0 then
+			setStatus(editor, L["VisibilityFramesAssigned"] or "Frames already assigned to another config.", 1, 0.5, 0.3)
+		elseif exists > 0 then
+			setStatus(editor, L["VisibilityFrameExists"] or "Frame already in this config.", 1, 0.5, 0.3)
+		elseif invalid > 0 then
+			setStatus(editor, L["VisibilityFrameInvalid"] or "Invalid frame.", 1, 0.5, 0.3)
+		else
+			setStatus(editor, L["VisibilityFramesNoneAdded"] or "No frames added.", 1, 0.5, 0.3)
+		end
+	end
+	Visibility:RefreshEditor()
+end
+
+local function showKnownFramesMenu(owner)
+	if not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	local rootData = ensureRoot()
+	local frameIndex = rootData and rootData.frameIndex or {}
+	local function addGroup(root, label, allLabel, entries)
+		if not entries or #entries == 0 then return end
+		local addable = {}
+		for _, entry in ipairs(entries) do
+			local name = entry and entry.name
+			if name and not frameIndex[name] then addable[#addable + 1] = entry end
+		end
+		local sub = root:CreateButton(label)
+		local allButton = sub:CreateButton(allLabel, function() addFramesToConfig(addable) end)
+		if #addable == 0 and allButton.SetEnabled then allButton:SetEnabled(false) end
+		for _, entry in ipairs(entries) do
+			local name = entry and entry.name
+			local labelText = entry and (entry.label or entry.name) or ""
+			local button = sub:CreateButton(labelText, function() addFramesToConfig({ entry }) end)
+			if name and frameIndex[name] and button.SetEnabled then button:SetEnabled(false) end
+		end
+	end
+	MenuUtil.CreateContextMenu(owner, function(_, root)
+		root:SetTag("MENU_EQOL_VISIBILITY_KNOWN")
+		root:CreateTitle(L["VisibilityKnownFrames"] or "Known frames")
+		addGroup(root, L["visibilityKindActionBars"] or "Action Bars", L["VisibilityAllActionBars"] or "All Action Bars", getActionBarFrameEntries())
+		addGroup(root, L["VisibilityKnownUnitFrames"] or "Unit Frames", L["VisibilityAllUnitFrames"] or "All Unit Frames", getUnitFrameEntries())
+		addGroup(root, L["VisibilityKnownResourceBars"] or "Resource Bars", L["VisibilityAllResourceBars"] or "All Resource Bars", getResourceBarEntries())
+		addGroup(root, L["VisibilityKnownCooldownViewer"] or "Cooldown Viewer", L["VisibilityAllCooldownViewers"] or "All Cooldown Viewers", getCooldownViewerEntries())
+	end)
+end
+
 local function showAddMenu(owner, canAddGroup, onAddGroup, onAddCondition)
 	if not MenuUtil or not MenuUtil.CreateContextMenu then return end
 	MenuUtil.CreateContextMenu(owner, function(_, root)
@@ -765,9 +813,7 @@ local function showAddMenu(owner, canAddGroup, onAddGroup, onAddCondition)
 		local groupButton = root:CreateButton(L["VisibilityGroup"] or "Group", function()
 			if canAddGroup and onAddGroup then onAddGroup() end
 		end)
-		if not canAddGroup and groupButton.SetEnabled then
-			groupButton:SetEnabled(false)
-		end
+		if not canAddGroup and groupButton.SetEnabled then groupButton:SetEnabled(false) end
 		local submenu = root:CreateButton(L["VisibilityConditions"] or "Conditions")
 		for _, def in ipairs(Helper.RULE_DEFINITIONS) do
 			submenu:CreateButton(def.label, function()
@@ -882,15 +928,11 @@ local function buildFrameStackList(ignore)
 	for _, obj in ipairs(stack) do
 		if obj and obj.GetName then
 			local frame = obj
-			if not (frame.IsObjectType and frame:IsObjectType("Frame")) and obj.GetParent then
-				frame = obj:GetParent()
-			end
+			if not (frame.IsObjectType and frame:IsObjectType("Frame")) and obj.GetParent then frame = obj:GetParent() end
 			if frame and frame.GetName and frame.IsObjectType and frame:IsObjectType("Frame") then
 				local name = frame:GetName()
 				if name and name ~= "" and _G[name] == frame and not seen[name] then
-					if not isIgnoredFrameName(name)
-						and not (frame.IsForbidden and frame:IsForbidden())
-						and not isFrameIgnored(frame, ignore) then
+					if not isIgnoredFrameName(name) and not (frame.IsForbidden and frame:IsForbidden()) and not isFrameIgnored(frame, ignore) then
 						seen[name] = true
 						list[#list + 1] = { frame = frame, name = name }
 					end
@@ -995,9 +1037,7 @@ local function startPicker(editor, configId)
 		if self.lastCursorX and self.lastCursorY then
 			local dx = math.abs(x - self.lastCursorX)
 			local dy = math.abs(y - self.lastCursorY)
-			if dx > 2 or dy > 2 then
-				self.locked = false
-			end
+			if dx > 2 or dy > 2 then self.locked = false end
 		end
 		self.lastCursorX = x
 		self.lastCursorY = y
@@ -1025,9 +1065,7 @@ local function startPicker(editor, configId)
 			if self.tooltip then self.tooltip:Hide() end
 			return
 		end
-		if key == "TAB" then
-			cycleSelection(self, IsShiftKeyDown() and -1 or 1)
-		end
+		if key == "TAB" then cycleSelection(self, IsShiftKeyDown() and -1 or 1) end
 	end)
 
 	picker:SetScript("OnMouseWheel", function(self, delta)
@@ -1160,15 +1198,15 @@ local function ensureEditor()
 	condTitle:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -12)
 	condTitle:SetTextColor(0.9, 0.9, 0.9, 1)
 
-local configNameLabel = createLabel(right, L["VisibilityConfigName"] or "Config name", 11, "OUTLINE")
-configNameLabel:SetPoint("TOPLEFT", condTitle, "BOTTOMLEFT", 0, -8)
-configNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
+	local configNameLabel = createLabel(right, L["VisibilityConfigName"] or "Config name", 11, "OUTLINE")
+	configNameLabel:SetPoint("TOPLEFT", condTitle, "BOTTOMLEFT", 0, -8)
+	configNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-local configNameBox = createEditBox(right, 200, 20)
-configNameBox:SetPoint("TOPLEFT", configNameLabel, "BOTTOMLEFT", -2, -4)
+	local configNameBox = createEditBox(right, 200, 20)
+	configNameBox:SetPoint("TOPLEFT", configNameLabel, "BOTTOMLEFT", -2, -4)
 
-local enabledCheck = createCheck(right, L["VisibilityEnabled"] or "Enabled")
-enabledCheck:SetPoint("TOPLEFT", configNameBox, "BOTTOMLEFT", -2, -6)
+	local enabledCheck = createCheck(right, L["VisibilityEnabled"] or "Enabled")
+	enabledCheck:SetPoint("TOPLEFT", configNameBox, "BOTTOMLEFT", -2, -6)
 
 	local modeLabel = createLabel(right, L["VisibilityMode"] or "Mode", 11, "OUTLINE")
 	modeLabel:SetPoint("TOPLEFT", enabledCheck, "BOTTOMLEFT", 2, -8)
@@ -1218,24 +1256,25 @@ enabledCheck:SetPoint("TOPLEFT", configNameBox, "BOTTOMLEFT", -2, -6)
 	local pickButton = createButton(middle, L["VisibilityPickFrame"] or "Pick Frame", 110, 22)
 	pickButton:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 46)
 
-local frameNameLabel = createLabel(middle, L["VisibilityFrameName"] or "Frame name", 11, "OUTLINE")
-frameNameLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 20)
-frameNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
+	local knownFramesButton = createButton(middle, L["VisibilityAddKnownFrames"] or "Add known frames", 140, 22)
+	knownFramesButton:SetPoint("LEFT", pickButton, "RIGHT", 8, 0)
 
-local frameNameBox = createEditBox(middle, 150, 20)
-frameNameBox:SetPoint("LEFT", frameNameLabel, "RIGHT", 6, 0)
+	local frameNameLabel = createLabel(middle, L["VisibilityFrameName"] or "Frame name", 11, "OUTLINE")
+	frameNameLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 20)
+	frameNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-local addFrame = createButton(middle, L["VisibilityAddFrame"] or "Add", 60, 20)
-addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
+	local frameNameBox = createEditBox(middle, 150, 20)
+	frameNameBox:SetPoint("LEFT", frameNameLabel, "RIGHT", 6, 0)
+
+	local addFrame = createButton(middle, L["VisibilityAddFrame"] or "Add", 60, 20)
+	addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 
 	local statusText = middle:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	statusText:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 6)
 	statusText:SetText("")
 	frame.statusText = statusText
 
-	frame:SetScript("OnShow", function()
-		Visibility:RefreshEditor()
-	end)
+	frame:SetScript("OnShow", function() Visibility:RefreshEditor() end)
 	frame:SetScript("OnHide", function()
 		saveEditorPosition(frame)
 		stopPicker()
@@ -1253,6 +1292,7 @@ addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 		addConfig = addConfig,
 		deleteConfig = deleteConfig,
 		pickButton = pickButton,
+		addKnownFrames = knownFramesButton,
 		configNameBox = configNameBox,
 		frameNameBox = frameNameBox,
 		addFrame = addFrame,
@@ -1272,8 +1312,6 @@ addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 		local editor = getEditor()
 		local configId = editor and editor.selectedConfigId
 		if not configId then return end
-		local cfg = configId and Visibility:GetConfig(configId)
-		if isFixedConfig(cfg) then return end
 		if not StaticPopupDialogs["EQOL_VISIBILITY_DELETE"] then
 			StaticPopupDialogs["EQOL_VISIBILITY_DELETE"] = {
 				text = L["VisibilityDeleteConfirm"] or "Delete this visibility config?",
@@ -1299,8 +1337,6 @@ addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 	pickButton:SetScript("OnClick", function()
 		local editor = getEditor()
 		local configId = editor and editor.selectedConfigId
-		local cfg = configId and Visibility:GetConfig(configId)
-		if isFixedConfig(cfg) then return end
 		if not configId then
 			configId = Visibility:CreateConfig(L["VisibilityNewConfig"] or "New Visibility Config")
 			Visibility:SetSelectedConfig(configId)
@@ -1309,12 +1345,16 @@ addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 		startPicker(editor, configId)
 	end)
 
+	knownFramesButton:SetScript("OnClick", function(self)
+		local editor = getEditor()
+		local configId = editor and editor.selectedConfigId
+		showKnownFramesMenu(self)
+	end)
+
 	addFrame:SetScript("OnClick", function()
 		local editor = getEditor()
 		local configId = editor and editor.selectedConfigId
 		if not configId then return end
-		local cfg = configId and Visibility:GetConfig(configId)
-		if isFixedConfig(cfg) then return end
 		local name = editor.frameNameBox:GetText()
 		editor.frameNameBox:SetText("")
 		editor.frameNameBox:ClearFocus()
@@ -1338,15 +1378,13 @@ addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
 		Visibility:RefreshEditor()
 	end)
 
-frameNameBox:SetScript("OnEnterPressed", function()
-	addFrame:Click()
-end)
+	frameNameBox:SetScript("OnEnterPressed", function() addFrame:Click() end)
 
 	configNameBox:SetScript("OnEnterPressed", function(self)
 		local editor = getEditor()
 		local configId = editor and editor.selectedConfigId
 		local cfg = configId and Visibility:GetConfig(configId)
-		if cfg and not isFixedConfig(cfg) then
+		if cfg then
 			local text = self:GetText()
 			if text and text ~= "" then cfg.name = text end
 			Visibility:RefreshEditor()
@@ -1406,9 +1444,7 @@ function Visibility:RefreshEditor()
 	local selected = root.selectedConfig
 	if not selected or not root.configs[selected] then
 		selected = root.order and root.order[1]
-		if selected and root.configs[selected] then
-			root.selectedConfig = selected
-		end
+		if selected and root.configs[selected] then root.selectedConfig = selected end
 	end
 	editor.selectedConfigId = selected
 
@@ -1452,27 +1488,17 @@ function Visibility:RefreshEditor()
 
 	-- Inspector fields
 	local cfg = selected and root.configs and root.configs[selected]
-	local fixed = cfg and isFixedConfig(cfg)
 	if cfg then
 		if editor.configNameBox then
 			editor.configNameBox:SetText(cfg.name or "")
-			if fixed then
-				editor.configNameBox:Disable()
-			else
-				editor.configNameBox:Enable()
-			end
+			editor.configNameBox:Enable()
 		end
 		if editor.frameNameBox then
-			if fixed then
-				editor.frameNameBox:Disable()
-				editor.addFrame:Disable()
-				editor.pickButton:Disable()
-			else
-				editor.frameNameBox:Enable()
-				editor.addFrame:Enable()
-				editor.pickButton:Enable()
-			end
+			editor.frameNameBox:Enable()
+			editor.addFrame:Enable()
+			editor.pickButton:Enable()
 		end
+		if editor.addKnownFrames then editor.addKnownFrames:Enable() end
 		editor.enabledCheck:SetChecked(cfg.enabled == true)
 		editor.enabledCheck:Enable()
 		local modeLabel = cfg.mode == Helper.MODES.HIDE and (L["VisibilityModeHide"] or "Hide when") or (L["VisibilityModeShow"] or "Show when")
@@ -1492,6 +1518,7 @@ function Visibility:RefreshEditor()
 			editor.addFrame:Disable()
 			editor.pickButton:Enable()
 		end
+		if editor.addKnownFrames then editor.addKnownFrames:Enable() end
 		editor.enabledCheck:SetChecked(false)
 		editor.enabledCheck:Disable()
 		editor.modeButton:SetText(L["VisibilityModeShow"] or "Show when")
@@ -1501,7 +1528,7 @@ function Visibility:RefreshEditor()
 	end
 
 	if editor.deleteConfig then
-		if cfg and not fixed then
+		if cfg then
 			editor.deleteConfig:Enable()
 		else
 			editor.deleteConfig:Disable()
@@ -1543,11 +1570,7 @@ function Visibility:RefreshEditor()
 			else
 				row.text:SetTextColor(0.7, 0.7, 0.7, 1)
 			end
-			if fixed then
-				row.remove:Hide()
-			else
-				row.remove:Show()
-			end
+			row.remove:Show()
 			row:ClearAllPoints()
 			row:SetPoint("TOPLEFT", fContent, "TOPLEFT", 0, -((fIndex - 1) * (rowHeight + 2)))
 			row:SetPoint("TOPRIGHT", fContent, "TOPRIGHT", 0, -((fIndex - 1) * (rowHeight + 2)))
@@ -1721,7 +1744,6 @@ function Visibility:RefreshEditor()
 		condRows[i]:Hide()
 	end
 	cContent:SetHeight(math.max(1, cIndex * (rowH + 2)))
-
 end
 
 function Visibility:OpenEditor()
