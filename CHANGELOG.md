@@ -14,6 +14,7 @@
 - Cooldown Panels: Optional power check tint when a spell is unusable due to insufficient resources.
 - Cooldown Panels: Panel spec filter (show only for specific specs).
 - Cooldown Panels: Power tint color can be customized.
+- Cooldown Panels: Added /ecd slash command to open the editor (if the command is free).
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - UF Plus: Highlight dispellable debuffs option for aura icons.
@@ -36,6 +37,7 @@
 - Sound: Personal crafting orders now have extra sound options for New/Removed orders (fires only on changes).
 - Shared Media: 2 new voices for crafting orders (Crafting Order - New, Crafting Order - Canceled).
 - Visibility: Added player casting/mounted/in-group rules plus skyriding show/hide and player health < 100% support for action bars/cooldown viewer.
+- Mover: Ready Check frame is now movable.
 
 ### 🔁 Changed
 

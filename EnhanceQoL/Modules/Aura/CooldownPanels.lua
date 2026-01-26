@@ -4607,6 +4607,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "wrapDirection",
 				parentId = "cooldownPanelLayout",
 				height = 120,
+				disabled = function() return (layout.wrapCount or 0) == 0 end,
 				get = function() return normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") end,
 				set = function(_, value) applyEditLayout(panelId, "wrapDirection", value) end,
 				generator = function(_, root)
@@ -4625,6 +4626,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "growthPoint",
 				parentId = "cooldownPanelLayout",
 				height = 90,
+				disabled = function() return (layout.wrapCount or 0) == 0 end,
 				get = function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
 				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
 				generator = function(_, root)
@@ -5310,6 +5312,36 @@ local function registerEditModeCallbacks()
 	editModeCallbacksRegistered = true
 end
 
+local function isSlashCommandRegistered(command)
+	if not command then return false end
+	command = command:lower()
+	for key, value in pairs(_G) do
+		if type(key) == "string" and key:match("^SLASH_") and type(value) == "string" then
+			if value:lower() == command then return true end
+		end
+	end
+	return false
+end
+
+local function registerCooldownPanelsSlashCommand()
+	if not SlashCmdList then return end
+	local command = "/ecd"
+	if isSlashCommandRegistered(command) then
+		local owned = SlashCmdList["EQOLCP"] and type(_G.SLASH_EQOLCP1) == "string" and _G.SLASH_EQOLCP1:lower() == command
+		if not owned then return end
+	end
+	_G.SLASH_EQOLCP1 = command
+	SlashCmdList["EQOLCP"] = function()
+		local panels = addon.Aura and addon.Aura.CooldownPanels
+		if not panels then return end
+		if panels.ToggleEditor then
+			panels:ToggleEditor()
+		elseif panels.OpenEditor then
+			panels:OpenEditor()
+		end
+	end
+end
+
 refreshPanelsForSpell = function(spellId)
 	local id = tonumber(spellId)
 	if not id then return false end
@@ -5571,6 +5603,7 @@ function CooldownPanels:Init()
 	self:RefreshAllPanels()
 	ensureUpdateFrame()
 	registerEditModeCallbacks()
+	registerCooldownPanelsSlashCommand()
 end
 
 function addon.Aura.functions.InitCooldownPanels()

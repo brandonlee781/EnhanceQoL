@@ -247,6 +247,13 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "ReadyCheckFrame",
+		label = L["Ready Check"] or "Ready Check",
+		group = "activities",
+		names = { "ReadyCheckFrame" },
+		defaultEnabled = true,
+	},
+	{
 		id = "WeeklyRewardsFrame",
 		label = L["Great Vault"] or "Great Vault",
 		group = "activities",

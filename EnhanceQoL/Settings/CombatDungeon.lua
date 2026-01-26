@@ -151,27 +151,38 @@ local function cancelCombatLogStopTimer()
 	addon.variables.combatLogStopTimer = nil
 end
 
+local function getCombatLogEnabledState()
+	if _G.IsLoggingCombat then
+		local enabled = _G.IsLoggingCombat()
+		return enabled and true or false
+	end
+	local logger = _G.LoggingCombat
+	if not logger then return false end
+	local enabled = logger()
+	return enabled and true or false
+end
+
 local function applyCombatLogState(enabled)
 	local logger = _G.LoggingCombat
 	if not logger then return end
 	local target = enabled and true or false
 	if target then
 		cancelCombatLogStopTimer()
-		local current = logger()
-		if current == true then return end
+		local current = getCombatLogEnabledState()
+		if current then return end
 		logger(true)
 		printCombatLogMessage(L["combatLogEnabledMsg"] or "Combat logging enabled.")
 		return
 	end
 
 	if addon.db and addon.db.combatLogDelayedStop and C_Timer and C_Timer.NewTimer then
-		local current = logger()
-		if current == false then return end
+		local current = getCombatLogEnabledState()
+		if not current then return end
 		cancelCombatLogStopTimer()
 		addon.variables = addon.variables or {}
 		addon.variables.combatLogStopTimer = C_Timer.NewTimer(COMBAT_LOG_DELAY_SECONDS, function()
 			addon.variables.combatLogStopTimer = nil
-			if logger() then
+			if getCombatLogEnabledState() then
 				logger(false)
 				printCombatLogMessage(L["combatLogDisabledMsg"] or "Combat logging disabled.")
 			end
@@ -180,7 +191,7 @@ local function applyCombatLogState(enabled)
 	end
 
 	cancelCombatLogStopTimer()
-	local current = logger()
+	local current = getCombatLogEnabledState()
 	if current == target then return end
 	logger(false)
 	printCombatLogMessage(L["combatLogDisabledMsg"] or "Combat logging disabled.")
@@ -206,10 +217,7 @@ local function updateCombatLogState()
 
 	local category = getCombatLogCategory(instanceType)
 	if not category then return end
-	if addon.variables and addon.variables.combatLogRestoreState == nil then
-		local logger = _G.LoggingCombat
-		addon.variables.combatLogRestoreState = logger and logger() or false
-	end
+	if addon.variables and addon.variables.combatLogRestoreState == nil then addon.variables.combatLogRestoreState = getCombatLogEnabledState() end
 
 	local decision = getCombatLogDecision(category, difficultyID)
 	if decision == nil then return end
