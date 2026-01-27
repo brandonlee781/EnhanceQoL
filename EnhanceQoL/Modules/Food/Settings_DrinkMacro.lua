@@ -369,6 +369,7 @@ local function buildDrinkMacroSettings()
 	})
 
 	local function customSpellsEnabled() return healthParentCheck() and addon.db.healthUseCustomSpells == true end
+	local customSpellsParent = addon.SettingsLayout.elements["healthUseCustomSpells"] and addon.SettingsLayout.elements["healthUseCustomSpells"].element or healthEnable.element
 
 	local customSpellOrder = {}
 
@@ -418,7 +419,7 @@ local function buildDrinkMacroSettings()
 			StaticPopup_Show("EQOL_ADD_HEALTH_SPELL")
 		end,
 		parent = true,
-		element = addon.SettingsLayout.elements["healthUseCustomSpells"] and addon.SettingsLayout.elements["healthUseCustomSpells"].element or healthEnable.element,
+		element = customSpellsParent,
 		parentCheck = customSpellsEnabled,
 		parentSection = convenienceSection,
 	})
@@ -444,7 +445,7 @@ local function buildDrinkMacroSettings()
 		text = L["Custom Spells"] or "Custom Spells",
 		parentCheck = customSpellsEnabled,
 		parent = true,
-		element = addon.SettingsLayout.elements["healthUseCustomSpells"] and addon.SettingsLayout.elements["healthUseCustomSpells"].element or healthEnable.element,
+		element = customSpellsParent,
 		listFunc = customSpellList,
 		order = customSpellOrder,
 		default = "",
@@ -463,6 +464,16 @@ local function buildDrinkMacroSettings()
 		end,
 		parentSection = convenienceSection,
 	})
+
+	addon.functions.SettingsCreateText(
+		cDrink,
+		L["healthCustomSpellsHint"] or "Selecting a spell in the dropdown removes it (the field stays blank by design). The macro uses any custom spells you know.",
+		{
+			parent = customSpellsParent,
+			parentCheck = customSpellsEnabled,
+			parentSection = convenienceSection,
+		}
+	)
 
 	addon.functions.SettingsCreateText(cDrink, string.format(L["healthMacroPlaceOnBar"], "EnhanceQoLHealthMacro"), { parentSection = convenienceSection })
 	if addon.variables and addon.variables.unitClass == "WARLOCK" then addon.functions.SettingsCreateText(cDrink, L["healthMacroTipReset"], { parentSection = convenienceSection }) end

@@ -31,6 +31,8 @@ local COOLDOWN_VIEWER_VISIBILITY_MODES = constants.COOLDOWN_VIEWER_VISIBILITY_MO
 		IN_COMBAT = "IN_COMBAT",
 		WHILE_MOUNTED = "WHILE_MOUNTED",
 		WHILE_NOT_MOUNTED = "WHILE_NOT_MOUNTED",
+		SKYRIDING_ACTIVE = "SKYRIDING_ACTIVE",
+		SKYRIDING_INACTIVE = "SKYRIDING_INACTIVE",
 		MOUSEOVER = "MOUSEOVER",
 		PLAYER_HAS_TARGET = "PLAYER_HAS_TARGET",
 		PLAYER_CASTING = "PLAYER_CASTING",
@@ -423,7 +425,7 @@ local function createButtonAppearanceControls(category, expandable)
 		parent = true,
 		element = borderColorToggle.element,
 		parentCheck = function() return borderColorToggle.setting and borderColorToggle.setting:GetValue() == true end,
-		colorizeLabel = true,
+		colorizeLabel = false,
 		parentSection = expandable,
 	})
 
@@ -854,6 +856,14 @@ local function createCooldownViewerDropdowns(category, expandable)
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.IN_COMBAT, text = L["cooldownManagerShowCombat"] or "In combat" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED, text = L["cooldownManagerShowMounted"] or "Mounted" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED, text = L["cooldownManagerShowNotMounted"] or "Not mounted" },
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE,
+			text = L["cooldownManagerShowSkyriding"] or (L["visibilityRule_skyriding"] or "While skyriding"),
+		},
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE,
+			text = L["cooldownManagerHideSkyriding"] or (L["visibilityRule_hideSkyriding"] or "Hide while skyriding"),
+		},
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING, text = L["cooldownManagerShowCasting"] or "Player is casting" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_IN_GROUP, text = L["cooldownManagerShowGrouped"] or "In party/raid" },
 		{

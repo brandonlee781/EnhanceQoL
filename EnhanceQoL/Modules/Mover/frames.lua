@@ -198,7 +198,6 @@ local frames = {
 		names = { "CooldownViewerSettings" },
 		addon = "Blizzard_CooldownViewer",
 		defaultEnabled = true,
-		
 	},
 	{
 		id = "InspectFrame",
@@ -245,6 +244,13 @@ local frames = {
 		label = L["Dungeon Ready Dialog"] or "Dungeon Ready Dialog",
 		group = "activities",
 		names = { "LFGDungeonReadyDialog" },
+		defaultEnabled = true,
+	},
+	{
+		id = "ReadyCheckFrame",
+		label = L["Ready Check"] or "Ready Check",
+		group = "activities",
+		names = { "ReadyCheckFrame" },
 		defaultEnabled = true,
 	},
 	{

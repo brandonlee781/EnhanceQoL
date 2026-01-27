@@ -142,6 +142,7 @@ local applyClassResourceLayout
 local totemFrameOriginalLayout
 local totemFrameManaged
 local totemFrameHooked
+local totemFrameSample
 local applyTotemFrameLayout
 
 local bossUnitLookup = { boss = true }
@@ -838,16 +839,44 @@ local function normalizeTotemFrameConfig(value)
 	return {}
 end
 
-local function hasActiveTotems()
-	if not GetTotemInfo then return false end
-	for i = 1, (MAX_TOTEMS or 4) do
-		local haveTotem = GetTotemInfo(i)
-		if haveTotem then return true end
+function TotemFrameUtil.ensureSampleFrame(parent)
+	if not totemFrameSample then
+		totemFrameSample = CreateFrame("Frame", nil, parent)
+		totemFrameSample.ignoreFramePositionManager = true
+		totemFrameSample._eqolManageVisibility = true
+		totemFrameSample:SetSize(37, 37)
+		totemFrameSample:EnableMouse(false)
 	end
-	return false
+	if parent and totemFrameSample:GetParent() ~= parent then
+		totemFrameSample:SetParent(parent)
+	end
+	return totemFrameSample
+end
+
+function TotemFrameUtil.hideSampleFrame()
+	if not totemFrameSample then return end
+	if totemFrameSample._eqolSampleButton then totemFrameSample._eqolSampleButton:Hide() end
+	totemFrameSample:Hide()
+end
+
+function TotemFrameUtil.syncSampleFrame(sampleFrame, totemFrame, fallbackParent)
+	if not sampleFrame or not totemFrame then return end
+	sampleFrame:ClearAllPoints()
+	local numPoints = totemFrame.GetNumPoints and totemFrame:GetNumPoints() or 0
+	if numPoints > 0 then
+		for i = 1, numPoints do
+			sampleFrame:SetPoint(totemFrame:GetPoint(i))
+		end
+	elseif fallbackParent then
+		sampleFrame:SetPoint("TOPRIGHT", fallbackParent, "BOTTOMRIGHT", 0, 0)
+	end
+	if sampleFrame.SetScale and totemFrame.GetScale then sampleFrame:SetScale(totemFrame:GetScale()) end
+	if sampleFrame.SetFrameStrata and totemFrame.GetFrameStrata then sampleFrame:SetFrameStrata(totemFrame:GetFrameStrata()) end
+	if sampleFrame.SetFrameLevel and totemFrame.GetFrameLevel then sampleFrame:SetFrameLevel(totemFrame:GetFrameLevel()) end
 end
 
 function TotemFrameUtil.restoreTotemFrame()
+	TotemFrameUtil.hideSampleFrame()
 	if not totemFrameManaged then return end
 	local frame = _G.TotemFrame
 	if not frame then return end
@@ -881,21 +910,25 @@ function TotemFrameUtil.hookTotemFrame(frame)
 	end) end
 end
 
-function TotemFrameUtil.updateSample(frame, shouldShow)
+function TotemFrameUtil.updateSample(frame, shouldShow, activeRefFrame)
 	if not frame then return end
+	local manageVisibility = frame._eqolManageVisibility == true
+	local refFrame = activeRefFrame or frame
 	if not shouldShow then
 		if frame._eqolSampleButton then frame._eqolSampleButton:Hide() end
-		if not hasActiveTotems() and (frame.activeTotems == nil or frame.activeTotems == 0) then frame:Hide() end
+		if manageVisibility and frame.Hide then frame:Hide() end
 		return
 	end
-	if (frame.activeTotems and frame.activeTotems > 0) or hasActiveTotems() then
+	if refFrame and refFrame.activeTotems and refFrame.activeTotems > 0 then
 		if frame._eqolSampleButton then frame._eqolSampleButton:Hide() end
+		if manageVisibility and frame.Hide then frame:Hide() end
 		return
 	end
 	local button = frame._eqolSampleButton
 	if not button then
 		button = CreateFrame("Button", nil, frame, "TotemButtonTemplate")
 		frame._eqolSampleButton = button
+		button:SetAllPoints(frame)
 	end
 	button.layoutIndex = 1
 	button.slot = 0
@@ -911,23 +944,28 @@ function TotemFrameUtil.updateSample(frame, shouldShow)
 	button:SetScript("OnUpdate", nil)
 	button:EnableMouse(false)
 	button:Show()
-	frame:Show()
+	if manageVisibility and frame.Show then frame:Show() end
 	if frame.Layout then frame:Layout() end
 end
 
 applyTotemFrameLayout = function(cfg)
 	local frame = _G.TotemFrame
 	if not frame then
+		TotemFrameUtil.hideSampleFrame()
 		TotemFrameUtil.restoreTotemFrame()
 		return
 	end
 	local classKey = addon.variables and addon.variables.unitClass
 	if not classKey or not totemFrameClasses[classKey] then
+		TotemFrameUtil.hideSampleFrame()
 		TotemFrameUtil.restoreTotemFrame()
 		return
 	end
 	local st = states[UNIT.PLAYER]
-	if not st or not st.frame then return end
+	if not st or not st.frame then
+		TotemFrameUtil.hideSampleFrame()
+		return
+	end
 	local def = defaultsFor(UNIT.PLAYER)
 	local rcfg = (cfg and cfg.classResource) or (def and def.classResource) or {}
 	local tcfg = normalizeTotemFrameConfig(rcfg.totemFrame)
@@ -935,10 +973,14 @@ applyTotemFrameLayout = function(cfg)
 	local enabled = tcfg.enabled
 	if enabled == nil then enabled = tdef.enabled end
 	if enabled ~= true then
+		TotemFrameUtil.hideSampleFrame()
 		TotemFrameUtil.restoreTotemFrame()
 		return
 	end
-	if InCombatLockdown and InCombatLockdown() then return end
+	if InCombatLockdown and InCombatLockdown() then
+		TotemFrameUtil.hideSampleFrame()
+		return
+	end
 
 	TotemFrameUtil.storeTotemFrameDefaults(frame)
 	TotemFrameUtil.hookTotemFrame(frame)
@@ -980,7 +1022,14 @@ applyTotemFrameLayout = function(cfg)
 	local showSample = tcfg.showSample
 	if showSample == nil then showSample = tdef.showSample end
 	showSample = inEditMode and showSample == true
-	TotemFrameUtil.updateSample(frame, showSample)
+	if frame._eqolSampleButton then frame._eqolSampleButton:Hide() end
+	if showSample then
+		local sampleFrame = TotemFrameUtil.ensureSampleFrame(st.frame)
+		TotemFrameUtil.syncSampleFrame(sampleFrame, frame, st.frame)
+		TotemFrameUtil.updateSample(sampleFrame, true, frame)
+	else
+		TotemFrameUtil.hideSampleFrame()
+	end
 end
 
 local function resolveProfileDB(profileName)

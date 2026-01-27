@@ -36,11 +36,65 @@ function addon.functions.IsTimerunner()
 	return false
 end
 
+local function canChangeProtectedVisibility(frame)
+	if not frame then return false end
+	if InCombatLockdown and InCombatLockdown() then
+		if frame.IsProtected and frame:IsProtected() then return false end
+	end
+	return true
+end
+
 function addon.functions.toggleRaidTools(value, self)
-	if value == false and (UnitInParty("player") or UnitInRaid("player")) then
-		self:Show()
-	elseif UnitInParty("player") then
-		self:Hide()
+	if not self then return end
+	local inParty = UnitInParty("player")
+	local inRaid = UnitInRaid("player")
+	local inGroup = inParty or inRaid
+	local hideInParty = value == true and inParty and not inRaid
+
+	if not inGroup then
+		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = nil
+			self:SetAlpha(1)
+		end
+		return
+	end
+
+	if hideInParty then
+		if canChangeProtectedVisibility(self) then
+			if self.Hide then self:Hide() end
+		elseif self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = true
+			self:SetAlpha(0)
+		end
+	else
+		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = nil
+			self:SetAlpha(1)
+		end
+		if canChangeProtectedVisibility(self) then
+			if self.Show then self:Show() end
+		elseif self.SetAlpha then
+			self:SetAlpha(1)
+		end
+	end
+end
+
+function addon.functions.updateRaidToolsHook()
+	local manager = _G.CompactRaidFrameManager
+	if not manager or not manager.SetScript then return end
+	if addon.db and addon.db["hideRaidTools"] then
+		if not manager._eqolRaidToolsOnShowHooked then
+			manager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
+			manager._eqolRaidToolsOnShowHooked = true
+		end
+		addon.functions.toggleRaidTools(addon.db["hideRaidTools"], manager)
+	elseif manager._eqolRaidToolsOnShowHooked then
+		manager:SetScript("OnShow", nil)
+		manager._eqolRaidToolsOnShowHooked = nil
+		if manager._eqolRaidToolsAlphaHidden and manager.SetAlpha then
+			manager._eqolRaidToolsAlphaHidden = nil
+			manager:SetAlpha(1)
+		end
 	end
 end
 
@@ -1402,6 +1456,15 @@ local function isSlashCommandOwnedByEQOL(command, listName, prefix, maxIndex)
 	return false
 end
 
+local function getPullCountdownSeconds(msg)
+	local number = tonumber(msg and msg:match("(%d+)") or "")
+	if not number then number = (addon.db and addon.db["pullTimerLongTime"]) or 10 end
+	if number < 0 then number = 0 end
+	local maxSeconds = (Constants and Constants.PartyCountdownConstants and Constants.PartyCountdownConstants.MaxCountdownSeconds) or 3600
+	if number > maxSeconds then number = maxSeconds end
+	return number
+end
+
 local function toggleCooldownViewerSettings()
 	if InCombatLockdown and InCombatLockdown() then return end
 	local frame = _G.CooldownViewerSettings
@@ -1481,6 +1544,17 @@ function addon.functions.registerCooldownManagerSlashCommand()
 	_G.SLASH_EQOLCDMSC1 = commands[1]
 	_G.SLASH_EQOLCDMSC2 = commands[2]
 	SlashCmdList["EQOLCDMSC"] = function() toggleCooldownViewerSettings() end
+end
+
+function addon.functions.registerPullTimerSlashCommand()
+	if not SlashCmdList then return end
+	local function canClaim(command) return isSlashCommandOwnedByEQOL(command, "EQOLPULL", "EQOLPULL", 1) or not isSlashCommandRegistered(command) end
+	if not canClaim("/pull") then return end
+	_G.SLASH_EQOLPULL1 = "/pull"
+	SlashCmdList["EQOLPULL"] = function(msg)
+		local seconds = getPullCountdownSeconds(msg)
+		if C_PartyInfo and C_PartyInfo.DoCountdown then C_PartyInfo.DoCountdown(seconds) end
+	end
 end
 
 function addon.functions.registerEditModeSlashCommand()

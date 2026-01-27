@@ -552,6 +552,7 @@ local function ShortenHotkeyText(text)
 	if isMinusKeybind then short = short .. "-" end
 	return short
 end
+Labels.ShortenHotkeyText = ShortenHotkeyText
 
 local function ApplyHotkeyStyling(button)
 	if not addon.db then return end

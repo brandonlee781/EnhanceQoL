@@ -606,6 +606,28 @@ local function registerEditModeBars()
 					add("BuffBarCooldownViewer", "BuffBarCooldownViewer")
 					add("BuffIconCooldownViewer", "BuffIconCooldownViewer")
 
+					local cooldownPanels = addon.Aura and addon.Aura.CooldownPanels
+					if cooldownPanels and cooldownPanels.GetRoot then
+						local root = cooldownPanels:GetRoot()
+						if root and root.panels then
+							local order = root.order or {}
+							local function addPanelEntry(panelId, panel)
+								if not panel or panel.enabled == false then return end
+								local label = string.format("Panel %s: %s", tostring(panelId), panel.name or "Cooldown Panel")
+								add("EQOL_CooldownPanel" .. tostring(panelId), label)
+							end
+							if #order > 0 then
+								for _, panelId in ipairs(order) do
+									addPanelEntry(panelId, root.panels[panelId])
+								end
+							else
+								for panelId, panel in pairs(root.panels) do
+									addPanelEntry(panelId, panel)
+								end
+							end
+						end
+					end
+
 					if addon.variables and addon.variables.actionBarNames then
 						for _, info in ipairs(addon.variables.actionBarNames) do
 							if info.name then add(info.name, info.text or info.name) end

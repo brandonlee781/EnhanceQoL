@@ -7,6 +7,14 @@
 - Mount Keybinding: Option to disable shifting into Travel/Cat Form while mounted for druids using random mount.
 - Cooldown Viewer: Separate fade amount slider for “Show when” visibility rules.
 - Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
+- Cooldown Panels: Panel-level keybind display settings in Edit Mode (enable, anchor, offsets, font).
+- Cooldown Panels: Growth point option to center icon rows/columns.
+- Cooldown Panels: Spell activation overlay glows now shown on matching entries.
+- Cooldown Panels: Optional range overlay with customizable color (spell range checks).
+- Cooldown Panels: Optional power check tint when a spell is unusable due to insufficient resources.
+- Cooldown Panels: Panel spec filter (show only for specific specs).
+- Cooldown Panels: Power tint color can be customized.
+- Cooldown Panels: Added /ecd slash command to open the editor (if the command is free).
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - UF Plus: Highlight dispellable debuffs option for aura icons.
@@ -22,22 +30,31 @@
 - Trade Log: Trade history line now shows colorized item names per side (You/Other).
 - Trade Log: Removed “Trade” from trade history preview.
 - Settings: Optional slash commands for Edit Mode (/em, /edit, /editmode) and Quick Keybind Mode (/kb).
+- Settings: Optional /pull slash command for the Blizzard pull countdown (skips if claimed).
 - Settings: Moved slash command toggles to General → UI Utilities.
 - Questing: Optional modifier requirement for quest automation (accept/complete).
 - Mouse Ring: Combat-only color/size override and optional extra combat ring overlay.
 - Sound: Personal crafting orders now have extra sound options for New/Removed orders (fires only on changes).
 - Shared Media: 2 new voices for crafting orders (Crafting Order - New, Crafting Order - Canceled).
 - Visibility: Added player casting/mounted/in-group rules plus skyriding show/hide and player health < 100% support for action bars/cooldown viewer.
+- Mover: Ready Check frame is now movable.
 
 ### 🔁 Changed
 
 - Resource Bars: Druid Treant form no longer listed in form filters (mapped to Humanoid)
+- Minimap: Only re-show hidden elements if EnhanceQoL hid them (avoids overriding other addons)
 
 ### 🐛 Fixed
 
 - Cooldown Panel glow wasn't working correctly in restricted environment
+- Cooldown Panels: Growth point alignment now uses left/center/right start points to keep the edit mode overlay aligned
+- Cooldown Panels: Track override spell IDs so talent-based replacements update correctly
+- Cooldown Panels: Item uses/charge count now tracked correctly (includeUses)
+- Hide Raid Tools: Only hook CompactRaidFrameManager when setting is enabled and avoid protected Hide in combat (alpha fallback)
+- Data Panels: Reflow inline texture widths on UI scale changes to prevent squished text
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
+- Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank
 
 ---
 
