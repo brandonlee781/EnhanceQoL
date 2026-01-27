@@ -51,6 +51,7 @@
 - Cooldown Panels: Track override spell IDs so talent-based replacements update correctly
 - Cooldown Panels: Item uses/charge count now tracked correctly (includeUses)
 - Hide Raid Tools: Only hook CompactRaidFrameManager when setting is enabled and avoid protected Hide in combat (alpha fallback)
+- Data Panels: Reflow inline texture widths on UI scale changes to prevent squished text
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
 - Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank

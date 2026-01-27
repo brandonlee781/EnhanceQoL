@@ -150,6 +150,17 @@ local function normalizeContentAnchor(anchor, fallback)
 	return "LEFT"
 end
 
+local function hasInlineTexture(text)
+	if type(text) ~= "string" then return false end
+	return text:find("|T", 1, true) or text:find("|A", 1, true)
+end
+
+local function scheduleInlineReflowAll()
+	for _, panel in pairs(panels) do
+		if panel and panel.ScheduleTextReflow then panel:ScheduleTextReflow() end
+	end
+end
+
 local function updateSelectionStrata(panel, targetStrata)
 	if not panel or not panel.frame then return end
 	local selection = panel.frame.Selection
@@ -841,6 +852,17 @@ function DataPanel.Create(id, name, existingOnly)
 		if changed then self:Refresh() end
 	end
 
+	function panel:ScheduleTextReflow()
+		if self._eqolTextReflowScheduled then return end
+		if not C_Timer or not C_Timer.After then return end
+		self._eqolTextReflowScheduled = true
+		C_Timer.After(0.05, function()
+			if panels[id] ~= panel then return end
+			panel._eqolTextReflowScheduled = nil
+			if panel.ApplyTextStyle then panel:ApplyTextStyle() end
+		end)
+	end
+
 	function panel:SyncEditModeValue(field, value)
 		if not EditMode or not self.editModeId or self.suspendEditSync or self.applyingFromEditMode then return end
 		self.suspendEditSync = true
@@ -1343,6 +1365,7 @@ function DataPanel.Create(id, name, existingOnly)
 							child.lastWidth = w
 							child:SetWidth(w)
 						end
+						if (isNew or textChanged or partsFontChanged) and hasInlineTexture(text) then panel:ScheduleTextReflow() end
 					end
 					child.currencyID = part.id
 					totalWidth = totalWidth + (child.lastWidth or 0) + (i > 1 and 5 or 0)
@@ -1389,6 +1412,7 @@ function DataPanel.Create(id, name, existingOnly)
 						if self.lastWidths and self.lastWidths[name] then self.lastWidths[name] = width end
 						layoutNeedsRefresh = true
 					end
+					if hasInlineTexture(text) then panel:ScheduleTextReflow() end
 				end
 			end
 			if payload.parts then
@@ -1600,7 +1624,13 @@ end
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:SetScript("OnEvent", function(self)
+initFrame:RegisterEvent("UI_SCALE_CHANGED")
+initFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+initFrame:SetScript("OnEvent", function(self, event)
+	if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+		scheduleInlineReflowAll()
+		return
+	end
 	addon.db = addon.db or {}
 	local panelsDB = addon.db.dataPanels or {}
 	addon.db.dataPanels = panelsDB
@@ -1610,6 +1640,8 @@ initFrame:SetScript("OnEvent", function(self)
 	end
 
 	self:UnregisterEvent("PLAYER_LOGIN")
+	scheduleInlineReflowAll()
+	if C_Timer and C_Timer.After then C_Timer.After(0.1, scheduleInlineReflowAll) end
 end)
 
 return DataPanel
