@@ -402,6 +402,46 @@ local function normalizeColor(value, fallback)
 	return { r, g, b, a }
 end
 
+local function resolveColor(value, fallback)
+	local ref = fallback or { 1, 1, 1, 1 }
+	local r, g, b, a
+	if type(value) == "table" then
+		r = value.r or value[1] or ref[1] or 1
+		g = value.g or value[2] or ref[2] or 1
+		b = value.b or value[3] or ref[3] or 1
+		a = value.a
+		if a == nil then a = value[4] end
+	else
+		r = ref[1] or 1
+		g = ref[2] or 1
+		b = ref[3] or 1
+		a = ref[4]
+	end
+	if a == nil then a = ref[4] end
+	if a == nil then a = 1 end
+	if r < 0 then
+		r = 0
+	elseif r > 1 then
+		r = 1
+	end
+	if g < 0 then
+		g = 0
+	elseif g > 1 then
+		g = 1
+	end
+	if b < 0 then
+		b = 0
+	elseif b > 1 then
+		b = 1
+	end
+	if a < 0 then
+		a = 0
+	elseif a > 1 then
+		a = 1
+	end
+	return r, g, b, a
+end
+
 local function getLayoutKey(layout)
 	if not layout then return "" end
 	local rowSizes = layout.rowSizes
@@ -3572,9 +3612,9 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
 	local checkPower = layout.checkPower == true
-	local powerTintColor = normalizeColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
+	local powerTintR, powerTintG, powerTintB = resolveColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
 	local rangeOverlayEnabled = layout.rangeOverlayEnabled == true
-	local rangeOverlayColor = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
+	local rangeOverlayR, rangeOverlayG, rangeOverlayB, rangeOverlayA = resolveColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -3764,9 +3804,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.entryId = entryId
 				data.overlayGlow = overlayGlow
 				data.powerInsufficient = powerInsufficient
-				data.powerTintColor = powerTintColor
 				data.rangeOverlay = rangeOverlay
-				data.rangeOverlayColor = rangeOverlayColor
 				data.glowReady = glowReady
 				data.glowDuration = glowDuration
 				data.soundReady = soundReady
@@ -3938,8 +3976,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		end
 		icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1)
 		if data.powerInsufficient then
-			local col = data.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor or { 0.5, 0.5, 1, 1 }
-			icon.texture:SetVertexColor(col[1] or 0.5, col[2] or 0.5, col[3] or 1)
+			icon.texture:SetVertexColor(powerTintR or 0.5, powerTintG or 0.5, powerTintB or 1)
 		else
 			icon.texture:SetVertexColor(1, 1, 1)
 		end
@@ -3963,8 +4000,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		end
 		if icon.rangeOverlay then
 			if data.rangeOverlay then
-				local col = data.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor or { 1, 0.1, 0.1, 0.35 }
-				icon.rangeOverlay:SetColorTexture(col[1] or 1, col[2] or 0.1, col[3] or 0.1, col[4] or 0.35)
+				icon.rangeOverlay:SetColorTexture(rangeOverlayR or 1, rangeOverlayG or 0.1, rangeOverlayB or 0.1, rangeOverlayA or 0.35)
 				icon.rangeOverlay:Show()
 			else
 				icon.rangeOverlay:Hide()
