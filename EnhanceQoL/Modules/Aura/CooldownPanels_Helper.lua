@@ -283,6 +283,21 @@ function Helper.CreateEntry(entryType, idValue, defaults)
 	return entry
 end
 
+function Helper.GetEntryKey(panelId, entryId) return tostring(panelId) .. ":" .. tostring(entryId) end
+
+function Helper.NormalizeDisplayCount(value)
+	if value == nil then return nil end
+	if issecretvalue and issecretvalue(value) then return value end
+	if value == "" then return nil end
+	return value
+end
+
+function Helper.HasDisplayCount(value)
+	if value == nil then return false end
+	if issecretvalue and issecretvalue(value) then return true end
+	return value ~= ""
+end
+
 Helper.Keybinds = Helper.Keybinds or {}
 local Keybinds = Helper.Keybinds
 
@@ -300,6 +315,9 @@ local DEFAULT_ACTION_BUTTON_NAMES = {
 local GetItemInfoInstantFn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 local GetOverrideSpell = C_Spell and C_Spell.GetOverrideSpell
 local GetInventoryItemID = GetInventoryItemID
+local GetActionDisplayCount = C_ActionBar and C_ActionBar.GetActionDisplayCount
+local FindSpellActionButtons = C_ActionBar and C_ActionBar.FindSpellActionButtons
+local issecretvalue = _G.issecretvalue
 
 local function getEffectiveSpellId(spellId)
 	local id = tonumber(spellId)
@@ -314,6 +332,99 @@ end
 local function getRoot()
 	if CooldownPanels and CooldownPanels.GetRoot then return CooldownPanels:GetRoot() end
 	return nil
+end
+
+local function getRuntime(panelId)
+	CooldownPanels.runtime = CooldownPanels.runtime or {}
+	local runtime = CooldownPanels.runtime[panelId]
+	if not runtime then
+		runtime = {}
+		CooldownPanels.runtime[panelId] = runtime
+	end
+	return runtime
+end
+
+local function getActionSlotForSpell(spellId)
+	if not spellId then return nil end
+	if ActionButtonUtil and ActionButtonUtil.GetActionButtonBySpellID then
+		local button = ActionButtonUtil.GetActionButtonBySpellID(spellId, false, false)
+		if button and button.action then return button.action end
+	end
+	if FindSpellActionButtons then
+		local slots = FindSpellActionButtons(spellId)
+		if type(slots) == "table" and slots[1] then return slots[1] end
+	end
+	return nil
+end
+
+local function getActionDisplayCountForSpell(spellId)
+	if not GetActionDisplayCount then return nil end
+	local slot = getActionSlotForSpell(spellId)
+	if not slot then return nil end
+	return GetActionDisplayCount(slot)
+end
+
+function Helper.UpdateActionDisplayCountsForSpell(spellId, baseSpellId)
+	if not GetActionDisplayCount then return false end
+	local id = tonumber(spellId)
+	local baseId = tonumber(baseSpellId)
+	local runtime = CooldownPanels.runtime
+	local index = runtime and runtime.spellIndex
+	if not index then return false end
+
+	local panels = {}
+	if id and index[id] then
+		for panelId in pairs(index[id]) do
+			panels[panelId] = true
+		end
+	end
+	if baseId and index[baseId] then
+		for panelId in pairs(index[baseId]) do
+			panels[panelId] = true
+		end
+	end
+	if not next(panels) then return false end
+
+	runtime.actionDisplayCounts = runtime.actionDisplayCounts or {}
+	local cache = runtime.actionDisplayCounts
+
+	for panelId in pairs(panels) do
+		local panel = CooldownPanels:GetPanel(panelId)
+		if panel and panel.entries then
+			local runtimePanel = getRuntime(panelId)
+			local entryToIcon = runtimePanel.entryToIcon
+			local needsRefresh = false
+			for entryId, entry in pairs(panel.entries) do
+				if entry and entry.type == "SPELL" and entry.showStacks == true and entry.spellID then
+					local entrySpellId = entry.spellID
+					local effectiveId = getEffectiveSpellId(entrySpellId)
+					local matches = (id and (entrySpellId == id or effectiveId == id)) or (baseId and (entrySpellId == baseId or effectiveId == baseId))
+					if matches then
+						local displayCount = getActionDisplayCountForSpell(effectiveId) or (effectiveId ~= entrySpellId and getActionDisplayCountForSpell(entrySpellId) or nil)
+						displayCount = Helper.NormalizeDisplayCount(displayCount)
+						cache[Helper.GetEntryKey(panelId, entryId)] = displayCount
+
+						local icon = entryToIcon and entryToIcon[entryId]
+						if icon then
+							if displayCount ~= nil then
+								icon.count:SetText(displayCount)
+								icon.count:Show()
+							else
+								icon.count:Hide()
+								needsRefresh = true
+							end
+						else
+							if displayCount ~= nil then needsRefresh = true end
+						end
+					end
+				end
+			end
+			if needsRefresh then
+				if CooldownPanels:GetPanel(panelId) then CooldownPanels:RefreshPanel(panelId) end
+			end
+		end
+	end
+	return true
 end
 
 local function getActionButtonSlotMap()

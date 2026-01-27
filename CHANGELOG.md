@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.7.2] - 2026-01-27
+
+### 🐛 Fixed
+
+- Cooldown Panels: Range checks now get enabled for newly added spells so range overlay updates reliably.
+- Cooldown Panels: "Show stack count" now uses ActionBar display counts (updates on SPELL_UPDATE_USES), supporting secret stacks.
+
+---
+
 ## [7.7.1] - 2026-01-27
 
 ### 🐛 Fixed

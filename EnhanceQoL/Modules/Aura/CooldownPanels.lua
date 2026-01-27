@@ -152,8 +152,8 @@ local GetSpellChargesInfo = C_Spell and C_Spell.GetSpellCharges
 local GetBaseSpell = C_Spell and C_Spell.GetBaseSpell
 local GetOverrideSpell = C_Spell and C_Spell.GetOverrideSpell
 local GetSpellPowerCost = C_Spell and C_Spell.GetSpellPowerCost
+local EnableSpellRangeCheck = C_Spell and C_Spell.EnableSpellRangeCheck
 local IsSpellUsableFn = C_Spell and C_Spell.IsSpellUsable or IsUsableSpell
-local GetPlayerAuraBySpellID = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
 local IsSpellKnown = C_SpellBook.IsSpellInSpellBook
 local IsEquippedItem = C_Item.IsEquippedItem
 local GetTime = GetTime
@@ -294,6 +294,7 @@ local function getRuntime(panelId)
 end
 
 local updatePowerEventRegistration
+local updateRangeCheckSpells
 local updateItemCountCacheForItem
 
 local function refreshEditModeSettingValues()
@@ -1080,6 +1081,8 @@ function CooldownPanels:RemoveEntry(panelId, entryId)
 	local panel = self:GetPanel(panelId)
 	if not panel or not panel.entries or not panel.entries[entryId] then return end
 	panel.entries[entryId] = nil
+	local runtime = CooldownPanels.runtime
+	if runtime and runtime.actionDisplayCounts then runtime.actionDisplayCounts[Helper.GetEntryKey(panelId, entryId)] = nil end
 	Helper.SyncOrder(panel.order, panel.entries)
 	self:RebuildSpellIndex()
 	self:RefreshPanel(panelId)
@@ -1090,16 +1093,20 @@ function CooldownPanels:RebuildSpellIndex()
 	local index = {}
 	local enabledPanels = {}
 	local itemPanels = {}
+	local rangeCheckSpells = {}
 	if root and root.panels then
 		for panelId, panel in pairs(root.panels) do
 			if panel and panel.enabled ~= false and panelAllowsSpec(panel) then
 				enabledPanels[panelId] = true
+				local layout = panel.layout
+				local wantsRangeCheck = layout and layout.rangeOverlayEnabled == true
 				for _, entry in pairs(panel.entries or {}) do
 					if entry and entry.type == "SPELL" and entry.spellID then
 						local spellId = tonumber(entry.spellID)
 						if spellId then
 							index[spellId] = index[spellId] or {}
 							index[spellId][panelId] = true
+							if wantsRangeCheck then rangeCheckSpells[spellId] = true end
 							local overrideId = getEffectiveSpellId(spellId)
 							if overrideId and overrideId ~= spellId then
 								index[overrideId] = index[overrideId] or {}
@@ -1116,6 +1123,7 @@ function CooldownPanels:RebuildSpellIndex()
 	self.runtime.spellIndex = index
 	self.runtime.enabledPanels = enabledPanels
 	self.runtime.itemPanels = itemPanels
+	if updateRangeCheckSpells then updateRangeCheckSpells(rangeCheckSpells) end
 	self:RebuildPowerIndex()
 	self:RebuildChargesIndex()
 	return index
@@ -3694,16 +3702,16 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					elseif cooldownDurationObject then
 						_, _, _, _, cooldownGCD = getSpellCooldownInfo(spellId)
 					end
-					if showStacks and GetPlayerAuraBySpellID then
-						local aura = GetPlayerAuraBySpellID(spellId)
-						if aura and isSafeGreaterThan(aura.applications, 1) then stackCount = aura.applications end
+					if showStacks then
+						local cache = shared and shared.actionDisplayCounts
+						if cache then stackCount = cache[Helper.GetEntryKey(panelId, entryId)] end
 					end
 					cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
 					local durationActive = cooldownDurationObject ~= nil and (cooldownRemaining == nil or cooldownRemaining > 0)
 					show = alwaysShow
 					if not show and showCooldown and ((cooldownDurationObject ~= nil) or (cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration))) then show = true end
 					if not show and showCharges and chargesInfo and isSafeLessThan(chargesInfo.currentCharges, chargesInfo.maxCharges) then show = true end
-					if not show and showStacks and stackCount then show = true end
+					if not show and showStacks and Helper.HasDisplayCount(stackCount) then show = true end
 				end
 			elseif entry.type == "ITEM" and entry.itemID then
 				local itemCache = shared and shared.itemCountCache
@@ -3810,7 +3818,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.soundReady = soundReady
 				data.soundName = soundName
 				data.readyAt = runtime.readyAt[entryId]
-				data.stackCount = stackCount
+				data.stackCount = Helper.NormalizeDisplayCount(stackCount)
 				data.itemCount = itemCount
 				data.itemUses = itemUses
 				data.emptyItem = emptyItem
@@ -3840,9 +3848,16 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	end
 	ensureIconCount(frame, count)
 
+	runtime.entryToIcon = runtime.entryToIcon or {}
+	local entryToIcon = runtime.entryToIcon
+	for key in pairs(entryToIcon) do
+		entryToIcon[key] = nil
+	end
+
 	for i = 1, count do
 		local data = visible[i]
 		local icon = frame.icons[i]
+		entryToIcon[data.entryId] = icon
 		icon.texture:SetTexture(data.icon or PREVIEW_ICON)
 		applyIconTooltip(icon, data.entry, showTooltips)
 		icon.cooldown:SetHideCountdownNumbers(not data.showCooldownText)
@@ -4205,6 +4220,7 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.growthPoint = normalizeGrowthPoint(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	elseif field == "rangeOverlayEnabled" then
 		layout.rangeOverlayEnabled = value == true
+		if updateRangeCheckSpells then updateRangeCheckSpells() end
 	elseif field == "rangeOverlayColor" then
 		layout.rangeOverlayColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	elseif field == "checkPower" then
@@ -5602,6 +5618,49 @@ updatePowerEventRegistration = function()
 		runtime.powerEventRegistered = nil
 	end
 end
+
+updateRangeCheckSpells = function(rangeCheckSpells)
+	if not EnableSpellRangeCheck then return end
+	local wanted = rangeCheckSpells
+	if not wanted then
+		wanted = {}
+		local root = ensureRoot()
+		if root and root.panels then
+			for _, panel in pairs(root.panels) do
+				if panel and panel.enabled ~= false and panelAllowsSpec(panel) then
+					local layout = panel.layout
+					if layout and layout.rangeOverlayEnabled == true then
+						for _, entry in pairs(panel.entries or {}) do
+							if entry and entry.type == "SPELL" and entry.spellID then
+								local spellId = tonumber(entry.spellID)
+								if spellId then wanted[spellId] = true end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	CooldownPanels.runtime = CooldownPanels.runtime or {}
+	local runtime = CooldownPanels.runtime
+	runtime.rangeCheckSpells = runtime.rangeCheckSpells or {}
+	local active = runtime.rangeCheckSpells
+
+	for spellId in pairs(active) do
+		if not wanted[spellId] then
+			EnableSpellRangeCheck(spellId, false)
+			active[spellId] = nil
+			if runtime.rangeOverlaySpells then runtime.rangeOverlaySpells[spellId] = nil end
+		end
+	end
+	for spellId in pairs(wanted) do
+		if not active[spellId] then
+			EnableSpellRangeCheck(spellId, true)
+			active[spellId] = true
+		end
+	end
+end
 local function clearReadyGlowForSpell(spellId)
 	local id = tonumber(spellId)
 	if not id then return false end
@@ -5764,6 +5823,11 @@ local function ensureUpdateFrame()
 				return
 			end
 		end
+		if event == "SPELL_UPDATE_USES" then
+			local spellId, baseSpellId = ...
+			if Helper and Helper.UpdateActionDisplayCountsForSpell then Helper.UpdateActionDisplayCountsForSpell(spellId, baseSpellId) end
+			return
+		end
 		if event == "SPELL_UPDATE_CHARGES" then
 			refreshPanelsForCharges()
 			return
@@ -5777,6 +5841,7 @@ local function ensureUpdateFrame()
 	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:RegisterEvent("SPELL_UPDATE_ICON")
 	frame:RegisterEvent("SPELL_UPDATE_CHARGES")
+	frame:RegisterEvent("SPELL_UPDATE_USES")
 	frame:RegisterEvent("SPELLS_CHANGED")
 	frame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
 	frame:RegisterEvent("PLAYER_TALENT_UPDATE")
