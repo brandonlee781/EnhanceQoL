@@ -536,7 +536,7 @@ data = {
 		text = L["hideRaidTools"],
 		func = function(v)
 			addon.db["hideRaidTools"] = v
-			addon.functions.toggleRaidTools(addon.db["hideRaidTools"], _G.CompactRaidFrameManager)
+			addon.functions.updateRaidToolsHook()
 		end,
 		parentSection = interfaceExpandable,
 	},

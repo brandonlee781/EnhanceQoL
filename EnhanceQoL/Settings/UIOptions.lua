@@ -425,7 +425,7 @@ local function createButtonAppearanceControls(category, expandable)
 		parent = true,
 		element = borderColorToggle.element,
 		parentCheck = function() return borderColorToggle.setting and borderColorToggle.setting:GetValue() == true end,
-		colorizeLabel = true,
+		colorizeLabel = false,
 		parentSection = expandable,
 	})
 

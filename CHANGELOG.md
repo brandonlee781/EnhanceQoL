@@ -49,6 +49,8 @@
 - Cooldown Panel glow wasn't working correctly in restricted environment
 - Cooldown Panels: Growth point alignment now uses left/center/right start points to keep the edit mode overlay aligned
 - Cooldown Panels: Track override spell IDs so talent-based replacements update correctly
+- Cooldown Panels: Item uses/charge count now tracked correctly (includeUses)
+- Hide Raid Tools: Only hook CompactRaidFrameManager when setting is enabled and avoid protected Hide in combat (alpha fallback)
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
 - Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank

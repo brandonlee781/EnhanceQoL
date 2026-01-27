@@ -2984,7 +2984,7 @@ local function initMisc()
 		AzeriteLevelUpToast:UnregisterAllEvents()
 		AzeriteLevelUpToast:Hide()
 	end
-	_G.CompactRaidFrameManager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
+	addon.functions.updateRaidToolsHook()
 	ExpansionLandingPageMinimapButton:HookScript("OnShow", function(self)
 		local id = addon.variables.landingPageReverse[self.title]
 		if addon.db["enableSquareMinimap"] then

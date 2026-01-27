@@ -3682,6 +3682,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 						end
 					end
 					cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
+					if showCooldown and isCooldownActive(cooldownStart, cooldownDuration) then
+						cooldownEnabledOk = true
+						cooldownEnabled = true
+					end
 					show = alwaysShow or showWhenEmpty
 					if not show and showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 				end
@@ -3694,6 +3698,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 							cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(itemId, entry.slotID)
 						end
 						cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
+						if showCooldown and isCooldownActive(cooldownStart, cooldownDuration) then
+							cooldownEnabledOk = true
+							cooldownEnabled = true
+						end
 						show = alwaysShow or showWhenNoCooldown
 						if not show and showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 					elseif showWhenNoCooldown then

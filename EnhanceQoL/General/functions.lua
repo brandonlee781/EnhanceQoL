@@ -36,11 +36,65 @@ function addon.functions.IsTimerunner()
 	return false
 end
 
+local function canChangeProtectedVisibility(frame)
+	if not frame then return false end
+	if InCombatLockdown and InCombatLockdown() then
+		if frame.IsProtected and frame:IsProtected() then return false end
+	end
+	return true
+end
+
 function addon.functions.toggleRaidTools(value, self)
-	if value == false and (UnitInParty("player") or UnitInRaid("player")) then
-		self:Show()
-	elseif UnitInParty("player") then
-		self:Hide()
+	if not self then return end
+	local inParty = UnitInParty("player")
+	local inRaid = UnitInRaid("player")
+	local inGroup = inParty or inRaid
+	local hideInParty = value == true and inParty and not inRaid
+
+	if not inGroup then
+		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = nil
+			self:SetAlpha(1)
+		end
+		return
+	end
+
+	if hideInParty then
+		if canChangeProtectedVisibility(self) then
+			if self.Hide then self:Hide() end
+		elseif self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = true
+			self:SetAlpha(0)
+		end
+	else
+		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
+			self._eqolRaidToolsAlphaHidden = nil
+			self:SetAlpha(1)
+		end
+		if canChangeProtectedVisibility(self) then
+			if self.Show then self:Show() end
+		elseif self.SetAlpha then
+			self:SetAlpha(1)
+		end
+	end
+end
+
+function addon.functions.updateRaidToolsHook()
+	local manager = _G.CompactRaidFrameManager
+	if not manager or not manager.SetScript then return end
+	if addon.db and addon.db["hideRaidTools"] then
+		if not manager._eqolRaidToolsOnShowHooked then
+			manager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
+			manager._eqolRaidToolsOnShowHooked = true
+		end
+		addon.functions.toggleRaidTools(addon.db["hideRaidTools"], manager)
+	elseif manager._eqolRaidToolsOnShowHooked then
+		manager:SetScript("OnShow", nil)
+		manager._eqolRaidToolsOnShowHooked = nil
+		if manager._eqolRaidToolsAlphaHidden and manager.SetAlpha then
+			manager._eqolRaidToolsAlphaHidden = nil
+			manager:SetAlpha(1)
+		end
 	end
 end
 
