@@ -3932,7 +3932,7 @@ local function createPowerBar(type, anchor)
 	end
 	if type == "RUNES" then
 		bar:SetStatusBarColor(getPowerBarColor(type))
-	elseif not (settings and settings.useBarColor == true) then
+	elseif not (settings and (settings.useBarColor == true or settings.useClassColor == true)) then
 		local dr, dg, db = getPowerBarColor(type)
 		local alpha = (settings and settings.barColor and settings.barColor[4]) or 1
 		bar:SetStatusBarColor(dr, dg, db, alpha)

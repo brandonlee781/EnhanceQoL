@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.7.1] - 2026-01-27
+
+### 🐛 Fixed
+
+- Resource Bars: Class color was not working on some classes
+
+---
+
 ## [7.7.0] - 2026-01-25
 
 ### ✨ Added
