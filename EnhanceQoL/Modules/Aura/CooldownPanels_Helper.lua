@@ -497,7 +497,7 @@ function Keybinds.GetEntryKeybindText(entry, layout)
 	local cached = runtime._eqolKeybindCache[cacheKey]
 	if cached ~= nil then return cached or nil end
 
-	local text
+	local text = nil
 	if entry.type == "SPELL" and entry.spellID then
 		local spellId = effectiveSpellId or entry.spellID
 		-- if C_ActionBar and C_ActionBar.FindSpellActionButtons then

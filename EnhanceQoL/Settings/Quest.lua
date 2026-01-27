@@ -630,6 +630,7 @@ function addon.functions.initQuest()
 	if Menu and Menu.ModifyMenu then
 		local function GetNPCIDFromGUID(guid)
 			if guid then
+				if issecretvalue and issecretvalue(guid) then return nil end
 				local type, _, _, _, _, npcID = strsplit("-", guid)
 				if type == "Creature" or type == "Vehicle" then return tonumber(npcID) end
 			end
@@ -644,7 +645,7 @@ function addon.functions.initQuest()
 			if not npcID then return end
 			if issecretvalue and issecretvalue(npcID) then return end
 			local name = UnitName("target")
-			if not name then return end
+			if not name or (issecretvalue and issecretvalue(name)) then return end
 
 			root:CreateDivider()
 			root:CreateTitle(addonName)
