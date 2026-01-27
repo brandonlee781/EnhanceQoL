@@ -930,6 +930,7 @@ if TooltipDataProcessor then
 		if not addon.db then return end
 		if not data or not data.type then return end
 
+		if addon.functions.isRestrictedContent() then return end
 		local id, name, _, timeLimit, kind
 
 		if issecretvalue and issecretvalue(data.type) then
