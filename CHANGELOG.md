@@ -55,7 +55,8 @@
 - Resource Bars: Druid forms missed Tree of Life
 - Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
 - Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank
-
+- Unit Frames: Rightclicking a Unit Frame in restricted environment with NPC ID option enabled
+- 
 ---
 
 ## [7.6.0] - 2026-01-24
