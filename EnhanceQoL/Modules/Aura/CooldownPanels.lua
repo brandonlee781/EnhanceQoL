@@ -609,18 +609,32 @@ local function setExampleCooldown(cooldown)
 	end
 end
 
+local getPreviewEntryIds
 local function getPreviewCount(panel)
 	if not panel or type(panel.order) ~= "table" then return DEFAULT_PREVIEW_COUNT end
-	local count = #panel.order
-	if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+	local entries = getPreviewEntryIds and getPreviewEntryIds(panel) or nil
+	if not entries then
+		local count = #panel.order
+		if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+		if count > MAX_PREVIEW_COUNT then return MAX_PREVIEW_COUNT end
+		return count
+	end
+	local count = #entries
+	if count <= 0 then return 0 end
 	if count > MAX_PREVIEW_COUNT then return MAX_PREVIEW_COUNT end
 	return count
 end
 
-local function getEditorPreviewCount(panel, previewFrame, baseLayout)
+local function getEditorPreviewCount(panel, previewFrame, baseLayout, entries)
 	if not panel or type(panel.order) ~= "table" then return DEFAULT_PREVIEW_COUNT end
-	local count = #panel.order
-	if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+	local count
+	if entries then
+		count = #entries
+		if count <= 0 then return 0 end
+	else
+		count = #panel.order
+		if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+	end
 	if not previewFrame then return count end
 
 	local spacing = clampInt((baseLayout and baseLayout.spacing) or 0, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
@@ -836,6 +850,21 @@ local function ensureRoot()
 	return addon.db.cooldownPanels
 end
 
+local function markRootOrderDirty(root)
+	if root then root._orderDirty = true end
+end
+
+local function syncRootOrderIfDirty(root, force)
+	if not root then return false end
+	if not force then
+		if not root._orderDirty then return false end
+		if InCombatLockdown and InCombatLockdown() then return false end
+	end
+	Helper.SyncOrder(root.order, root.panels)
+	root._orderDirty = nil
+	return true
+end
+
 function CooldownPanels:EnsureDB() return ensureRoot() end
 
 function CooldownPanels:GetRoot() return ensureRoot() end
@@ -859,7 +888,8 @@ function CooldownPanels:SetPanelOrder(order)
 	local root = ensureRoot()
 	if not root or type(order) ~= "table" then return end
 	root.order = order
-	Helper.SyncOrder(root.order, root.panels)
+	markRootOrderDirty(root)
+	syncRootOrderIfDirty(root, true)
 end
 
 function CooldownPanels:SetSelectedPanel(panelId)
@@ -883,6 +913,7 @@ function CooldownPanels:CreatePanel(name)
 	panel.id = id
 	root.panels[id] = panel
 	root.order[#root.order + 1] = id
+	markRootOrderDirty(root)
 	if not root.selectedPanel then root.selectedPanel = id end
 	self:RegisterEditModePanel(id)
 	self:RefreshPanel(id)
@@ -894,7 +925,8 @@ function CooldownPanels:DeletePanel(panelId)
 	panelId = normalizeId(panelId)
 	if not root or not root.panels or not root.panels[panelId] then return end
 	root.panels[panelId] = nil
-	Helper.SyncOrder(root.order, root.panels)
+	markRootOrderDirty(root)
+	syncRootOrderIfDirty(root, true)
 	if root.selectedPanel == panelId then root.selectedPanel = root.order[1] end
 	local runtime = CooldownPanels.runtime and CooldownPanels.runtime[panelId]
 	if runtime then
@@ -1085,6 +1117,7 @@ function CooldownPanels:NormalizeAll()
 	if not root then return end
 	Helper.NormalizeRoot(root)
 	Helper.SyncOrder(root.order, root.panels)
+	root._orderDirty = nil
 	for panelId, panel in pairs(root.panels) do
 		if panel and panel.id == nil then panel.id = panelId end
 		Helper.NormalizePanel(panel, root.defaults)
@@ -2825,6 +2858,7 @@ local function movePanelInOrder(root, panelId, targetPanelId)
 	table.remove(root.order, fromIndex)
 	if fromIndex < toIndex then toIndex = toIndex - 1 end
 	table.insert(root.order, toIndex, panelId)
+	markRootOrderDirty(root)
 	return true
 end
 
@@ -3013,6 +3047,39 @@ local function refreshEntryList(editor, panel)
 	content:SetHeight(totalHeight > 1 and totalHeight or 1)
 end
 
+local function entryIsAvailableForPreview(entry)
+	if not entry or type(entry) ~= "table" then return false end
+	if entry.type == "SPELL" then
+		if not entry.spellID then return false end
+		return isSpellKnownSafe(entry.spellID)
+	elseif entry.type == "ITEM" then
+		if not entry.itemID then return false end
+		if itemHasUseSpell and not itemHasUseSpell(entry.itemID) then return false end
+		if entry.showWhenEmpty == true then return true end
+		return hasItem(entry.itemID)
+	elseif entry.type == "SLOT" then
+		if entry.slotID and GetInventoryItemID then
+			local itemId = GetInventoryItemID("player", entry.slotID)
+			if not itemId then return entry.showWhenNoCooldown == true end
+			if itemHasUseSpell and itemHasUseSpell(itemId) then return true end
+			return entry.showWhenNoCooldown == true
+		end
+		return false
+	end
+	return true
+end
+
+getPreviewEntryIds = function(panel)
+	if not panel or type(panel.order) ~= "table" then return nil end
+	if #panel.order == 0 then return nil end
+	local list = {}
+	for _, entryId in ipairs(panel.order) do
+		local entry = panel.entries and panel.entries[entryId]
+		if entry and entryIsAvailableForPreview(entry) then list[#list + 1] = entryId end
+	end
+	return list
+end
+
 local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
@@ -3083,7 +3150,8 @@ local function refreshPreview(editor, panel)
 
 	if editor.previewHintLabel then editor.previewHintLabel:Show() end
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
-	local count = getEditorPreviewCount(panel, preview, baseLayout)
+	local previewEntryIds = getPreviewEntryIds and getPreviewEntryIds(panel) or nil
+	local count = getEditorPreviewCount(panel, preview, baseLayout, previewEntryIds)
 	local layout = getPreviewLayout(panel, preview, count)
 	applyIconLayout(canvas, count, layout)
 	canvas:ClearAllPoints()
@@ -3092,11 +3160,16 @@ local function refreshPreview(editor, panel)
 
 	preview.entryByIndex = preview.entryByIndex or {}
 	for i = 1, count do
-		local entryId = panel.order and panel.order[i]
+		local entryId = (previewEntryIds and previewEntryIds[i]) or (panel.order and panel.order[i])
 		local entry = entryId and panel.entries and panel.entries[entryId] or nil
 		local icon = canvas.icons[i]
-		icon.texture:SetTexture(getEntryIcon(entry))
-		icon.entryId = entryId
+		if entry then
+			icon.texture:SetTexture(getEntryIcon(entry))
+			icon.entryId = entryId
+		else
+			icon.texture:SetTexture(PREVIEW_ICON)
+			icon.entryId = nil
+		end
 		icon.count:Hide()
 		icon.charges:Hide()
 		if icon.rangeOverlay then icon.rangeOverlay:Hide() end
@@ -3355,6 +3428,7 @@ function CooldownPanels:RefreshEditor()
 
 	self:NormalizeAll()
 	Helper.SyncOrder(root.order, root.panels)
+	root._orderDirty = nil
 
 	local panelId = editor.selectedPanelId or root.selectedPanel or (root.order and root.order[1])
 	if panelId and (not root.panels or not root.panels[panelId]) then panelId = root.order and root.order[1] or nil end
@@ -3475,11 +3549,12 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
+	local previewEntryIds = getPreviewEntryIds and getPreviewEntryIds(panel) or nil
 	local count = countOverride or getPreviewCount(panel)
 	ensureIconCount(frame, count)
 
 	for i = 1, count do
-		local entryId = panel.order and panel.order[i]
+		local entryId = (previewEntryIds and previewEntryIds[i]) or (panel.order and panel.order[i])
 		local entry = entryId and panel.entries and panel.entries[entryId] or nil
 		local icon = frame.icons[i]
 		local showCooldown = entry and entry.showCooldown ~= false
@@ -4088,7 +4163,7 @@ end
 function CooldownPanels:RefreshAllPanels()
 	local root = ensureRoot()
 	if not root then return end
-	Helper.SyncOrder(root.order, root.panels)
+	syncRootOrderIfDirty(root)
 	for _, panelId in ipairs(root.order) do
 		self:RefreshPanel(panelId)
 	end
@@ -5347,6 +5422,7 @@ function CooldownPanels:EnsureEditMode()
 	local root = ensureRoot()
 	if not root then return end
 	Helper.SyncOrder(root.order, root.panels)
+	root._orderDirty = nil
 	for _, panelId in ipairs(root.order) do
 		self:RegisterEditModePanel(panelId)
 	end
