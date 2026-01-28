@@ -25,6 +25,7 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	rangeOverlayColor = { 1, 0.1, 0.1, 0.35 },
 	checkPower = false,
 	powerTintColor = { 0.5, 0.5, 1, 1 },
+	unusableTintColor = { 0.6, 0.6, 0.6, 1 },
 	opacityOutOfCombat = 1,
 	opacityInCombat = 1,
 	stackAnchor = "BOTTOMRIGHT",
@@ -50,6 +51,7 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	cooldownGcdDrawEdge = false,
 	cooldownGcdDrawBling = false,
 	cooldownGcdDrawSwipe = false,
+	showChargesCooldown = false,
 	showTooltips = false,
 }
 
@@ -161,6 +163,7 @@ function Helper.NormalizePanel(panel, defaults)
 	local layoutDefaults = defaults.layout or Helper.PANEL_LAYOUT_DEFAULTS
 	if type(panel.layout) ~= "table" then panel.layout = {} end
 	local hadKeybindsEnabled = panel.layout.keybindsEnabled
+	local hadChargesCooldown = panel.layout.showChargesCooldown
 	for key, value in pairs(layoutDefaults) do
 		if panel.layout[key] == nil then panel.layout[key] = value end
 	end
@@ -181,11 +184,12 @@ function Helper.NormalizePanel(panel, defaults)
 	if type(panel.order) ~= "table" then panel.order = {} end
 	if panel.enabled == nil then panel.enabled = true end
 	if type(panel.name) ~= "string" or panel.name == "" then panel.name = "Cooldown Panel" end
-	if hadKeybindsEnabled == nil then
+	if hadKeybindsEnabled == nil or hadChargesCooldown == nil then
 		for _, entry in pairs(panel.entries) do
-			if entry and entry.showKeybinds == true then
-				panel.layout.keybindsEnabled = true
-				break
+			if entry then
+				if hadKeybindsEnabled == nil and entry.showKeybinds == true then panel.layout.keybindsEnabled = true end
+				if hadChargesCooldown == nil and entry.showChargesCooldown == true then panel.layout.showChargesCooldown = true end
+				if (hadKeybindsEnabled ~= nil or panel.layout.keybindsEnabled == true) and (hadChargesCooldown ~= nil or panel.layout.showChargesCooldown == true) then break end
 			end
 		end
 	end

@@ -1,6 +1,10 @@
 # Changelog
 
-## [7.7.3] - 2026-01-28
+## [7.8.0] - 2026-01-28
+
+### ✨ Added
+
+- Cooldown Panels: Option to enable charge duration show
 
 ### 🐛 Fixed
 

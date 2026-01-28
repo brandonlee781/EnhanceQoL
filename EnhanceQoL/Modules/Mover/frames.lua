@@ -318,6 +318,16 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "BattlefieldMapFrame",
+		label = _G.BATTLEFIELD_MINIMAP,
+		group = "world",
+		names = { "BattlefieldMapFrame" },
+		addon = "Blizzard_BattlefieldMap",
+		disableMove = true,
+		scaleTargets = { "BattlefieldMapTab" },
+		defaultEnabled = true,
+	},
+	{
 		id = "FlightMapFrame",
 		label = L["Flight Map"] or "Flight Map",
 		group = "world",

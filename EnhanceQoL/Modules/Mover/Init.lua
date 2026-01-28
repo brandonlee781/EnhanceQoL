@@ -215,6 +215,15 @@ function addon.Mover.functions.RegisterFrame(def)
 		table.insert(handles, handle)
 	end
 
+	local scaleTargets = {}
+	local scaleTargetsSeen = {}
+	local function addScaleTarget(path)
+		if type(path) ~= "string" or path == "" then return end
+		if scaleTargetsSeen[path] then return end
+		scaleTargetsSeen[path] = true
+		table.insert(scaleTargets, path)
+	end
+
 	local function addRelativeHandles(list)
 		if type(list) == "string" then list = { list } end
 		if type(list) ~= "table" then return end
@@ -235,7 +244,16 @@ function addon.Mover.functions.RegisterFrame(def)
 		end
 	end
 	addRelativeHandles(def.handlesRelative or def.dragbars or def.subframes)
+	if type(def.scaleTargets) == "string" then
+		addScaleTarget(def.scaleTargets)
+	elseif type(def.scaleTargets) == "table" then
+		for _, path in ipairs(def.scaleTargets) do
+			addScaleTarget(path)
+		end
+	end
+	if type(def.scaleTarget) == "string" then addScaleTarget(def.scaleTarget) end
 
+	local disableMove = def and (def.disableMove or def.scaleOnly) or nil
 	local entry = {
 		id = def.id,
 		label = def.label or def.id,
@@ -245,9 +263,11 @@ function addon.Mover.functions.RegisterFrame(def)
 		defaultEnabled = def.defaultEnabled,
 		names = names,
 		handles = (#handles > 0) and handles or nil,
+		scaleTargets = (#scaleTargets > 0) and scaleTargets or nil,
 		addon = def.addon,
 		useRootHandle = def.useRootHandle,
 		keepTwoPointSize = def.keepTwoPointSize,
+		disableMove = disableMove,
 		ignoreFramePositionManager = def.ignoreFramePositionManager,
 		userPlaced = def.userPlaced,
 		skipOnHide = def.skipOnHide,
@@ -718,6 +738,8 @@ function addon.Mover.functions.createHooks(frame, entry)
 	captureDefaultPoints(frame)
 	captureDefaultState(frame)
 
+	local moveDisabled = resolved.disableMove
+
 	if InCombatLockdown() then
 		addon.Mover.variables.combatQueue[frame] = resolved
 		return
@@ -836,6 +858,25 @@ function addon.Mover.functions.createHooks(frame, entry)
 	registerScaleTarget(frame)
 	attachScaleReset(frame)
 
+	local function attachScaleTargetPath(path)
+		local target = resolveFramePath(path)
+		if not target then return end
+		if target.IsForbidden and target:IsForbidden() then return end
+		registerScaleTarget(target)
+		attachScaleReset(target)
+	end
+
+	if resolved.scaleTargets then
+		for _, path in ipairs(resolved.scaleTargets) do
+			attachScaleTargetPath(path)
+		end
+		frame:HookScript("OnShow", function()
+			for _, path in ipairs(resolved.scaleTargets) do
+				attachScaleTargetPath(path)
+			end
+		end)
+	end
+
 	local function attachHandle(anchor)
 		if not anchor then return nil end
 		local handle
@@ -874,47 +915,52 @@ function addon.Mover.functions.createHooks(frame, entry)
 		attachScaleReset(target)
 	end
 
-	local useOverlay = resolved.useRootHandle
-	if useOverlay == nil then useOverlay = frame:IsProtected() end
-	if useOverlay then
-		if resolved.useRootHandle ~= false then frame._eqolMoveHandle = attachHandle(frame) end
+	local useOverlay = false
+	if not moveDisabled then
+		useOverlay = resolved.useRootHandle
+		if useOverlay == nil then useOverlay = frame:IsProtected() end
+	end
+	if not moveDisabled then
+		if useOverlay then
+			if resolved.useRootHandle ~= false then frame._eqolMoveHandle = attachHandle(frame) end
 
-		local createdSubs = frame._eqolMoveSubHandles or {}
-		if resolved.handles then
-			local function attachHandleToPath(path)
-				local anchor = resolveFramePath(path)
-				if not anchor or createdSubs[anchor] then return end
-				if anchor.IsForbidden and anchor:IsForbidden() then return end
-				createdSubs[anchor] = attachHandle(anchor)
-			end
+			local createdSubs = frame._eqolMoveSubHandles or {}
+			if resolved.handles then
+				local function attachHandleToPath(path)
+					local anchor = resolveFramePath(path)
+					if not anchor or createdSubs[anchor] then return end
+					if anchor.IsForbidden and anchor:IsForbidden() then return end
+					createdSubs[anchor] = attachHandle(anchor)
+				end
 
-			for _, path in ipairs(resolved.handles) do
-				attachHandleToPath(path)
-			end
-
-			frame:HookScript("OnShow", function()
 				for _, path in ipairs(resolved.handles) do
 					attachHandleToPath(path)
 				end
-			end)
-		end
-		frame._eqolMoveSubHandles = createdSubs
-	else
-		attachDragHandlers(frame)
-		if resolved.handles then
-			local function attachDragTarget(path)
-				local anchor = resolveFramePath(path)
-				if not anchor then return end
-				attachDragHandlers(anchor)
+
+				frame:HookScript("OnShow", function()
+					for _, path in ipairs(resolved.handles) do
+						attachHandleToPath(path)
+					end
+				end)
 			end
-			for _, path in ipairs(resolved.handles) do
-				attachDragTarget(path)
-			end
-			frame:HookScript("OnShow", function()
+			frame._eqolMoveSubHandles = createdSubs
+		else
+			attachDragHandlers(frame)
+			if resolved.handles then
+				local function attachDragTarget(path)
+					local anchor = resolveFramePath(path)
+					if not anchor then return end
+					attachDragHandlers(anchor)
+				end
 				for _, path in ipairs(resolved.handles) do
 					attachDragTarget(path)
 				end
-			end)
+				frame:HookScript("OnShow", function()
+					for _, path in ipairs(resolved.handles) do
+						attachDragTarget(path)
+					end
+				end)
+			end
 		end
 	end
 	frame._eqolMoveDragTargets = dragTargets
@@ -972,13 +1018,15 @@ function addon.Mover.functions.createHooks(frame, entry)
 
 	local function updateHandleState()
 		local enabled = isEntryActive(resolved)
-		applyFrameState(frame, resolved, enabled, useOverlay)
-		for target in pairs(dragTargets) do
-			applyDragTargetState(target, enabled)
-		end
-		setHandleEnabled(frame._eqolMoveHandle, enabled)
-		for _, handle in pairs(frame._eqolMoveSubHandles or {}) do
-			setHandleEnabled(handle, enabled)
+		if not moveDisabled then
+			applyFrameState(frame, resolved, enabled, useOverlay)
+			for target in pairs(dragTargets) do
+				applyDragTargetState(target, enabled)
+			end
+			setHandleEnabled(frame._eqolMoveHandle, enabled)
+			for _, handle in pairs(frame._eqolMoveSubHandles or {}) do
+				setHandleEnabled(handle, enabled)
+			end
 		end
 		if not enabled then
 			local mouseover = addon.Mover.variables.scaleMouseover

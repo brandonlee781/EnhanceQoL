@@ -271,11 +271,20 @@ end
 local function setPowerInsufficient(runtime, spellId, isUsable, insufficientPower)
 	if not runtime or not spellId then return end
 	runtime.powerInsufficient = runtime.powerInsufficient or {}
-	local value = (not isUsable or insufficientPower) and true or nil
+	runtime.spellUnusable = runtime.spellUnusable or {}
+	local usable = isUsable == true
+	local powerValue = (insufficientPower == true) and true or nil
+	local unusableValue = (not usable and insufficientPower ~= true) and true or nil
 	local baseId = getBaseSpellId(spellId)
 	local effectiveId = getEffectiveSpellId(spellId)
-	if baseId then runtime.powerInsufficient[baseId] = value end
-	if effectiveId and effectiveId ~= baseId then runtime.powerInsufficient[effectiveId] = value end
+	if baseId then
+		runtime.powerInsufficient[baseId] = powerValue
+		runtime.spellUnusable[baseId] = unusableValue
+	end
+	if effectiveId and effectiveId ~= baseId then
+		runtime.powerInsufficient[effectiveId] = powerValue
+		runtime.spellUnusable[effectiveId] = unusableValue
+	end
 end
 
 local function getSpellPowerCostNamesFromCosts(costs)
@@ -1188,6 +1197,8 @@ function CooldownPanels:RebuildPowerIndex()
 	runtime.powerCheckActive = powerCheckActive == true
 	runtime.powerInsufficient = runtime.powerInsufficient or {}
 	wipe(runtime.powerInsufficient)
+	runtime.spellUnusable = runtime.spellUnusable or {}
+	wipe(runtime.spellUnusable)
 	updatePowerEventRegistration()
 	if IsSpellUsableFn then
 		for spellId in pairs(powerCheckSpells) do
@@ -3639,6 +3650,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local showKeybinds = layout.keybindsEnabled == true
 	local checkPower = layout.checkPower == true
 	local powerTintR, powerTintG, powerTintB = resolveColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
+	local unusableTintR, unusableTintG, unusableTintB = resolveColor(layout.unusableTintColor, Helper.PANEL_LAYOUT_DEFAULTS.unusableTintColor)
 	local rangeOverlayEnabled = layout.rangeOverlayEnabled == true
 	local rangeOverlayR, rangeOverlayG, rangeOverlayB, rangeOverlayA = resolveColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	local drawEdge = layout.cooldownDrawEdge ~= false
@@ -3665,6 +3677,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local showCooldown = entry.showCooldown ~= false
 			local showCooldownText = entry.showCooldownText ~= false
 			local showCharges = entry.showCharges == true
+			local showChargesCooldown = showCharges and layout.showChargesCooldown == true
 			local showStacks = entry.showStacks == true
 			local showItemCount = entry.type == "ITEM" and entry.showItemCount ~= false
 			local showItemUses = entry.type == "ITEM" and entry.showItemUses == true
@@ -3687,6 +3700,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 
 			local overlayGlow = entry.type == "SPELL" and isSpellFlagged(shared.overlayGlowSpells, baseSpellId, effectiveSpellId)
 			local powerInsufficient = checkPower and entry.type == "SPELL" and isSpellFlagged(shared.powerInsufficient, baseSpellId, effectiveSpellId)
+			local spellUnusable = checkPower and entry.type == "SPELL" and isSpellFlagged(shared.spellUnusable, baseSpellId, effectiveSpellId)
 			local rangeOverlay = rangeOverlayEnabled and entry.type == "SPELL" and isSpellFlagged(shared.rangeOverlaySpells, baseSpellId, effectiveSpellId)
 			if rangeOverlay and IsSpellUsableFn then
 				local checkId = effectiveSpellId or baseSpellId
@@ -3828,6 +3842,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.showCooldown = showCooldown
 				data.showCooldownText = showCooldownText
 				data.showCharges = showCharges
+				data.showChargesCooldown = showChargesCooldown
 				data.showStacks = showStacks
 				data.showItemCount = showItemCount
 				data.showItemUses = showItemUses
@@ -3837,6 +3852,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				data.entryId = entryId
 				data.overlayGlow = overlayGlow
 				data.powerInsufficient = powerInsufficient
+				data.spellUnusable = spellUnusable
 				data.rangeOverlay = rangeOverlay
 				data.glowReady = glowReady
 				data.glowDuration = glowDuration
@@ -3965,9 +3981,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				-- icon.cooldown:SetCooldownFromDurationObject(cooldownDurationObject)
 				-- icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 				setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
-				-- local entrySpellId = data.entry and data.entry.spellID
-				-- local effectiveId = entrySpellId and getEffectiveSpellId(entrySpellId) or entrySpellId
-				-- local CCD = effectiveId and C_Spell.GetSpellChargeDuration(effectiveId)
+
 				-- local SCD = effectiveId and C_Spell.GetSpellCooldownDuration(effectiveId)
 				-- only when you have zero charges SCD will be true CCD is always true when one charge is missing
 				if cooldownDurationObject then
@@ -3979,7 +3993,14 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 						if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", onCooldownDone) end
 						setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 						icon.texture:SetDesaturation(cooldownDurationObject:EvaluateRemainingDuration(curveDesat))
-						icon.cooldown:SetCooldownFromDurationObject(cooldownDurationObject)
+						if data.showChargesCooldown then
+							local entrySpellId = data.entry and data.entry.spellID
+							local effectiveId = entrySpellId and getEffectiveSpellId(entrySpellId) or entrySpellId
+							local CCD = effectiveId and C_Spell.GetSpellChargeDuration(effectiveId)
+							icon.cooldown:SetCooldownFromDurationObject(CCD)
+						else
+							icon.cooldown:SetCooldownFromDurationObject(cooldownDurationObject)
+						end
 					end
 				end
 			elseif durationActive then
@@ -4015,7 +4036,9 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 		end
 		icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1)
-		if data.powerInsufficient then
+		if data.spellUnusable then
+			icon.texture:SetVertexColor(unusableTintR or 0.6, unusableTintG or 0.6, unusableTintB or 0.6)
+		elseif data.powerInsufficient then
 			icon.texture:SetVertexColor(powerTintR or 0.5, powerTintG or 0.5, powerTintB or 1)
 		else
 			icon.texture:SetVertexColor(1, 1, 1)
@@ -4302,6 +4325,8 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.cooldownDrawBling = value ~= false
 	elseif field == "cooldownDrawSwipe" then
 		layout.cooldownDrawSwipe = value ~= false
+	elseif field == "showChargesCooldown" then
+		layout.showChargesCooldown = value == true
 	elseif field == "cooldownGcdDrawEdge" then
 		layout.cooldownGcdDrawEdge = value == true
 	elseif field == "cooldownGcdDrawBling" then
@@ -4394,6 +4419,7 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "cooldownDrawEdge", data.cooldownDrawEdge, true)
 	applyEditLayout(panelId, "cooldownDrawBling", data.cooldownDrawBling, true)
 	applyEditLayout(panelId, "cooldownDrawSwipe", data.cooldownDrawSwipe, true)
+	applyEditLayout(panelId, "showChargesCooldown", data.showChargesCooldown, true)
 	applyEditLayout(panelId, "cooldownGcdDrawEdge", data.cooldownGcdDrawEdge, true)
 	applyEditLayout(panelId, "cooldownGcdDrawBling", data.cooldownGcdDrawBling, true)
 	applyEditLayout(panelId, "cooldownGcdDrawSwipe", data.cooldownGcdDrawSwipe, true)
@@ -5326,6 +5352,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				defaultCollapsed = true,
 			},
 			{
+				name = L["CooldownPanelShowChargesCooldown"] or "Show charges cooldown",
+				kind = SettingType.Checkbox,
+				field = "showChargesCooldown",
+				parentId = "cooldownPanelCooldown",
+				default = layout.showChargesCooldown == true,
+				get = function() return layout.showChargesCooldown == true end,
+				set = function(_, value) applyEditLayout(panelId, "showChargesCooldown", value) end,
+			},
+			{
 				name = L["CooldownPanelDrawEdge"] or "Draw edge",
 				kind = SettingType.Checkbox,
 				field = "cooldownDrawEdge",
@@ -5430,6 +5465,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			cooldownDrawEdge = layout.cooldownDrawEdge ~= false,
 			cooldownDrawBling = layout.cooldownDrawBling ~= false,
 			cooldownDrawSwipe = layout.cooldownDrawSwipe ~= false,
+			showChargesCooldown = layout.showChargesCooldown == true,
 			cooldownGcdDrawEdge = layout.cooldownGcdDrawEdge == true,
 			cooldownGcdDrawBling = layout.cooldownGcdDrawBling == true,
 			cooldownGcdDrawSwipe = layout.cooldownGcdDrawSwipe == true,
