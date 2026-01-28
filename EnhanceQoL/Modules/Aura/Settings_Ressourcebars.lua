@@ -2171,6 +2171,48 @@ local function registerEditModeBars()
 					end,
 				}
 
+				settingsList[#settingsList + 1] = {
+					name = L["Gradient direction"] or "Gradient direction",
+					kind = settingType.Dropdown,
+					height = 80,
+					field = "gradientDirection",
+					parentId = "colorsetting",
+					generator = function(_, root)
+						local function getDir()
+							local c = curSpecCfg()
+							local v = (c and c.gradientDirection) or (cfg and cfg.gradientDirection) or "VERTICAL"
+							if type(v) == "string" then v = v:upper() end
+							return v == "HORIZONTAL" and "HORIZONTAL" or "VERTICAL"
+						end
+						local function setDir(value)
+							local c = curSpecCfg()
+							if not c then return end
+							c.gradientDirection = value == "HORIZONTAL" and "HORIZONTAL" or "VERTICAL"
+							queueRefresh()
+						end
+						root:CreateRadio(L["Vertical"] or "Vertical", function() return getDir() == "VERTICAL" end, function() setDir("VERTICAL") end)
+						root:CreateRadio(L["Horizontal"] or "Horizontal", function() return getDir() == "HORIZONTAL" end, function() setDir("HORIZONTAL") end)
+					end,
+					get = function()
+						local c = curSpecCfg()
+						local v = (c and c.gradientDirection) or (cfg and cfg.gradientDirection) or "VERTICAL"
+						if type(v) == "string" then v = v:upper() end
+						return v == "HORIZONTAL" and "HORIZONTAL" or "VERTICAL"
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						if type(value) == "string" then value = value:upper() end
+						c.gradientDirection = value == "HORIZONTAL" and "HORIZONTAL" or "VERTICAL"
+						queueRefresh()
+					end,
+					default = "VERTICAL",
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.useGradient == true
+					end,
+				}
+
 				if barType == "RUNES" then
 					settingsList[#settingsList + 1] = {
 						name = L["Rune cooldown color"] or "Rune cooldown color",

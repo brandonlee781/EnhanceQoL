@@ -71,6 +71,7 @@ local ResourcebarVars = {
 	SMOOTH_SPEED = 12,
 	DEFAULT_SMOOTH_DEADZONE = 0.75,
 	RUNE_UPDATE_INTERVAL = 0.1,
+	ESSENCE_UPDATE_INTERVAL = 0.1,
 	REFRESH_DEBOUNCE = 0.05,
 	REANCHOR_REFRESH = { reanchorOnly = true },
 	OOC_VISIBILITY_DRIVER = "[combat] show; hide",
@@ -120,6 +121,7 @@ local COSMETIC_BAR_KEYS = {
 	"useGradient",
 	"gradientStartColor",
 	"gradientEndColor",
+	"gradientDirection",
 	"staggerHighColors",
 	"staggerHighThreshold",
 	"staggerExtremeThreshold",
@@ -1438,6 +1440,28 @@ local function ensureTextOverlayFrame(bar)
 	return overlay
 end
 
+local EnumPowerType = Enum.PowerType
+
+local POWER_ENUM = {
+	MANA = (EnumPowerType and EnumPowerType.Mana) or 0,
+	RAGE = (EnumPowerType and EnumPowerType.Rage) or 1,
+	FOCUS = (EnumPowerType and EnumPowerType.Focus) or 2,
+	ENERGY = (EnumPowerType and EnumPowerType.Energy) or 3,
+	COMBO_POINTS = (EnumPowerType and EnumPowerType.ComboPoints) or 4,
+	RUNES = (EnumPowerType and EnumPowerType.Runes) or 5,
+	RUNIC_POWER = (EnumPowerType and EnumPowerType.RunicPower) or 6,
+	SOUL_SHARDS = (EnumPowerType and EnumPowerType.SoulShards) or 7,
+	LUNAR_POWER = (EnumPowerType and EnumPowerType.LunarPower) or (EnumPowerType and EnumPowerType.Alternate) or 8,
+	HOLY_POWER = (EnumPowerType and EnumPowerType.HolyPower) or 9,
+	MAELSTROM = (EnumPowerType and EnumPowerType.Maelstrom) or 11,
+	CHI = (EnumPowerType and EnumPowerType.Chi) or 12,
+	INSANITY = (EnumPowerType and EnumPowerType.Insanity) or 13,
+	ARCANE_CHARGES = (EnumPowerType and EnumPowerType.ArcaneCharges) or 16,
+	FURY = (EnumPowerType and EnumPowerType.Fury) or 17,
+	PAIN = (EnumPowerType and EnumPowerType.Pain) or 18,
+	ESSENCE = (EnumPowerType and EnumPowerType.Essence) or 19,
+}
+
 local function applyStatusBarInsets(frame, inset, force)
 	if not frame then return end
 	inset = inset or RB.ZERO_INSETS
@@ -1491,6 +1515,11 @@ local function applyStatusBarInsets(frame, inset, force)
 		updateBarThresholds(frame._rbType)
 	end
 	if frame.runes then layoutRunes(frame) end
+	if frame.essences then
+		local cfg = frame._cfg or (frame._rbType and getBarSettings(frame._rbType)) or getBarSettings("ESSENCE") or {}
+		local count = POWER_ENUM and UnitPowerMax("player", POWER_ENUM.ESSENCE) or 0
+		ResourceBars.LayoutEssences(frame, cfg, count, resolveTexture(cfg))
+	end
 end
 
 applyAbsorbLayout = function(bar, cfg)
@@ -2462,28 +2491,6 @@ powertypeClasses = {
 	},
 }
 
-local EnumPowerType = Enum.PowerType
-
-local POWER_ENUM = {
-	MANA = (EnumPowerType and EnumPowerType.Mana) or 0,
-	RAGE = (EnumPowerType and EnumPowerType.Rage) or 1,
-	FOCUS = (EnumPowerType and EnumPowerType.Focus) or 2,
-	ENERGY = (EnumPowerType and EnumPowerType.Energy) or 3,
-	COMBO_POINTS = (EnumPowerType and EnumPowerType.ComboPoints) or 4,
-	RUNES = (EnumPowerType and EnumPowerType.Runes) or 5,
-	RUNIC_POWER = (EnumPowerType and EnumPowerType.RunicPower) or 6,
-	SOUL_SHARDS = (EnumPowerType and EnumPowerType.SoulShards) or 7,
-	LUNAR_POWER = (EnumPowerType and EnumPowerType.LunarPower) or (EnumPowerType and EnumPowerType.Alternate) or 8,
-	HOLY_POWER = (EnumPowerType and EnumPowerType.HolyPower) or 9,
-	MAELSTROM = (EnumPowerType and EnumPowerType.Maelstrom) or 11,
-	CHI = (EnumPowerType and EnumPowerType.Chi) or 12,
-	INSANITY = (EnumPowerType and EnumPowerType.Insanity) or 13,
-	ARCANE_CHARGES = (EnumPowerType and EnumPowerType.ArcaneCharges) or 16,
-	FURY = (EnumPowerType and EnumPowerType.Fury) or 17,
-	PAIN = (EnumPowerType and EnumPowerType.Pain) or 18,
-	ESSENCE = (EnumPowerType and EnumPowerType.Essence) or 19,
-}
-
 classPowerTypes = {
 	"RAGE",
 	"ESSENCE",
@@ -3237,6 +3244,19 @@ function updatePowerBar(type, runeSlot)
 		bar:SetMinMaxValues(0, maxPower)
 	end
 	local curPower = UnitPower("player", pType, useRaw)
+	local barValue = curPower
+	local essenceFraction
+	local essenceSecret
+	if type == "ESSENCE" then
+		essenceSecret = issecretvalue and (issecretvalue(curPower) or issecretvalue(maxPower))
+		if not essenceSecret and maxPower and maxPower > 0 then
+			local now = GetTime()
+			essenceFraction = ResourceBars.ComputeEssenceFraction(bar, curPower, maxPower, now, POWER_ENUM.ESSENCE)
+			if essenceFraction and essenceFraction > 0 and curPower < maxPower then barValue = min(maxPower, curPower + essenceFraction) end
+		else
+			essenceFraction = 0
+		end
+	end
 	local displayCur = curPower
 	local displayMax = maxPower
 	if isSoulShards then
@@ -3245,13 +3265,13 @@ function updatePowerBar(type, runeSlot)
 	end
 
 	local style = bar._style or ((type == "MANA") and "PERCENT" or "CURMAX")
-	local smooth = cfg.smoothFill == true
+	local smooth = cfg.smoothFill == true and type ~= "ESSENCE"
 	if not addon.variables.isMidnight and smooth then
-		bar._smoothTarget = curPower
+		bar._smoothTarget = barValue
 		bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or RB.DEFAULT_SMOOTH_DEADZONE
 		bar._smoothSpeed = RB.SMOOTH_SPEED
 		if not bar._smoothInitialized then
-			bar:SetValue(curPower)
+			bar:SetValue(barValue)
 			bar._smoothInitialized = true
 		end
 		bar._smoothEnabled = true
@@ -3260,12 +3280,12 @@ function updatePowerBar(type, runeSlot)
 		bar._smoothTarget = nil
 		bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or RB.DEFAULT_SMOOTH_DEADZONE
 		bar._smoothSpeed = RB.SMOOTH_SPEED
-		bar:SetValue(curPower)
+		bar:SetValue(barValue)
 		bar._smoothInitialized = nil
 		bar._smoothEnabled = false
 		stopSmoothUpdater(bar)
 	end
-	bar._lastVal = curPower
+	bar._lastVal = barValue
 	local percent = getPowerPercent("player", pType, curPower, maxPower)
 	local percentText = formatPercentText(percent, cfg)
 	local percentStr = addon.variables.isMidnight and (percentText .. "%") or percentText
@@ -3386,6 +3406,76 @@ function updatePowerBar(type, runeSlot)
 		end
 		bar._usingMaxColor = (cfg.useMaxColor == true)
 		bar._usingHolyThreeColor = reachedThree and not bar._usingMaxColor
+	end
+
+	if type == "ESSENCE" then
+		local maxVal = maxPower or 0
+		local essenceTexture = resolveTexture(cfg)
+		if essenceSecret then
+			ResourceBars.UpdateEssenceSegments(bar, cfg, 0, 0, 0, RB.WHITE, ResourceBars.LayoutEssences, essenceTexture)
+			ResourceBars.DeactivateEssenceTicker(bar)
+		else
+			ResourceBars.UpdateEssenceSegments(bar, cfg, curPower, maxVal, essenceFraction or 0, RB.WHITE, ResourceBars.LayoutEssences, essenceTexture)
+			bar._essenceConfig = cfg
+			bar._essenceMaxPower = maxVal
+			if maxVal > 0 and curPower < maxVal then
+				bar._essenceAnimating = true
+				local tick = bar._essenceTickDuration or 5
+				bar._essenceUpdateInterval = min(RB.ESSENCE_UPDATE_INTERVAL, max(0.05, tick / 20))
+				if not bar._essenceUpdater then
+					bar._essenceUpdater = function(self, elapsed)
+						if not self:IsShown() then
+							ResourceBars.DeactivateEssenceTicker(self)
+							return
+						end
+						self._essenceAccum = (self._essenceAccum or 0) + (elapsed or 0)
+						local threshold = self._essenceUpdateInterval or RB.ESSENCE_UPDATE_INTERVAL
+						if self._essenceAccum < threshold then return end
+						self._essenceAccum = 0
+						local now = GetTime()
+						local current = UnitPower("player", POWER_ENUM.ESSENCE)
+						local maxPower = UnitPowerMax("player", POWER_ENUM.ESSENCE)
+						self._essenceMaxPower = maxPower
+						local cfgOnUpdate = self._essenceConfig or {}
+						local texOnUpdate = resolveTexture(cfgOnUpdate)
+						if issecretvalue and (issecretvalue(current) or issecretvalue(maxPower)) then
+							ResourceBars.UpdateEssenceSegments(self, cfgOnUpdate, 0, 0, 0, RB.WHITE, ResourceBars.LayoutEssences, texOnUpdate)
+							ResourceBars.DeactivateEssenceTicker(self)
+							return
+						end
+						if not maxPower or maxPower <= 0 then
+							ResourceBars.DeactivateEssenceTicker(self)
+							return
+						end
+						local fraction = ResourceBars.ComputeEssenceFraction(self, current, maxPower, now, POWER_ENUM.ESSENCE)
+						if not self._essenceNextTick or current >= maxPower then
+							ResourceBars.DeactivateEssenceTicker(self)
+							ResourceBars.UpdateEssenceSegments(self, cfgOnUpdate, current, maxPower, 0, RB.WHITE, ResourceBars.LayoutEssences, texOnUpdate)
+							return
+						end
+						if self._essenceNextTick <= now then
+							if After then
+								After(0, function() updatePowerBar("ESSENCE") end)
+							else
+								updatePowerBar("ESSENCE")
+							end
+							return
+						end
+						local value = current + (fraction or 0)
+						if value > maxPower then value = maxPower end
+						self:SetValue(value)
+						self._lastVal = value
+						ResourceBars.UpdateEssenceSegments(self, cfgOnUpdate, current, maxPower, fraction or 0, RB.WHITE, ResourceBars.LayoutEssences, texOnUpdate)
+					end
+				end
+				if bar:GetScript("OnUpdate") ~= bar._essenceUpdater then
+					bar._essenceAccum = 0
+					bar:SetScript("OnUpdate", bar._essenceUpdater)
+				end
+			else
+				ResourceBars.DeactivateEssenceTicker(bar)
+			end
+		end
 	end
 
 	configureSpecialTexture(bar, type, cfg)
@@ -3904,12 +3994,7 @@ local function createPowerBar(type, anchor)
 	applyBackdrop(bar, settings)
 	if type ~= "RUNES" then applyBarFillColor(bar, settings, type) end
 
-	if type ~= "RUNES" then
-		if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
-		applyFontToString(bar.text, settings)
-		applyTextPosition(bar, settings, 3, 0)
-		bar.text:Show()
-	else
+	if type == "RUNES" then
 		if bar.text then
 			bar.text:SetText("")
 			bar.text:Hide()
@@ -3918,6 +4003,21 @@ local function createPowerBar(type, anchor)
 		local tex = bar:GetStatusBarTexture()
 		if tex then tex:SetAlpha(0) end
 		layoutRunes(bar)
+	elseif type == "ESSENCE" then
+		if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+		applyFontToString(bar.text, settings)
+		applyTextPosition(bar, settings, 3, 0)
+		bar.text:Show()
+		-- Hide parent statusbar texture; we render segmented essence bars
+		local tex = bar:GetStatusBarTexture()
+		if tex then tex:SetAlpha(0) end
+		local count = POWER_ENUM and UnitPowerMax("player", POWER_ENUM.ESSENCE) or 0
+		ResourceBars.LayoutEssences(bar, settings or {}, count, resolveTexture(settings or {}))
+	else
+		if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+		applyFontToString(bar.text, settings)
+		applyTextPosition(bar, settings, 3, 0)
+		bar.text:Show()
 	end
 	if type == "RUNES" and not bar._runeVisibilityHooks then
 		bar:HookScript("OnHide", function(self)
@@ -3929,6 +4029,10 @@ local function createPowerBar(type, anchor)
 			updatePowerBar("RUNES")
 		end)
 		bar._runeVisibilityHooks = true
+	end
+	if type == "ESSENCE" and not bar._essenceVisibilityHooks then
+		bar:HookScript("OnHide", function(self) ResourceBars.DeactivateEssenceTicker(self) end)
+		bar._essenceVisibilityHooks = true
 	end
 	if type == "RUNES" then
 		bar:SetStatusBarColor(getPowerBarColor(type))
@@ -3958,6 +4062,11 @@ local function createPowerBar(type, anchor)
 		if type == "RUNES" then
 			layoutRunes(bar)
 			updateBarSeparators("RUNES")
+		elseif type == "ESSENCE" then
+			local cfg = getBarSettings("ESSENCE") or {}
+			local count = POWER_ENUM and UnitPowerMax("player", POWER_ENUM.ESSENCE) or 0
+			ResourceBars.LayoutEssences(bar, cfg, count, resolveTexture(cfg))
+			if ResourceBars.separatorEligible[type] then updateBarSeparators(type) end
 		elseif ResourceBars.separatorEligible[type] then
 			updateBarSeparators(type)
 		end
@@ -4801,6 +4910,10 @@ function ResourceBars.Refresh()
 			if pType == "RUNES" then
 				layoutRunes(bar)
 				updatePowerBar("RUNES")
+			elseif pType == "ESSENCE" then
+				local count = POWER_ENUM and UnitPowerMax("player", POWER_ENUM.ESSENCE) or 0
+				ResourceBars.LayoutEssences(bar, cfg or {}, count, resolveTexture(cfg or {}))
+				updatePowerBar("ESSENCE")
 			else
 				updatePowerBar(pType)
 			end
@@ -4847,6 +4960,10 @@ function ResourceBars.Refresh()
 				bar:SetStatusBarTexture(resolveTexture(cfg))
 				local tex = bar:GetStatusBarTexture()
 				if tex then tex:SetAlpha(0) end
+			elseif pType == "ESSENCE" then
+				bar:SetStatusBarTexture(resolveTexture(cfg))
+				local tex = bar:GetStatusBarTexture()
+				if tex then tex:SetAlpha(0) end
 			else
 				bar:SetStatusBarTexture(resolveTexture(cfg))
 				configureSpecialTexture(bar, pType, cfg)
@@ -4858,7 +4975,12 @@ function ResourceBars.Refresh()
 				applyFontToString(bar.text, cfg)
 				applyTextPosition(bar, cfg, 3, 0)
 			end
-			if pType == "RUNES" then layoutRunes(bar) end
+			if pType == "RUNES" then
+				layoutRunes(bar)
+			elseif pType == "ESSENCE" then
+				local count = POWER_ENUM and UnitPowerMax("player", POWER_ENUM.ESSENCE) or 0
+				ResourceBars.LayoutEssences(bar, cfg or {}, count, resolveTexture(cfg or {}))
+			end
 			if pType ~= "RUNES" then updatePowerBar(pType) end
 		end
 	end
@@ -4870,6 +4992,10 @@ function ResourceBars.Refresh()
 	local rcfg = getBarSettings("RUNES")
 	local runesEnabled = rcfg and (rcfg.enabled == true)
 	if powerbar and powerbar.RUNES and (not powerbar.RUNES:IsShown() or not runesEnabled) then deactivateRuneTicker(powerbar.RUNES) end
+	-- Ensure ESSENCE animation stops when not visible/enabled
+	local ecfg = getBarSettings("ESSENCE")
+	local essenceEnabled = ecfg and (ecfg.enabled == true)
+	if powerbar and powerbar.ESSENCE and (not powerbar.ESSENCE:IsShown() or not essenceEnabled) then ResourceBars.DeactivateEssenceTicker(powerbar.ESSENCE) end
 end
 
 ResourceBars._pendingRefresh = ResourceBars._pendingRefresh or {}

@@ -23,9 +23,7 @@ local function isGradientDebugEnabled()
 	return addon and addon.db and addon.db.debugResourceBarsGradient == true
 end
 
-local function formatColor(r, g, b, a)
-	return string.format("%.2f/%.2f/%.2f/%.2f", r or 0, g or 0, b or 0, a or 1)
-end
+local function formatColor(r, g, b, a) return string.format("%.2f/%.2f/%.2f/%.2f", r or 0, g or 0, b or 0, a or 1) end
 
 local function debugGradient(bar, reason, cfg, baseR, baseG, baseB, baseA, sr, sg, sb, sa, er, eg, eb, ea, force)
 	if not isGradientDebugEnabled() then return end
@@ -67,6 +65,7 @@ end
 local function clearGradientState(bar)
 	bar._rbGradientEnabled = nil
 	bar._rbGradientTex = nil
+	bar._rbGradDir = nil
 	bar._rbGradSR = nil
 	bar._rbGradSG = nil
 	bar._rbGradSB = nil
@@ -77,16 +76,229 @@ local function clearGradientState(bar)
 	bar._rbGradEA = nil
 end
 
+function ResourceBars.DeactivateEssenceTicker(bar)
+	if not bar then return end
+	if bar:GetScript("OnUpdate") == bar._essenceUpdater then bar:SetScript("OnUpdate", nil) end
+	bar._essenceAnimating = false
+	bar._essenceAccum = 0
+	bar._essenceUpdateInterval = nil
+end
+
+function ResourceBars.ComputeEssenceFraction(bar, current, maxPower, now, powerEnum)
+	if not bar then return 0, 0 end
+	if current == nil or maxPower == nil then
+		bar._essenceNextTick = nil
+		bar._essenceFraction = 0
+		return 0, 0
+	end
+	if issecretvalue and (issecretvalue(current) or issecretvalue(maxPower)) then
+		bar._essenceNextTick = nil
+		bar._essenceFraction = 0
+		return 0, 0
+	end
+	local regen = GetPowerRegenForPowerType and GetPowerRegenForPowerType(powerEnum)
+	if not regen or regen <= 0 then regen = 0.2 end
+	local tickDuration = 1 / regen
+
+	bar._essenceTickDuration = tickDuration
+	bar._essenceNextTick = bar._essenceNextTick or nil
+	bar._essenceLastPower = bar._essenceLastPower or current
+
+	if current > bar._essenceLastPower then
+		if current < maxPower then
+			bar._essenceNextTick = now + tickDuration
+		else
+			bar._essenceNextTick = nil
+		end
+	end
+
+	if current < maxPower and not bar._essenceNextTick then bar._essenceNextTick = now + tickDuration end
+
+	if current >= maxPower then bar._essenceNextTick = nil end
+
+	bar._essenceLastPower = current
+
+	local fraction = 0
+	if current < maxPower and bar._essenceNextTick and tickDuration > 0 then
+		local remaining = bar._essenceNextTick - now
+		if remaining < 0 then remaining = 0 end
+		fraction = 1 - (remaining / tickDuration)
+		if fraction < 0 then
+			fraction = 0
+		elseif fraction > 1 then
+			fraction = 1
+		end
+	end
+
+	if UnitPartialPower and current < maxPower and powerEnum then
+		local partial = UnitPartialPower("player", powerEnum)
+		if partial ~= nil and not (issecretvalue and issecretvalue(partial)) then
+			local partialFrac = partial / 1000
+			if partialFrac < 0 then
+				partialFrac = 0
+			elseif partialFrac > 1 then
+				partialFrac = 1
+			end
+			fraction = partialFrac
+			if tickDuration > 0 then bar._essenceNextTick = now + (1 - fraction) * tickDuration end
+		end
+	end
+
+	bar._essenceFraction = fraction
+	return fraction, tickDuration
+end
+
+function ResourceBars.LayoutEssences(bar, cfg, count, texturePath)
+	if not bar then return end
+	if not count or count <= 0 then
+		if bar.essences then
+			for i = 1, #bar.essences do
+				if bar.essences[i] then bar.essences[i]:Hide() end
+			end
+		end
+		bar._essenceSegments = 0
+		return
+	end
+
+	bar.essences = bar.essences or {}
+	local inner = bar._rbInner or bar
+	local w = math.max(1, inner:GetWidth() or (bar:GetWidth() or 0))
+	local h = math.max(1, inner:GetHeight() or (bar:GetHeight() or 0))
+	local vertical = cfg and cfg.verticalFill == true
+	local segPrimary
+	if vertical then
+		segPrimary = math.max(1, math.floor(h / count + 0.5))
+	else
+		segPrimary = math.max(1, math.floor(w / count + 0.5))
+	end
+
+	for i = 1, count do
+		local sb = bar.essences[i]
+		if not sb then
+			sb = CreateFrame("StatusBar", bar:GetName() .. "Essence" .. i, inner)
+			sb:SetMinMaxValues(0, 1)
+			bar.essences[i] = sb
+		end
+		if texturePath and sb._rb_tex ~= texturePath then
+			sb:SetStatusBarTexture(texturePath)
+			sb._rb_tex = texturePath
+		end
+		sb:ClearAllPoints()
+		if sb:GetParent() ~= inner then sb:SetParent(inner) end
+		sb:SetFrameLevel((bar:GetFrameLevel() or 1) + 1)
+		if vertical then
+			sb:SetWidth(w)
+			sb:SetHeight(segPrimary)
+			sb:SetOrientation("VERTICAL")
+			if i == 1 then
+				sb:SetPoint("BOTTOM", inner, "BOTTOM", 0, 0)
+			else
+				sb:SetPoint("BOTTOM", bar.essences[i - 1], "TOP", 0, 0)
+			end
+			if i == count then sb:SetPoint("TOP", inner, "TOP", 0, 0) end
+		else
+			sb:SetHeight(h)
+			sb:SetOrientation("HORIZONTAL")
+			if i == 1 then
+				sb:SetPoint("LEFT", inner, "LEFT", 0, 0)
+			else
+				sb:SetPoint("LEFT", bar.essences[i - 1], "RIGHT", 0, 0)
+			end
+			if i == count then
+				sb:SetPoint("RIGHT", inner, "RIGHT", 0, 0)
+			else
+				sb:SetWidth(segPrimary)
+			end
+		end
+		if not sb:IsShown() then sb:Show() end
+	end
+	for i = count + 1, #bar.essences do
+		if bar.essences[i] then bar.essences[i]:Hide() end
+	end
+	bar._essenceSegments = count
+	bar._essenceVertical = vertical
+end
+
+function ResourceBars.UpdateEssenceSegments(bar, cfg, current, maxPower, fraction, fallbackColor, layoutFunc, texturePath)
+	if not bar then return end
+	if not maxPower or maxPower <= 0 then
+		if bar.essences then
+			for i = 1, #bar.essences do
+				if bar.essences[i] then bar.essences[i]:Hide() end
+			end
+		end
+		return
+	end
+	if not bar.essences or bar._essenceSegments ~= maxPower or bar._essenceVertical ~= (cfg and cfg.verticalFill == true) then
+		if layoutFunc then layoutFunc(bar, cfg, maxPower, texturePath) end
+	end
+	if not bar.essences then return end
+
+	local base = bar._lastColor or bar._baseColor or fallbackColor or { 1, 1, 1, 1 }
+	local fullR, fullG, fullB, fullA = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+	local dimFactor = 0.5
+	local dimR, dimG, dimB, dimA = fullR * dimFactor, fullG * dimFactor, fullB * dimFactor, fullA
+	local colorKey = fullR .. ":" .. fullG .. ":" .. fullB .. ":" .. fullA
+
+	for i = 1, maxPower do
+		local sb = bar.essences[i]
+		if sb then
+			local state
+			local value
+			if i <= current then
+				state = "full"
+				value = 1
+			elseif i == current + 1 and fraction and fraction > 0 then
+				state = "partial"
+				value = fraction
+			else
+				state = "empty"
+				value = 0
+			end
+			sb:SetMinMaxValues(0, 1)
+			sb:SetValue(value)
+
+			local wantR, wantG, wantB, wantA
+			if state == "full" then
+				wantR, wantG, wantB, wantA = fullR, fullG, fullB, fullA
+			else
+				wantR, wantG, wantB, wantA = dimR, dimG, dimB, dimA
+			end
+
+			local needsColor = sb._essenceState ~= state or sb._essenceColorKey ~= colorKey
+			sb._essenceState = state
+			sb._essenceColorKey = colorKey
+			if needsColor then
+				if ResourceBars.SetStatusBarColorWithGradient then
+					ResourceBars.SetStatusBarColorWithGradient(sb, cfg, wantR, wantG, wantB, wantA)
+				else
+					sb:SetStatusBarColor(wantR, wantG, wantB, wantA or 1)
+				end
+				sb._rbColorInitialized = true
+			elseif ResourceBars.RefreshStatusBarGradient then
+				ResourceBars.RefreshStatusBarGradient(sb, cfg, wantR, wantG, wantB, wantA)
+			end
+			if not sb:IsShown() then sb:Show() end
+		end
+	end
+	for i = maxPower + 1, #bar.essences do
+		if bar.essences[i] then bar.essences[i]:Hide() end
+	end
+end
+
 function ResourceBars.ApplyBarGradient(bar, cfg, baseR, baseG, baseB, baseA, force)
 	if not bar or not cfg or cfg.useGradient ~= true then return false end
 	local tex = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
 	if not tex or not tex.SetGradient then return false end
 	local sr, sg, sb, sa, er, eg, eb, ea = resolveGradientColors(cfg, baseR, baseG, baseB, baseA)
+	local direction = (cfg and cfg.gradientDirection) or "VERTICAL"
+	if type(direction) == "string" then direction = direction:upper() end
+	if direction ~= "HORIZONTAL" then direction = "VERTICAL" end
 	if
 		not force
-		and
-		bar._rbGradientEnabled
+		and bar._rbGradientEnabled
 		and bar._rbGradientTex == tex
+		and bar._rbGradDir == direction
 		and bar._rbGradSR == sr
 		and bar._rbGradSG == sg
 		and bar._rbGradSB == sb
@@ -98,10 +310,11 @@ function ResourceBars.ApplyBarGradient(bar, cfg, baseR, baseG, baseB, baseA, for
 	then
 		return true
 	end
-	tex:SetGradient("VERTICAL", CreateColor(sr, sg, sb, sa), CreateColor(er, eg, eb, ea))
+	tex:SetGradient(direction, CreateColor(sr, sg, sb, sa), CreateColor(er, eg, eb, ea))
 	debugGradient(bar, "apply", cfg, baseR, baseG, baseB, baseA, sr, sg, sb, sa, er, eg, eb, ea, force)
 	bar._rbGradientEnabled = true
 	bar._rbGradientTex = tex
+	bar._rbGradDir = direction
 	bar._rbGradSR, bar._rbGradSG, bar._rbGradSB, bar._rbGradSA = sr, sg, sb, sa
 	bar._rbGradER, bar._rbGradEG, bar._rbGradEB, bar._rbGradEA = er, eg, eb, ea
 	return true

@@ -4,6 +4,8 @@
 
 ### ✨ Added
 
+- Resource Bars: Evoker Essence bars now show filling animation
+- Resource Bars: Gradiant color works horizontal now too
 - Cooldown Panels: Option to enable charge duration show
 
 ### 🐛 Fixed
