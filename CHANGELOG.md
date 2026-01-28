@@ -8,10 +8,15 @@
 - Resource Bars: Gradiant color works horizontal now too
 - Cooldown Panels: Option to enable charge duration show
 
+### 🔁 Changed
+
+- Cooldown Panels: Switched button glow to LibButtonGlow
+
 ### 🐛 Fixed
 
 - Mover: MailFrame/SendMail and Open Mail are now movable.
 - Cooldown Panels: Spell usable checks are now evaluated correctly.
+- Cooldown Panels: Overlay glow now resolves override spell IDs (talent replacements) correctly.
 
 ---
 

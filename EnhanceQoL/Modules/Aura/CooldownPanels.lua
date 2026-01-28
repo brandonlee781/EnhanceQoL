@@ -16,6 +16,7 @@ local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0", true)
+local LBG = LibStub("LibButtonGlow-1.0")
 local Masque
 
 CooldownPanels.ENTRY_TYPE = {
@@ -154,6 +155,7 @@ local GetOverrideSpell = C_Spell and C_Spell.GetOverrideSpell
 local GetSpellPowerCost = C_Spell and C_Spell.GetSpellPowerCost
 local EnableSpellRangeCheck = C_Spell and C_Spell.EnableSpellRangeCheck
 local IsSpellUsableFn = C_Spell and C_Spell.IsSpellUsable or IsUsableSpell
+local IsSpellPassiveFn = C_Spell and C_Spell.IsSpellPassive or IsPassiveSpell
 local IsSpellKnown = C_SpellBook.IsSpellInSpellBook
 local IsEquippedItem = C_Item.IsEquippedItem
 local GetTime = GetTime
@@ -266,6 +268,14 @@ local function getBaseSpellId(spellId)
 		if type(baseId) == "number" and baseId > 0 then return baseId end
 	end
 	return id
+end
+
+local function isSpellPassiveSafe(spellId, effectiveId)
+	if not spellId or not IsSpellPassiveFn then return false end
+	local checkId = effectiveId or getEffectiveSpellId(spellId) or spellId
+	if IsSpellPassiveFn(checkId) then return true end
+	if checkId ~= spellId and IsSpellPassiveFn(spellId) then return true end
+	return false
 end
 
 local function setPowerInsufficient(runtime, spellId, isUsable, insufficientPower)
@@ -1126,13 +1136,15 @@ function CooldownPanels:RebuildSpellIndex()
 					if entry and entry.type == "SPELL" and entry.spellID then
 						local spellId = tonumber(entry.spellID)
 						if spellId then
-							index[spellId] = index[spellId] or {}
-							index[spellId][panelId] = true
-							if wantsRangeCheck then rangeCheckSpells[spellId] = true end
-							local overrideId = getEffectiveSpellId(spellId)
-							if overrideId and overrideId ~= spellId then
-								index[overrideId] = index[overrideId] or {}
-								index[overrideId][panelId] = true
+							local effectiveId = getEffectiveSpellId(spellId) or spellId
+							if not isSpellPassiveSafe(spellId, effectiveId) then
+								index[spellId] = index[spellId] or {}
+								index[spellId][panelId] = true
+								if wantsRangeCheck then rangeCheckSpells[spellId] = true end
+								if effectiveId and effectiveId ~= spellId then
+									index[effectiveId] = index[effectiveId] or {}
+									index[effectiveId][panelId] = true
+								end
 							end
 						end
 					end
@@ -1167,17 +1179,19 @@ function CooldownPanels:RebuildPowerIndex()
 						local baseId = tonumber(entry.spellID)
 						if baseId then
 							local effectiveId = getEffectiveSpellId(baseId) or baseId
-							local costs = GetSpellPowerCost and GetSpellPowerCost(effectiveId)
-							if type(costs) == "table" then
-								powerCheckSpells[effectiveId] = true
-								local names = getSpellPowerCostNamesFromCosts(costs)
-								if names then
-									powerCostNames[baseId] = names
-									for _, name in ipairs(names) do
-										local key = string.upper(name)
-										if key ~= "" then
-											powerIndex[key] = powerIndex[key] or {}
-											powerIndex[key][effectiveId] = true
+							if not isSpellPassiveSafe(baseId, effectiveId) then
+								local costs = GetSpellPowerCost and GetSpellPowerCost(effectiveId)
+								if type(costs) == "table" then
+									powerCheckSpells[effectiveId] = true
+									local names = getSpellPowerCostNamesFromCosts(costs)
+									if names then
+										powerCostNames[baseId] = names
+										for _, name in ipairs(names) do
+											local key = string.upper(name)
+											if key ~= "" then
+												powerIndex[key] = powerIndex[key] or {}
+												powerIndex[key][effectiveId] = true
+											end
 										end
 									end
 								end
@@ -1220,16 +1234,18 @@ function CooldownPanels:RebuildChargesIndex()
 					if entry and entry.type == "SPELL" and entry.spellID and entry.showCharges == true then
 						local baseId = tonumber(entry.spellID)
 						if baseId then
-							chargesPanels[panelId] = true
 							local effectiveId = getEffectiveSpellId(baseId) or baseId
-							if GetSpellChargesInfo then
-								local info = GetSpellChargesInfo(effectiveId)
-								if type(info) == "table" then
-									chargesIndex[effectiveId] = chargesIndex[effectiveId] or {}
-									chargesIndex[effectiveId][panelId] = true
-									if effectiveId ~= baseId then
-										chargesIndex[baseId] = chargesIndex[baseId] or {}
-										chargesIndex[baseId][panelId] = true
+							if not isSpellPassiveSafe(baseId, effectiveId) then
+								chargesPanels[panelId] = true
+								if GetSpellChargesInfo then
+									local info = GetSpellChargesInfo(effectiveId)
+									if type(info) == "table" then
+										chargesIndex[effectiveId] = chargesIndex[effectiveId] or {}
+										chargesIndex[effectiveId][panelId] = true
+										if effectiveId ~= baseId then
+											chargesIndex[baseId] = chargesIndex[baseId] or {}
+											chargesIndex[baseId][panelId] = true
+										end
 									end
 								end
 							end
@@ -1469,6 +1485,16 @@ end
 local function setGlow(frame, enabled)
 	if frame._glow == enabled then return end
 	frame._glow = enabled
+
+	if LBG then
+		if enabled then
+			LBG.ShowOverlayGlow(frame)
+		else
+			LBG.HideOverlayGlow(frame)
+		end
+		return
+	end
+
 	local alertManager = _G.ActionButtonSpellAlertManager
 	if not alertManager then return end
 	if enabled then
@@ -3691,6 +3717,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local shared = CooldownPanels.runtime -- Root runtime (global state)
 			local baseSpellId = entry.type == "SPELL" and entry.spellID or nil
 			local effectiveSpellId = baseSpellId and getEffectiveSpellId(baseSpellId) or nil
+			local spellPassive = baseSpellId and isSpellPassiveSafe(baseSpellId, effectiveSpellId) or false
 			-- local function isSpellFlagged(map)
 			-- 	if not map then return false end
 			-- 	if effectiveSpellId and map[effectiveSpellId] == true then return true end
@@ -3724,7 +3751,9 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 
 			if entry.type == "SPELL" and baseSpellId then
 				local spellId = effectiveSpellId or baseSpellId
-				if IsSpellKnown and not IsSpellKnown(spellId) then
+				if spellPassive then
+					show = false
+				elseif IsSpellKnown and not IsSpellKnown(spellId) then
 					show = false
 				else
 					if showCharges and GetSpellChargesInfo then chargesInfo = GetSpellChargesInfo(spellId) end
@@ -5559,12 +5588,32 @@ refreshPanelsForSpell = function(spellId)
 	local id = tonumber(spellId)
 	if not id then return false end
 	local index = CooldownPanels.runtime and CooldownPanels.runtime.spellIndex
-	local panels = index and index[id]
-	if not panels then return false end
-	for panelId in pairs(panels) do
-		if CooldownPanels:GetPanel(panelId) then CooldownPanels:RefreshPanel(panelId) end
+	if not index then return false end
+	local refreshed = false
+	local ids = {}
+	local count = 0
+	local function pushId(value)
+		if not value or ids[value] then return end
+		ids[value] = true
+		count = count + 1
 	end
-	return true
+	pushId(id)
+	local baseId = getBaseSpellId(id)
+	if baseId and baseId ~= id then pushId(baseId) end
+	local effectiveId = getEffectiveSpellId(id)
+	if effectiveId and effectiveId ~= id then pushId(effectiveId) end
+
+	if count == 0 then return false end
+	for lookupId in pairs(ids) do
+		local panels = index[lookupId]
+		if panels then
+			for panelId in pairs(panels) do
+				if CooldownPanels:GetPanel(panelId) then CooldownPanels:RefreshPanel(panelId) end
+			end
+			refreshed = true
+		end
+	end
+	return refreshed
 end
 
 local function refreshPanelsForCharges()
@@ -5715,7 +5764,10 @@ updateRangeCheckSpells = function(rangeCheckSpells)
 						for _, entry in pairs(panel.entries or {}) do
 							if entry and entry.type == "SPELL" and entry.spellID then
 								local spellId = tonumber(entry.spellID)
-								if spellId then wanted[spellId] = true end
+								if spellId then
+									local effectiveId = getEffectiveSpellId(spellId) or spellId
+									if not isSpellPassiveSafe(spellId, effectiveId) then wanted[spellId] = true end
+								end
 							end
 						end
 					end
@@ -5774,17 +5826,22 @@ end
 local function setOverlayGlowForSpell(spellId, enabled)
 	local id = tonumber(spellId)
 	if not id then return false end
-	local index = CooldownPanels.runtime and CooldownPanels.runtime.spellIndex
-	local panels = index and index[id]
-	if not panels then return false end
-
 	CooldownPanels.runtime = CooldownPanels.runtime or {}
 	local runtime = CooldownPanels.runtime
 	runtime.overlayGlowSpells = runtime.overlayGlowSpells or {}
+	local baseId = getBaseSpellId(id)
+	local effectiveId = getEffectiveSpellId(id)
+	local function setFlag(spellIdentifier, value)
+		if spellIdentifier then runtime.overlayGlowSpells[spellIdentifier] = value end
+	end
 	if enabled then
-		runtime.overlayGlowSpells[id] = true
+		setFlag(id, true)
+		if baseId and baseId ~= id then setFlag(baseId, true) end
+		if effectiveId and effectiveId ~= id then setFlag(effectiveId, true) end
 	else
-		runtime.overlayGlowSpells[id] = nil
+		setFlag(id, nil)
+		if baseId and baseId ~= id then setFlag(baseId, nil) end
+		if effectiveId and effectiveId ~= id then setFlag(effectiveId, nil) end
 	end
 	if refreshPanelsForSpell and refreshPanelsForSpell(id) then return true end
 	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate("OverlayGlow") end
