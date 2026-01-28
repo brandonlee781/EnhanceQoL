@@ -126,6 +126,18 @@ local COOLDOWN_VIEWER_VISIBILITY_MODES = {
 }
 addon.constants.COOLDOWN_VIEWER_VISIBILITY_MODES = COOLDOWN_VIEWER_VISIBILITY_MODES
 
+local SPELL_ACTIVATION_OVERLAY_FRAME_NAME = "SpellActivationOverlayFrame"
+addon.constants.SPELL_ACTIVATION_OVERLAY_FRAME_NAME = SPELL_ACTIVATION_OVERLAY_FRAME_NAME
+local SPELL_ACTIVATION_OVERLAY_VISIBILITY_KEYS = {
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED] = true,
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED] = true,
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE] = true,
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE] = true,
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING] = true,
+	[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET] = true,
+}
+addon.constants.SPELL_ACTIVATION_OVERLAY_VISIBILITY_KEYS = SPELL_ACTIVATION_OVERLAY_VISIBILITY_KEYS
+
 local DEFAULT_BUTTON_SINK_COLUMNS = 4
 
 local DEFAULT_ACTION_BUTTON_COUNT = _G.NUM_ACTIONBAR_BUTTONS or 12
@@ -819,6 +831,7 @@ local midnightPlayerHealthCurve
 local midnightPlayerHealthCurveAlpha
 local IsInDruidTravelForm
 local EnsureSkyridingStateDriver
+local EnsureSpellActivationOverlayWatcher
 
 local function GetMidnightPlayerHealthAlpha(fadedAlpha)
 	if type(fadedAlpha) ~= "number" then fadedAlpha = 0 end
@@ -1469,10 +1482,10 @@ local function computeCooldownViewerTargetAlpha(cfg, state)
 	if not hovered and sharedHover and viewerStates then
 		for _, otherState in pairs(addon.variables.cooldownViewerStates) do
 			if otherState.hovered then
-					hovered = true
-					break
+				hovered = true
+				break
 			end
-    end
+		end
 	end
 
 	local hasTarget = UnitExists and UnitExists("target")
@@ -1776,6 +1789,171 @@ local function EnsureCooldownViewerEditCallbacks()
 	addon.variables.cooldownViewerEditHooked = true
 end
 addon.functions.EnsureCooldownViewerEditCallbacks = EnsureCooldownViewerEditCallbacks
+
+local function normalizeSpellActivationOverlayConfigValue(val, acc)
+	if not SPELL_ACTIVATION_OVERLAY_VISIBILITY_KEYS[val] then return acc end
+	acc = acc or {}
+	acc[val] = true
+	return acc
+end
+
+local function sanitizeSpellActivationOverlayConfig(cfg)
+	if type(cfg) == "table" then
+		local result
+		for key, value in pairs(cfg) do
+			if value == true then result = normalizeSpellActivationOverlayConfigValue(key, result) end
+		end
+		return result
+	end
+	if type(cfg) == "string" then return normalizeSpellActivationOverlayConfigValue(cfg, {}) end
+	return nil
+end
+
+function addon.functions.GetSpellActivationOverlayVisibility()
+	local cfg = sanitizeSpellActivationOverlayConfig(addon.db and addon.db.spellActivationOverlayVisibility)
+	if not cfg then return nil end
+	local copy = {}
+	for key, value in pairs(cfg) do
+		if value == true then copy[key] = true end
+	end
+	return copy
+end
+
+function addon.functions.SetSpellActivationOverlayVisibility(key, shouldSelect)
+	addon.db = addon.db or {}
+	local current = sanitizeSpellActivationOverlayConfig(addon.db.spellActivationOverlayVisibility) or {}
+	if shouldSelect then
+		current = normalizeSpellActivationOverlayConfigValue(key, current)
+	else
+		current[key] = nil
+	end
+	if current and next(current) then
+		addon.db.spellActivationOverlayVisibility = current
+	else
+		addon.db.spellActivationOverlayVisibility = nil
+	end
+	if EnsureSpellActivationOverlayWatcher then EnsureSpellActivationOverlayWatcher() end
+	if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+end
+
+local function getSpellActivationOverlayAlphaValue(key, fallback)
+	if not addon.db then return fallback end
+	local value = clampVisibilityAlpha(addon.db[key])
+	if value == nil then return fallback end
+	return value
+end
+
+local function computeSpellActivationOverlayTargetAlpha(cfg, activeAlpha, hiddenAlpha)
+	local mounted = IsPlayerMounted()
+	local isSkyriding = addon.variables and addon.variables.isPlayerSkyriding and true or false
+	local hasTarget = UnitExists and UnitExists("target") and true or false
+	local isCasting = IsPlayerCasting()
+
+	local shouldShow = false
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED] and mounted then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED] and not mounted then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE] and isSkyriding then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE] and not isSkyriding then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING] and isCasting then shouldShow = true end
+	if cfg[COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET] and hasTarget then shouldShow = true end
+
+	if shouldShow then return activeAlpha end
+	return hiddenAlpha
+end
+
+local function applySpellActivationOverlayMode(cfg)
+	local frame = _G[SPELL_ACTIVATION_OVERLAY_FRAME_NAME]
+	if not frame then return false end
+	addon.variables = addon.variables or {}
+	local vars = addon.variables
+
+	if not cfg or not next(cfg) then
+		if vars.spellActivationOverlayApplied then
+			local baseAlpha = vars.spellActivationOverlayBaseAlpha
+			if type(baseAlpha) ~= "number" then baseAlpha = 1 end
+			ApplyAlphaToRegion(frame, baseAlpha, false)
+		end
+		vars.spellActivationOverlayApplied = nil
+		vars.spellActivationOverlayBaseAlpha = nil
+		return true
+	end
+
+	if vars.spellActivationOverlayBaseAlpha == nil and frame.GetAlpha then
+		local baseAlpha = frame:GetAlpha()
+		if type(baseAlpha) == "number" then
+			vars.spellActivationOverlayBaseAlpha = baseAlpha
+		else
+			vars.spellActivationOverlayBaseAlpha = 1
+		end
+	end
+
+	local useCustomAlpha = addon.db and addon.db.spellActivationOverlayUseCustomAlpha == true
+	local activeAlpha = 1
+	local hiddenAlpha = 0
+	if useCustomAlpha then
+		activeAlpha = getSpellActivationOverlayAlphaValue("spellActivationOverlayActiveAlpha", 1)
+		hiddenAlpha = getSpellActivationOverlayAlphaValue("spellActivationOverlayHiddenAlpha", 0)
+	end
+
+	local targetAlpha = computeSpellActivationOverlayTargetAlpha(cfg, activeAlpha, hiddenAlpha)
+	ApplyAlphaToRegion(frame, targetAlpha, false)
+	vars.spellActivationOverlayApplied = true
+	return true
+end
+
+local function scheduleSpellActivationOverlayReapply()
+	addon.variables = addon.variables or {}
+	if addon.variables.spellActivationOverlayReapplyPending then return end
+	if not C_Timer or not C_Timer.After then return end
+
+	local attempts = (addon.variables.spellActivationOverlayRetryCount or 0) + 1
+	addon.variables.spellActivationOverlayRetryCount = attempts
+	if attempts > 10 then return end
+
+	addon.variables.spellActivationOverlayReapplyPending = true
+	C_Timer.After(1, function()
+		addon.variables.spellActivationOverlayReapplyPending = nil
+		if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+	end)
+end
+
+function addon.functions.ApplySpellActivationOverlayVisibility()
+	addon.db = addon.db or {}
+	addon.variables = addon.variables or {}
+	EnsureSkyridingStateDriver()
+
+	local cfg = addon.functions.GetSpellActivationOverlayVisibility()
+	local ok = applySpellActivationOverlayMode(cfg)
+
+	if cfg and not ok then
+		scheduleSpellActivationOverlayReapply()
+	elseif addon.variables then
+		addon.variables.spellActivationOverlayRetryCount = nil
+	end
+end
+
+EnsureSpellActivationOverlayWatcher = function()
+	addon.variables = addon.variables or {}
+	if addon.variables.spellActivationOverlayWatcher then return end
+
+	EnsureSkyridingStateDriver()
+	local watcher = CreateFrame("Frame")
+	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+	watcher:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+	watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_INTERRUPTED", "player")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_START", "player")
+	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
+	watcher:SetScript("OnEvent", function()
+		if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+	end)
+	addon.variables.spellActivationOverlayWatcher = watcher
+end
+addon.functions.EnsureSpellActivationOverlayWatcher = EnsureSpellActivationOverlayWatcher
 
 local hookedButtons = {}
 
@@ -2390,6 +2568,7 @@ EnsureSkyridingStateDriver = function()
 	local function refreshSkyridingDependents()
 		RefreshAllActionBarVisibilityAlpha()
 		if addon.functions and addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
+		if addon.functions and addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
 	end
 	driver:SetScript("OnShow", function()
 		addon.variables.isPlayerSkyriding = true
@@ -3311,6 +3490,8 @@ local function initUnitFrame()
 	if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
 	if addon.functions.EnsureCooldownViewerWatcher then addon.functions.EnsureCooldownViewerWatcher() end
 	if addon.functions.EnsureCooldownViewerEditCallbacks then addon.functions.EnsureCooldownViewerEditCallbacks() end
+	if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+	if addon.functions.EnsureSpellActivationOverlayWatcher then addon.functions.EnsureSpellActivationOverlayWatcher() end
 end
 
 local function initBagsFrame()
@@ -5424,6 +5605,7 @@ local function setAllHooks()
 		if addon.Aura.functions.InitBuffTracker then addon.Aura.functions.InitBuffTracker() end
 		if addon.Aura.functions.InitCooldownPanels then addon.Aura.functions.InitCooldownPanels() end
 		if addon.Aura.functions.InitResourceBars then addon.Aura.functions.InitResourceBars() end
+		if addon.Aura.functions.InitUnitFrames then addon.Aura.functions.InitUnitFrames() end
 	end
 	if addon.Drinks and addon.Drinks.functions then
 		if addon.Drinks.functions.InitDrinkMacro then addon.Drinks.functions.InitDrinkMacro() end

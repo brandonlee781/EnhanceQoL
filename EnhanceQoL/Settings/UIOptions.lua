@@ -18,6 +18,8 @@ local GetVisibilityRuleMetadata = addon.functions.GetVisibilityRuleMetadata or f
 local HasFrameVisibilityOverride = addon.functions.HasFrameVisibilityOverride or function() return false end
 local SetCooldownViewerVisibility = addon.functions.SetCooldownViewerVisibility or function() end
 local GetCooldownViewerVisibility = addon.functions.GetCooldownViewerVisibility or function() return nil end
+local SetSpellActivationOverlayVisibility = addon.functions.SetSpellActivationOverlayVisibility or function() end
+local GetSpellActivationOverlayVisibility = addon.functions.GetSpellActivationOverlayVisibility or function() return nil end
 local IsCooldownViewerEnabled = addon.functions.IsCooldownViewerEnabled or function() return false end
 local getCVarOptionState = addon.functions.GetCVarOptionState or function() return false end
 local setCVarOptionState = addon.functions.SetCVarOptionState or function() end
@@ -312,17 +314,14 @@ end
 local function createButtonAppearanceControls(category, expandable)
 	addon.functions.SettingsCreateHeadline(category, L["actionBarAppearanceHeader"] or "Button appearance", { parentSection = expandable })
 
-	local hideBorders = addon.functions.SettingsCreateCheckbox(category, {
-		var = "actionBarHideBorders",
-		text = L["actionBarHideBorders"] or "Hide button borders",
-		desc = L["actionBarHideBordersDesc"] or "Remove the default border texture around action buttons.",
-		func = function(value)
-			addon.db.actionBarHideBorders = value and true or false
-			addon.db.actionBarHideBordersAuto = nil
-			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
-		end,
-		parentSection = expandable,
-	})
+	local hideBorders
+	local function getBorderStyle()
+		local current = addon.db.actionBarBorderStyle or "DEFAULT"
+		local list = buildBorderDropdown()
+		if not list[current] then current = "DEFAULT" end
+		return current
+	end
+	local function isDefaultBorderStyle() return getBorderStyle() == "DEFAULT" end
 
 	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarBorderStyle",
@@ -331,12 +330,7 @@ local function createButtonAppearanceControls(category, expandable)
 		listFunc = buildBorderDropdown,
 		order = borderOrder,
 		default = "DEFAULT",
-		get = function()
-			local current = addon.db.actionBarBorderStyle or "DEFAULT"
-			local list = buildBorderDropdown()
-			if not list[current] then current = "DEFAULT" end
-			return current
-		end,
+		get = getBorderStyle,
 		set = function(key)
 			local list = buildBorderDropdown()
 			if not list[key] then key = "DEFAULT" end
@@ -354,6 +348,19 @@ local function createButtonAppearanceControls(category, expandable)
 			end
 			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 		end,
+		parentSection = expandable,
+	})
+
+	hideBorders = addon.functions.SettingsCreateCheckbox(category, {
+		var = "actionBarHideBorders",
+		text = L["actionBarHideBorders"] or "Hide button borders",
+		desc = L["actionBarHideBordersDesc"] or "Remove the default border texture around action buttons.",
+		func = function(value)
+			addon.db.actionBarHideBorders = value and true or false
+			addon.db.actionBarHideBordersAuto = nil
+			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
+		end,
+		parentCheck = isDefaultBorderStyle,
 		parentSection = expandable,
 	})
 
@@ -378,6 +385,7 @@ local function createButtonAppearanceControls(category, expandable)
 			addon.db.actionBarBorderEdgeSize = val
 			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 		end,
+		parentCheck = function() return not isDefaultBorderStyle() end,
 		parentSection = expandable,
 	})
 
@@ -402,6 +410,7 @@ local function createButtonAppearanceControls(category, expandable)
 			addon.db.actionBarBorderPadding = val
 			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 		end,
+		parentCheck = function() return not isDefaultBorderStyle() end,
 		parentSection = expandable,
 	})
 
@@ -955,6 +964,105 @@ local function createCooldownViewerDropdowns(category, expandable)
 	})
 end
 
+local function createSpellActivationOverlayDropdown(category, expandable)
+	if not category then return end
+
+	addon.functions.SettingsCreateHeadline(category, L["spellActivationOverlayHeader"] or "Spell activation overlay", { parentSection = expandable })
+
+	local options = {
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_MOUNTED, text = L["cooldownManagerShowMounted"] or "Mounted" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED, text = L["cooldownManagerShowNotMounted"] or "Not mounted" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE, text = L["cooldownManagerShowSkyriding"] or "While skyriding" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE, text = L["VisibilityCondNotSkyriding"] or "Not skyriding" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING, text = L["cooldownManagerShowCasting"] or "Player is casting" },
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET,
+			text = L["cooldownManagerShowTarget"] or L["visibilityRule_playerHasTarget"] or "When I have a target",
+		},
+	}
+
+	addon.functions.SettingsCreateMultiDropdown(category, {
+		var = "spellActivationOverlayVisibility",
+		text = L["spellActivationOverlayFrame"] or "Spell Activation Overlay",
+		options = options,
+		hideSummary = true,
+		isSelectedFunc = function(key)
+			local cfg = GetSpellActivationOverlayVisibility()
+			return cfg and cfg[key] == true
+		end,
+		setSelectedFunc = function(key, shouldSelect) SetSpellActivationOverlayVisibility(key, shouldSelect) end,
+		getSelection = function() return GetSpellActivationOverlayVisibility() or {} end,
+		setSelection = function(map)
+			for _, opt in ipairs(options) do
+				local key = opt.value
+				local desired = map and map[key] == true
+				SetSpellActivationOverlayVisibility(key, desired)
+			end
+		end,
+		desc = L["spellActivationOverlayDesc"] or "Visible while any selected condition is true.",
+		parentSection = expandable,
+	})
+
+	local customAlphaToggle = addon.functions.SettingsCreateCheckbox(category, {
+		var = "spellActivationOverlayUseCustomAlpha",
+		text = L["spellActivationOverlayUseCustomAlpha"] or "Use custom alpha",
+		default = false,
+		get = function() return addon.db and addon.db.spellActivationOverlayUseCustomAlpha end,
+		set = function(value)
+			addon.db = addon.db or {}
+			addon.db.spellActivationOverlayUseCustomAlpha = value and true or false
+			if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+		end,
+		parentSection = expandable,
+	})
+	local function customAlphaEnabled() return customAlphaToggle and customAlphaToggle.setting and customAlphaToggle.setting:GetValue() == true end
+
+	local function getAlphaPercent(key, fallback)
+		local value = addon.db and addon.db[key]
+		if type(value) ~= "number" then value = fallback end
+		if value < 0 then value = 0 end
+		if value > 1 then value = 1 end
+		return math.floor((value * 100) + 0.5)
+	end
+
+	local function setAlphaPercent(key, percent)
+		addon.db = addon.db or {}
+		local value = tonumber(percent) or 0
+		if value < 0 then value = 0 end
+		if value > 100 then value = 100 end
+		addon.db[key] = value / 100
+		if addon.functions.ApplySpellActivationOverlayVisibility then addon.functions.ApplySpellActivationOverlayVisibility() end
+	end
+
+	addon.functions.SettingsCreateSlider(category, {
+		var = "spellActivationOverlayActiveAlpha",
+		text = L["spellActivationOverlayActiveAlpha"] or "Active alpha",
+		min = 0,
+		max = 100,
+		step = 1,
+		default = 100,
+		get = function() return getAlphaPercent("spellActivationOverlayActiveAlpha", 1) end,
+		set = function(val) setAlphaPercent("spellActivationOverlayActiveAlpha", val) end,
+		element = customAlphaToggle and customAlphaToggle.element,
+		parentCheck = customAlphaEnabled,
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateSlider(category, {
+		var = "spellActivationOverlayHiddenAlpha",
+		text = L["spellActivationOverlayHiddenAlpha"] or "Hidden alpha",
+		min = 0,
+		max = 100,
+		step = 1,
+		default = 0,
+		get = function() return getAlphaPercent("spellActivationOverlayHiddenAlpha", 0) end,
+		set = function(val) setAlphaPercent("spellActivationOverlayHiddenAlpha", val) end,
+		element = customAlphaToggle and customAlphaToggle.element,
+		parentCheck = customAlphaEnabled,
+		parentSection = expandable,
+	})
+end
+
 local function createFrameCategory()
 	local category = addon.SettingsLayout.rootUI
 
@@ -1231,6 +1339,7 @@ local function createCastbarCategory()
 	})
 
 	createCooldownViewerDropdowns(category, expandable)
+	createSpellActivationOverlayDropdown(category, expandable)
 end
 
 local function ensureBarsResourcesCategory()

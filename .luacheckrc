@@ -38,6 +38,7 @@ exclude_files = {
 	"EnhanceQoLBags/**",
 	"News/**",
 	"scripts/**",
+	"EnhanceQoL/libs/LibButtonGlow-1.0/LibButtonGlow-1.0.lua",
 }
 ignore = {
 	"11./SLASH_.*", -- Setting an undefined (Slash handler) global variable

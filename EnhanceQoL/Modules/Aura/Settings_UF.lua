@@ -325,7 +325,10 @@ local function setColor(unit, path, r, g, b, a)
 	setValue(unit, path, { r or 1, g or 1, b or 1, a or curA or 1 })
 end
 
+local function canRefresh() return addon.db ~= nil and addon.Aura and addon.Aura.UFInitialized end
+
 local function refresh(unit)
+	if not canRefresh() then return end
 	if UF.RefreshUnit and unit then
 		UF.RefreshUnit(unit)
 	elseif UF.Refresh then
@@ -4001,7 +4004,8 @@ local function registerUnitFrame(unit, info)
 	hideFrameReset(frame)
 end
 
-if not UF.EditModeRegistered then
+local function registerEditModeFrames()
+	if UF.EditModeRegistered then return end
 	UF.EditModeRegistered = true
 	local frames = {
 		player = { frameName = "EQOLUFPlayerFrame", frameId = frameIds.player, title = L["UFPlayerFrame"] or PLAYER },
@@ -4017,8 +4021,10 @@ if not UF.EditModeRegistered then
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 end
 
--- Simple toggles in Settings panel (keep basic visibility outside Edit Mode)
-if addon.functions and addon.functions.SettingsCreateCategory then
+local function registerSettingsUI()
+	if UF.SettingsRegistered then return end
+	if not (addon.functions and addon.functions.SettingsCreateCategory) then return end
+	-- Simple toggles in Settings panel (keep basic visibility outside Edit Mode)
 	local cUF = addon.SettingsLayout.rootUI
 	local expandable = addon.SettingsLayout.expEQoLUnitFrames
 	if not expandable then
@@ -4329,4 +4335,11 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 	end
 
 	if addon.Aura and addon.Aura.functions and addon.Aura.functions.AddResourceBarsProfileSettings then addon.Aura.functions.AddResourceBarsProfileSettings() end
+	UF.SettingsRegistered = true
+end
+
+function UF.RegisterSettings()
+	if not addon.db then return end
+	registerEditModeFrames()
+	registerSettingsUI()
 end

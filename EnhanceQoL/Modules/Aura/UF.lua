@@ -847,9 +847,7 @@ function TotemFrameUtil.ensureSampleFrame(parent)
 		totemFrameSample:SetSize(37, 37)
 		totemFrameSample:EnableMouse(false)
 	end
-	if parent and totemFrameSample:GetParent() ~= parent then
-		totemFrameSample:SetParent(parent)
-	end
+	if parent and totemFrameSample:GetParent() ~= parent then totemFrameSample:SetParent(parent) end
 	return totemFrameSample
 end
 
@@ -5701,9 +5699,11 @@ function UF.RefreshUnit(unit)
 	end
 end
 
--- Auto-enable on load when configured
-if not addon.Aura.UFInitialized then
+function UF.Initialize()
+	if addon.Aura.UFInitialized then return end
+	if not addon.db then return end
 	addon.Aura.UFInitialized = true
+	if UF.RegisterSettings then UF.RegisterSettings() end
 	local cfg = ensureDB("player")
 	if cfg.enabled then After(0.1, function() UF.Enable() end) end
 	cfg = ensureDB("target")
@@ -5738,8 +5738,13 @@ if not addon.Aura.UFInitialized then
 		ensureBossFramesReady(cfg)
 		updateBossFrames(true)
 	end
+	if isBossFrameSettingEnabled() then DisableBossFrames() end
 end
-if isBossFrameSettingEnabled() then DisableBossFrames() end
+
+addon.Aura.functions = addon.Aura.functions or {}
+addon.Aura.functions.InitUnitFrames = function()
+	if UF and UF.Initialize then UF.Initialize() end
+end
 
 UF.targetAuras = targetAuras
 UF.defaults = defaults
