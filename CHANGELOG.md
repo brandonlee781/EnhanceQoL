@@ -7,6 +7,7 @@
 - Resource Bars: Evoker Essence bars now show filling animation
 - Resource Bars: Gradiant color works horizontal now too
 - Cooldown Panels: Option to enable charge duration show
+- Cooldown Panels: Added anchor points for ElvUI, Unhalted Unit Frames, and more MSUF frames (ToT/Focus/Pet/Boss).
 
 ### 🔁 Changed
 
