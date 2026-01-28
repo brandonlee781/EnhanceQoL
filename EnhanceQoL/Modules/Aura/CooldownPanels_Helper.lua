@@ -12,6 +12,8 @@ addon.Aura.CooldownPanels = addon.Aura.CooldownPanels or {}
 local CooldownPanels = addon.Aura.CooldownPanels
 CooldownPanels.helper = CooldownPanels.helper or {}
 local Helper = CooldownPanels.helper
+local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
+local LSM = LibStub("LibSharedMedia-3.0", true)
 
 Helper.PANEL_LAYOUT_DEFAULTS = {
 	iconSize = 36,
@@ -69,6 +71,427 @@ Helper.ENTRY_DEFAULTS = {
 	soundReady = false,
 	soundReadyFile = "None",
 }
+
+Helper.DEFAULT_PREVIEW_COUNT = 6
+Helper.MAX_PREVIEW_COUNT = 12
+Helper.PREVIEW_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+Helper.PREVIEW_ICON_SIZE = 36
+Helper.PREVIEW_COUNT_FONT_MIN = 12
+Helper.OFFSET_RANGE = 200
+Helper.EXAMPLE_COOLDOWN_PERCENT = 0.55
+Helper.VALID_DIRECTIONS = {
+	RIGHT = true,
+	LEFT = true,
+	UP = true,
+	DOWN = true,
+}
+local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
+Helper.STRATA_ORDER = STRATA_ORDER
+Helper.VALID_STRATA = {}
+for _, strata in ipairs(STRATA_ORDER) do
+	Helper.VALID_STRATA[strata] = true
+end
+Helper.VALID_ANCHORS = {
+	TOPLEFT = true,
+	TOP = true,
+	TOPRIGHT = true,
+	LEFT = true,
+	CENTER = true,
+	RIGHT = true,
+	BOTTOMLEFT = true,
+	BOTTOM = true,
+	BOTTOMRIGHT = true,
+}
+Helper.VALID_FONT_STYLE = {
+	NONE = true,
+	OUTLINE = true,
+	THICKOUTLINE = true,
+	MONOCHROMEOUTLINE = true,
+}
+Helper.GENERIC_ANCHORS = {
+	EQOL_ANCHOR_PLAYER = {
+		label = L["UFPlayerFrame"] or _G.HUD_EDIT_MODE_PLAYER_FRAME_LABEL or "Player Frame",
+		blizz = "PlayerFrame",
+		uf = "EQOLUFPlayerFrame",
+		ufKey = "player",
+	},
+	EQOL_ANCHOR_TARGET = {
+		label = L["UFTargetFrame"] or _G.HUD_EDIT_MODE_TARGET_FRAME_LABEL or "Target Frame",
+		blizz = "TargetFrame",
+		uf = "EQOLUFTargetFrame",
+		ufKey = "target",
+	},
+	EQOL_ANCHOR_TARGETTARGET = {
+		label = L["UFToTFrame"] or "Target of Target",
+		blizz = "TargetFrameToT",
+		uf = "EQOLUFToTFrame",
+		ufKey = "targettarget",
+	},
+	EQOL_ANCHOR_FOCUS = {
+		label = L["UFFocusFrame"] or _G.HUD_EDIT_MODE_FOCUS_FRAME_LABEL or "Focus Frame",
+		blizz = "FocusFrame",
+		uf = "EQOLUFFocusFrame",
+		ufKey = "focus",
+	},
+	EQOL_ANCHOR_PET = {
+		label = L["UFPetFrame"] or _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+		blizz = "PetFrame",
+		uf = "EQOLUFPetFrame",
+		ufKey = "pet",
+	},
+	EQOL_ANCHOR_BOSS = {
+		label = L["UFBossFrame"] or _G.HUD_EDIT_MODE_BOSS_FRAMES_LABEL or "Boss Frame",
+		blizz = "BossTargetFrameContainer",
+		uf = "EQOLUFBossContainer",
+		ufKey = "boss",
+	},
+}
+Helper.GENERIC_ANCHOR_ORDER = {
+	"EQOL_ANCHOR_PLAYER",
+	"EQOL_ANCHOR_TARGET",
+	"EQOL_ANCHOR_TARGETTARGET",
+	"EQOL_ANCHOR_FOCUS",
+	"EQOL_ANCHOR_PET",
+	"EQOL_ANCHOR_BOSS",
+}
+Helper.GENERIC_ANCHOR_BY_FRAME = {
+	PlayerFrame = "EQOL_ANCHOR_PLAYER",
+	EQOLUFPlayerFrame = "EQOL_ANCHOR_PLAYER",
+	TargetFrame = "EQOL_ANCHOR_TARGET",
+	EQOLUFTargetFrame = "EQOL_ANCHOR_TARGET",
+	TargetFrameToT = "EQOL_ANCHOR_TARGETTARGET",
+	EQOLUFToTFrame = "EQOL_ANCHOR_TARGETTARGET",
+	FocusFrame = "EQOL_ANCHOR_FOCUS",
+	EQOLUFFocusFrame = "EQOL_ANCHOR_FOCUS",
+	PetFrame = "EQOL_ANCHOR_PET",
+	EQOLUFPetFrame = "EQOL_ANCHOR_PET",
+	BossTargetFrameContainer = "EQOL_ANCHOR_BOSS",
+	EQOLUFBossContainer = "EQOL_ANCHOR_BOSS",
+}
+
+function Helper.ClampNumber(value, minValue, maxValue, fallback)
+	local num = tonumber(value)
+	if num == nil then return fallback end
+	if minValue ~= nil and num < minValue then return minValue end
+	if maxValue ~= nil and num > maxValue then return maxValue end
+	return num
+end
+
+function Helper.ClampInt(value, minValue, maxValue, fallback)
+	local num = Helper.ClampNumber(value, minValue, maxValue, fallback)
+	if num == nil then return nil end
+	return math.floor(num + 0.5)
+end
+
+function Helper.NormalizeDirection(direction, fallback)
+	if direction and Helper.VALID_DIRECTIONS[direction] then return direction end
+	if fallback and Helper.VALID_DIRECTIONS[fallback] then return fallback end
+	return "RIGHT"
+end
+
+function Helper.NormalizeStrata(strata, fallback)
+	if type(strata) == "string" then
+		local upper = string.upper(strata)
+		if Helper.VALID_STRATA[upper] then return upper end
+	end
+	if type(fallback) == "string" then
+		local upper = string.upper(fallback)
+		if Helper.VALID_STRATA[upper] then return upper end
+	end
+	return "MEDIUM"
+end
+
+function Helper.NormalizeColor(value, fallback)
+	local ref = fallback or { 1, 1, 1, 1 }
+	if type(value) ~= "table" then return { ref[1], ref[2], ref[3], ref[4] } end
+	local r = value.r or value[1] or ref[1] or 1
+	local g = value.g or value[2] or ref[2] or 1
+	local b = value.b or value[3] or ref[3] or 1
+	local a = value.a
+	if a == nil then a = value[4] end
+	if a == nil then a = ref[4] end
+	if a == nil then a = 1 end
+	if r < 0 then
+		r = 0
+	elseif r > 1 then
+		r = 1
+	end
+	if g < 0 then
+		g = 0
+	elseif g > 1 then
+		g = 1
+	end
+	if b < 0 then
+		b = 0
+	elseif b > 1 then
+		b = 1
+	end
+	if a < 0 then
+		a = 0
+	elseif a > 1 then
+		a = 1
+	end
+	return { r, g, b, a }
+end
+
+function Helper.ResolveColor(value, fallback)
+	local ref = fallback or { 1, 1, 1, 1 }
+	local r, g, b, a
+	if type(value) == "table" then
+		r = value.r or value[1] or ref[1] or 1
+		g = value.g or value[2] or ref[2] or 1
+		b = value.b or value[3] or ref[3] or 1
+		a = value.a
+		if a == nil then a = value[4] end
+	else
+		r = ref[1] or 1
+		g = ref[2] or 1
+		b = ref[3] or 1
+		a = ref[4]
+	end
+	if a == nil then a = ref[4] end
+	if a == nil then a = 1 end
+	if r < 0 then
+		r = 0
+	elseif r > 1 then
+		r = 1
+	end
+	if g < 0 then
+		g = 0
+	elseif g > 1 then
+		g = 1
+	end
+	if b < 0 then
+		b = 0
+	elseif b > 1 then
+		b = 1
+	end
+	if a < 0 then
+		a = 0
+	elseif a > 1 then
+		a = 1
+	end
+	return r, g, b, a
+end
+
+function Helper.NormalizeAnchor(anchor, fallback)
+	if anchor and Helper.VALID_ANCHORS[anchor] then return anchor end
+	if fallback and Helper.VALID_ANCHORS[fallback] then return fallback end
+	return "CENTER"
+end
+
+function Helper.NormalizeGrowthPoint(value, fallback)
+	local anchor = Helper.NormalizeAnchor(value, fallback)
+	if anchor == "TOP" or anchor == "CENTER" or anchor == "BOTTOM" then return "TOP" end
+	if anchor == "TOPRIGHT" or anchor == "RIGHT" or anchor == "BOTTOMRIGHT" then return "TOPRIGHT" end
+	return "TOPLEFT"
+end
+
+function Helper.NormalizeRelativeFrameName(value)
+	if type(value) ~= "string" or value == "" then return "UIParent" end
+	if Helper.GENERIC_ANCHORS[value] then return value end
+	local mapped = Helper.GENERIC_ANCHOR_BY_FRAME[value]
+	if mapped then return mapped end
+	return value
+end
+
+function Helper.NormalizeFontStyle(style, fallback)
+	if style == nil then style = fallback end
+	if style == nil then return nil end
+	if style == "" or style == "NONE" then return "" end
+	if style == "MONOCHROMEOUTLINE" or style == "OUTLINE,MONOCHROME" or style == "MONOCHROME,OUTLINE" then return "OUTLINE,MONOCHROME" end
+	return style
+end
+
+function Helper.NormalizeFontStyleChoice(style, fallback)
+	if style == nil then style = fallback end
+	if style == nil or style == "" then return "NONE" end
+	if style == "OUTLINE,MONOCHROME" or style == "MONOCHROME,OUTLINE" then return "MONOCHROMEOUTLINE" end
+	if Helper.VALID_FONT_STYLE[style] then return style end
+	return "NONE"
+end
+
+function Helper.NormalizeOpacity(value, fallback)
+	local resolvedFallback = fallback
+	if resolvedFallback == nil then resolvedFallback = 1 end
+	local num = Helper.ClampNumber(value, 0, 1, resolvedFallback)
+	if num == nil then return resolvedFallback end
+	return num
+end
+
+function Helper.ResolveFontPath(value, fallback)
+	if type(value) == "string" and value ~= "" then return value end
+	if type(fallback) == "string" and fallback ~= "" then return fallback end
+	return STANDARD_TEXT_FONT
+end
+
+function Helper.GetCountFontDefaults(frame)
+	if frame then
+		local icon = frame.icons and frame.icons[1]
+		if icon and icon.count and icon.count.GetFont then return icon.count:GetFont() end
+	end
+	local fallback = (addon.variables and addon.variables.defaultFont) or (LSM and LSM:Fetch("font", LSM.DefaultMedia.font)) or STANDARD_TEXT_FONT
+	return fallback, 12, "OUTLINE"
+end
+
+function Helper.GetChargesFontDefaults(frame)
+	if frame then
+		local icon = frame.icons and frame.icons[1]
+		if icon and icon.charges and icon.charges.GetFont then return icon.charges:GetFont() end
+	end
+	return Helper.GetCountFontDefaults()
+end
+
+function Helper.GetFontOptions(defaultPath)
+	local list = {}
+	local seen = {}
+	local function add(path, label)
+		if type(path) ~= "string" or path == "" then return end
+		local key = string.lower(path)
+		if seen[key] then return end
+		seen[key] = true
+		list[#list + 1] = { value = path, label = label }
+	end
+	if LSM and LSM.HashTable then
+		for name, path in pairs(LSM:HashTable("font") or {}) do
+			add(path, tostring(name))
+		end
+	end
+	if defaultPath then add(defaultPath, L["Default"] or "Default") end
+	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	return list
+end
+
+function Helper.Utf8Iter(str) return (str or ""):gmatch("[%z\1-\127\194-\244][\128-\191]*") end
+
+function Helper.Utf8Len(str)
+	local len = 0
+	for _ in Helper.Utf8Iter(str) do
+		len = len + 1
+	end
+	return len
+end
+
+function Helper.Utf8Sub(str, i, j)
+	str = str or ""
+	if str == "" then return "" end
+	i = i or 1
+	j = j or -1
+	if i < 1 then i = 1 end
+	local len = Helper.Utf8Len(str)
+	if j < 0 then j = len + j + 1 end
+	if j > len then j = len end
+	if i > j then return "" end
+	local pos = 1
+	local startByte, endByte
+	local idx = 0
+	for char in Helper.Utf8Iter(str) do
+		idx = idx + 1
+		if idx == i then startByte = pos end
+		if idx == j then
+			endByte = pos + #char - 1
+			break
+		end
+		pos = pos + #char
+	end
+	return str:sub(startByte or 1, endByte or #str)
+end
+
+function Helper.EllipsizeFontString(fontString, text, maxWidth)
+	if not fontString or maxWidth <= 0 then return text end
+	text = text or ""
+	fontString:SetText(text)
+	if fontString:GetStringWidth() <= maxWidth then return text end
+	local ellipsis = "..."
+	fontString:SetText(ellipsis)
+	if fontString:GetStringWidth() > maxWidth then return ellipsis end
+	local length = Helper.Utf8Len(text)
+	local low, high = 1, length
+	local best = ellipsis
+	while low <= high do
+		local mid = math.floor((low + high) / 2)
+		local candidate = Helper.Utf8Sub(text, 1, mid) .. ellipsis
+		fontString:SetText(candidate)
+		if fontString:GetStringWidth() <= maxWidth then
+			best = candidate
+			low = mid + 1
+		else
+			high = mid - 1
+		end
+	end
+	return best
+end
+
+function Helper.SetButtonTextEllipsized(button, text)
+	if not button then return end
+	local fontString = button.Text or button:GetFontString()
+	if not fontString then
+		button:SetText(text or "")
+		return
+	end
+	local maxWidth = (button:GetWidth() or 0) - 12
+	if maxWidth <= 0 then
+		button:SetText(text or "")
+		return
+	end
+	fontString:SetWidth(maxWidth)
+	if fontString.SetMaxLines then fontString:SetMaxLines(1) end
+	if fontString.SetWordWrap then fontString:SetWordWrap(false) end
+	button:SetText(Helper.EllipsizeFontString(fontString, text or "", maxWidth))
+end
+
+function Helper.CreateLabel(parent, text, size, style)
+	local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	label:SetText(text or "")
+	label:SetFont((addon.variables and addon.variables.defaultFont) or label:GetFont(), size or 12, style or "OUTLINE")
+	label:SetTextColor(1, 0.82, 0, 1)
+	return label
+end
+
+function Helper.CreateButton(parent, text, width, height)
+	local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	btn:SetText(text or "")
+	btn:SetSize(width or 120, height or 22)
+	return btn
+end
+
+function Helper.CreateEditBox(parent, width, height)
+	local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+	box:SetSize(width or 120, height or 22)
+	box:SetAutoFocus(false)
+	box:SetFontObject(GameFontHighlightSmall)
+	return box
+end
+
+function Helper.CreateCheck(parent, text)
+	local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+	cb.Text:SetText(text or "")
+	cb.Text:SetTextColor(1, 1, 1, 1)
+	return cb
+end
+
+function Helper.CreateSlider(parent, width, minValue, maxValue, step)
+	local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
+	slider:SetMinMaxValues(minValue or 0, maxValue or 1)
+	slider:SetValueStep(step or 1)
+	slider:SetObeyStepOnDrag(true)
+	slider:SetWidth(width or 180)
+	if slider.Low then slider.Low:SetText(tostring(minValue or 0)) end
+	if slider.High then slider.High:SetText(tostring(maxValue or 1)) end
+	return slider
+end
+
+function Helper.CreateRowButton(parent, height)
+	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
+	row:SetHeight(height or 28)
+	row.bg = row:CreateTexture(nil, "BACKGROUND")
+	row.bg:SetAllPoints(row)
+	row.bg:SetColorTexture(0, 0, 0, 0.2)
+	row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
+	row.highlight:SetAllPoints(row)
+	row.highlight:SetColorTexture(1, 1, 1, 0.06)
+	return row
+end
 
 local function spellHasCharges(spellId)
 	if not spellId then return false end

@@ -34,102 +34,6 @@ curveDesat:SetType(Enum.LuaCurveType.Step)
 curveDesat:AddPoint(0, 0)
 curveDesat:AddPoint(0.1, 1)
 
-local DEFAULT_PREVIEW_COUNT = 6
-local MAX_PREVIEW_COUNT = 12
-local PREVIEW_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
-local PREVIEW_ICON_SIZE = 36
-local PREVIEW_COUNT_FONT_MIN = 12
-local OFFSET_RANGE = 200
-local EXAMPLE_COOLDOWN_PERCENT = 0.55
-local VALID_DIRECTIONS = {
-	RIGHT = true,
-	LEFT = true,
-	UP = true,
-	DOWN = true,
-}
-local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
-local VALID_STRATA = {}
-for _, strata in ipairs(STRATA_ORDER) do
-	VALID_STRATA[strata] = true
-end
-local VALID_ANCHORS = {
-	TOPLEFT = true,
-	TOP = true,
-	TOPRIGHT = true,
-	LEFT = true,
-	CENTER = true,
-	RIGHT = true,
-	BOTTOMLEFT = true,
-	BOTTOM = true,
-	BOTTOMRIGHT = true,
-}
-local VALID_FONT_STYLE = {
-	NONE = true,
-	OUTLINE = true,
-	THICKOUTLINE = true,
-	MONOCHROMEOUTLINE = true,
-}
-local GENERIC_ANCHORS = {
-	EQOL_ANCHOR_PLAYER = {
-		label = L["UFPlayerFrame"] or _G.HUD_EDIT_MODE_PLAYER_FRAME_LABEL or "Player Frame",
-		blizz = "PlayerFrame",
-		uf = "EQOLUFPlayerFrame",
-		ufKey = "player",
-	},
-	EQOL_ANCHOR_TARGET = {
-		label = L["UFTargetFrame"] or _G.HUD_EDIT_MODE_TARGET_FRAME_LABEL or "Target Frame",
-		blizz = "TargetFrame",
-		uf = "EQOLUFTargetFrame",
-		ufKey = "target",
-	},
-	EQOL_ANCHOR_TARGETTARGET = {
-		label = L["UFToTFrame"] or "Target of Target",
-		blizz = "TargetFrameToT",
-		uf = "EQOLUFToTFrame",
-		ufKey = "targettarget",
-	},
-	EQOL_ANCHOR_FOCUS = {
-		label = L["UFFocusFrame"] or _G.HUD_EDIT_MODE_FOCUS_FRAME_LABEL or "Focus Frame",
-		blizz = "FocusFrame",
-		uf = "EQOLUFFocusFrame",
-		ufKey = "focus",
-	},
-	EQOL_ANCHOR_PET = {
-		label = L["UFPetFrame"] or _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
-		blizz = "PetFrame",
-		uf = "EQOLUFPetFrame",
-		ufKey = "pet",
-	},
-	EQOL_ANCHOR_BOSS = {
-		label = L["UFBossFrame"] or _G.HUD_EDIT_MODE_BOSS_FRAMES_LABEL or "Boss Frame",
-		blizz = "BossTargetFrameContainer",
-		uf = "EQOLUFBossContainer",
-		ufKey = "boss",
-	},
-}
-local GENERIC_ANCHOR_ORDER = {
-	"EQOL_ANCHOR_PLAYER",
-	"EQOL_ANCHOR_TARGET",
-	"EQOL_ANCHOR_TARGETTARGET",
-	"EQOL_ANCHOR_FOCUS",
-	"EQOL_ANCHOR_PET",
-	"EQOL_ANCHOR_BOSS",
-}
-local GENERIC_ANCHOR_BY_FRAME = {
-	PlayerFrame = "EQOL_ANCHOR_PLAYER",
-	EQOLUFPlayerFrame = "EQOL_ANCHOR_PLAYER",
-	TargetFrame = "EQOL_ANCHOR_TARGET",
-	EQOLUFTargetFrame = "EQOL_ANCHOR_TARGET",
-	TargetFrameToT = "EQOL_ANCHOR_TARGETTARGET",
-	EQOLUFToTFrame = "EQOL_ANCHOR_TARGETTARGET",
-	FocusFrame = "EQOL_ANCHOR_FOCUS",
-	EQOLUFFocusFrame = "EQOL_ANCHOR_FOCUS",
-	PetFrame = "EQOL_ANCHOR_PET",
-	EQOLUFPetFrame = "EQOL_ANCHOR_PET",
-	BossTargetFrameContainer = "EQOL_ANCHOR_BOSS",
-	EQOLUFBossContainer = "EQOL_ANCHOR_BOSS",
-}
-
 local GetItemInfoInstantFn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 local GetItemIconByID = C_Item and C_Item.GetItemIconByID
 local GetItemCooldownFn = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
@@ -370,111 +274,6 @@ end
 local getEditor
 local refreshPanelsForSpell
 
-local function clampNumber(value, minValue, maxValue, fallback)
-	local num = tonumber(value)
-	if not num then return fallback end
-	if minValue and num < minValue then return minValue end
-	if maxValue and num > maxValue then return maxValue end
-	return num
-end
-
-local function clampInt(value, minValue, maxValue, fallback)
-	local num = clampNumber(value, minValue, maxValue, fallback)
-	if num == nil then return nil end
-	return math.floor(num + 0.5)
-end
-
-local function normalizeDirection(direction, fallback)
-	if direction and VALID_DIRECTIONS[direction] then return direction end
-	if fallback and VALID_DIRECTIONS[fallback] then return fallback end
-	return "RIGHT"
-end
-
-local function normalizeStrata(strata, fallback)
-	if type(strata) == "string" then
-		local upper = string.upper(strata)
-		if VALID_STRATA[upper] then return upper end
-	end
-	if type(fallback) == "string" then
-		local upper = string.upper(fallback)
-		if VALID_STRATA[upper] then return upper end
-	end
-	return "MEDIUM"
-end
-
-local function normalizeColor(value, fallback)
-	local ref = fallback or { 1, 1, 1, 1 }
-	if type(value) ~= "table" then return { ref[1], ref[2], ref[3], ref[4] } end
-	local r = value.r or value[1] or ref[1] or 1
-	local g = value.g or value[2] or ref[2] or 1
-	local b = value.b or value[3] or ref[3] or 1
-	local a = value.a
-	if a == nil then a = value[4] end
-	if a == nil then a = ref[4] end
-	if a == nil then a = 1 end
-	if r < 0 then
-		r = 0
-	elseif r > 1 then
-		r = 1
-	end
-	if g < 0 then
-		g = 0
-	elseif g > 1 then
-		g = 1
-	end
-	if b < 0 then
-		b = 0
-	elseif b > 1 then
-		b = 1
-	end
-	if a < 0 then
-		a = 0
-	elseif a > 1 then
-		a = 1
-	end
-	return { r, g, b, a }
-end
-
-local function resolveColor(value, fallback)
-	local ref = fallback or { 1, 1, 1, 1 }
-	local r, g, b, a
-	if type(value) == "table" then
-		r = value.r or value[1] or ref[1] or 1
-		g = value.g or value[2] or ref[2] or 1
-		b = value.b or value[3] or ref[3] or 1
-		a = value.a
-		if a == nil then a = value[4] end
-	else
-		r = ref[1] or 1
-		g = ref[2] or 1
-		b = ref[3] or 1
-		a = ref[4]
-	end
-	if a == nil then a = ref[4] end
-	if a == nil then a = 1 end
-	if r < 0 then
-		r = 0
-	elseif r > 1 then
-		r = 1
-	end
-	if g < 0 then
-		g = 0
-	elseif g > 1 then
-		g = 1
-	end
-	if b < 0 then
-		b = 0
-	elseif b > 1 then
-		b = 1
-	end
-	if a < 0 then
-		a = 0
-	elseif a > 1 then
-		a = 1
-	end
-	return r, g, b, a
-end
-
 local function getLayoutKey(layout)
 	if not layout then return "" end
 	local rowSizes = layout.rowSizes
@@ -494,27 +293,6 @@ local function getLayoutKey(layout)
 	}, "|")
 end
 
-local function normalizeAnchor(anchor, fallback)
-	if anchor and VALID_ANCHORS[anchor] then return anchor end
-	if fallback and VALID_ANCHORS[fallback] then return fallback end
-	return "CENTER"
-end
-
-local function normalizeGrowthPoint(value, fallback)
-	local anchor = normalizeAnchor(value, fallback)
-	if anchor == "TOP" or anchor == "CENTER" or anchor == "BOTTOM" then return "TOP" end
-	if anchor == "TOPRIGHT" or anchor == "RIGHT" or anchor == "BOTTOMRIGHT" then return "TOPRIGHT" end
-	return "TOPLEFT"
-end
-
-local function normalizeRelativeFrameName(value)
-	if type(value) ~= "string" or value == "" then return "UIParent" end
-	if GENERIC_ANCHORS[value] then return value end
-	local mapped = GENERIC_ANCHOR_BY_FRAME[value]
-	if mapped then return mapped end
-	return value
-end
-
 local function ensurePanelAnchor(panel)
 	if not panel then return nil end
 	panel.anchor = panel.anchor or {}
@@ -523,7 +301,7 @@ local function ensurePanelAnchor(panel)
 	if anchor.relativePoint == nil then anchor.relativePoint = anchor.point end
 	if anchor.x == nil then anchor.x = panel.x or 0 end
 	if anchor.y == nil then anchor.y = panel.y or 0 end
-	anchor.relativeFrame = normalizeRelativeFrameName(anchor.relativeFrame)
+	anchor.relativeFrame = Helper.NormalizeRelativeFrameName(anchor.relativeFrame)
 	panel.point = anchor.point or panel.point
 	panel.x = anchor.x or panel.x
 	panel.y = anchor.y or panel.y
@@ -533,9 +311,9 @@ end
 local function anchorUsesUIParent(anchor) return not anchor or (anchor.relativeFrame or "UIParent") == "UIParent" end
 
 local function resolveAnchorFrame(anchor)
-	local relativeName = normalizeRelativeFrameName(anchor and anchor.relativeFrame)
+	local relativeName = Helper.NormalizeRelativeFrameName(anchor and anchor.relativeFrame)
 	if relativeName == "UIParent" then return UIParent end
-	local generic = GENERIC_ANCHORS[relativeName]
+	local generic = Helper.GENERIC_ANCHORS[relativeName]
 	if generic then
 		local ufCfg = addon.db and addon.db.ufFrames
 		if ufCfg and generic.ufKey and ufCfg[generic.ufKey] and ufCfg[generic.ufKey].enabled then
@@ -561,73 +339,6 @@ local function frameNameToPanelId(frameName)
 	if type(frameName) ~= "string" then return nil end
 	local id = frameName:match("^EQOL_CooldownPanel(%d+)$")
 	return id and tonumber(id) or nil
-end
-
-local function normalizeFontStyle(style, fallback)
-	if style == nil then style = fallback end
-	if style == nil then return nil end
-	if style == "" or style == "NONE" then return "" end
-	if style == "MONOCHROMEOUTLINE" or style == "OUTLINE,MONOCHROME" or style == "MONOCHROME,OUTLINE" then return "OUTLINE,MONOCHROME" end
-	return style
-end
-
-local function normalizeFontStyleChoice(style, fallback)
-	if style == nil then style = fallback end
-	if style == nil or style == "" then return "NONE" end
-	if style == "OUTLINE,MONOCHROME" or style == "MONOCHROME,OUTLINE" then return "MONOCHROMEOUTLINE" end
-	if VALID_FONT_STYLE[style] then return style end
-	return "NONE"
-end
-
-local function normalizeOpacity(value, fallback)
-	local resolvedFallback = fallback
-	if resolvedFallback == nil then resolvedFallback = 1 end
-	local num = clampNumber(value, 0, 1, resolvedFallback)
-	if num == nil then return resolvedFallback end
-	return num
-end
-
-local function resolveFontPath(value, fallback)
-	if type(value) == "string" and value ~= "" then return value end
-	if type(fallback) == "string" and fallback ~= "" then return fallback end
-	return STANDARD_TEXT_FONT
-end
-
-local function getCountFontDefaults(frame)
-	if frame then
-		local icon = frame.icons and frame.icons[1]
-		if icon and icon.count and icon.count.GetFont then return icon.count:GetFont() end
-	end
-	local fallback = (addon.variables and addon.variables.defaultFont) or (LSM and LSM:Fetch("font", LSM.DefaultMedia.font)) or STANDARD_TEXT_FONT
-	return fallback, 12, "OUTLINE"
-end
-
-local function getChargesFontDefaults(frame)
-	if frame then
-		local icon = frame.icons and frame.icons[1]
-		if icon and icon.charges and icon.charges.GetFont then return icon.charges:GetFont() end
-	end
-	return getCountFontDefaults()
-end
-
-local function getFontOptions(defaultPath)
-	local list = {}
-	local seen = {}
-	local function add(path, label)
-		if type(path) ~= "string" or path == "" then return end
-		local key = string.lower(path)
-		if seen[key] then return end
-		seen[key] = true
-		list[#list + 1] = { value = path, label = label }
-	end
-	if LSM and LSM.HashTable then
-		for name, path in pairs(LSM:HashTable("font") or {}) do
-			add(path, tostring(name))
-		end
-	end
-	if defaultPath then add(defaultPath, L["Default"] or "Default") end
-	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
-	return list
 end
 
 local function normalizeSoundName(value)
@@ -696,43 +407,43 @@ local function setExampleCooldown(cooldown)
 	if not cooldown then return end
 	local setAsPercent = _G.CooldownFrame_SetDisplayAsPercentage
 	if setAsPercent then
-		setAsPercent(cooldown, EXAMPLE_COOLDOWN_PERCENT)
+		setAsPercent(cooldown, Helper.EXAMPLE_COOLDOWN_PERCENT)
 	elseif cooldown.SetCooldown and GetTime then
 		local duration = 100
-		cooldown:SetCooldown(GetTime() - (duration * EXAMPLE_COOLDOWN_PERCENT), duration, 1)
+		cooldown:SetCooldown(GetTime() - (duration * Helper.EXAMPLE_COOLDOWN_PERCENT), duration, 1)
 	end
 end
 
 local getPreviewEntryIds
 local function getPreviewCount(panel)
-	if not panel or type(panel.order) ~= "table" then return DEFAULT_PREVIEW_COUNT end
+	if not panel or type(panel.order) ~= "table" then return Helper.DEFAULT_PREVIEW_COUNT end
 	local entries = getPreviewEntryIds and getPreviewEntryIds(panel) or nil
 	if not entries then
 		local count = #panel.order
-		if count <= 0 then return DEFAULT_PREVIEW_COUNT end
-		if count > MAX_PREVIEW_COUNT then return MAX_PREVIEW_COUNT end
+		if count <= 0 then return Helper.DEFAULT_PREVIEW_COUNT end
+		if count > Helper.MAX_PREVIEW_COUNT then return Helper.MAX_PREVIEW_COUNT end
 		return count
 	end
 	local count = #entries
 	if count <= 0 then return 0 end
-	if count > MAX_PREVIEW_COUNT then return MAX_PREVIEW_COUNT end
+	if count > Helper.MAX_PREVIEW_COUNT then return Helper.MAX_PREVIEW_COUNT end
 	return count
 end
 
 local function getEditorPreviewCount(panel, previewFrame, baseLayout, entries)
-	if not panel or type(panel.order) ~= "table" then return DEFAULT_PREVIEW_COUNT end
+	if not panel or type(panel.order) ~= "table" then return Helper.DEFAULT_PREVIEW_COUNT end
 	local count
 	if entries then
 		count = #entries
 		if count <= 0 then return 0 end
 	else
 		count = #panel.order
-		if count <= 0 then return DEFAULT_PREVIEW_COUNT end
+		if count <= 0 then return Helper.DEFAULT_PREVIEW_COUNT end
 	end
 	if not previewFrame then return count end
 
-	local spacing = clampInt((baseLayout and baseLayout.spacing) or 0, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
-	local step = PREVIEW_ICON_SIZE + spacing
+	local spacing = Helper.ClampInt((baseLayout and baseLayout.spacing) or 0, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local step = Helper.PREVIEW_ICON_SIZE + spacing
 	if step <= 0 then return count end
 	local width = previewFrame:GetWidth() or 0
 	local height = previewFrame:GetHeight() or 0
@@ -748,7 +459,7 @@ local function getEditorPreviewCount(panel, previewFrame, baseLayout, entries)
 end
 
 local function getEntryIcon(entry)
-	if not entry or type(entry) ~= "table" then return PREVIEW_ICON end
+	if not entry or type(entry) ~= "table" then return Helper.PREVIEW_ICON end
 	if entry.type == "SPELL" and entry.spellID then
 		local spellId = getEffectiveSpellId(entry.spellID) or entry.spellID
 		local runtime = CooldownPanels.runtime
@@ -758,7 +469,7 @@ local function getEntryIcon(entry)
 		local cache = runtime.iconCache
 		local cached = cache[spellId]
 		if cached then return cached end
-		local icon = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)) or PREVIEW_ICON
+		local icon = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)) or Helper.PREVIEW_ICON
 		cache[spellId] = icon
 		return icon
 	end
@@ -776,7 +487,7 @@ local function getEntryIcon(entry)
 			local _, _, _, _, instantIcon = GetItemInfoInstantFn(entry.itemID)
 			icon = instantIcon
 		end
-		icon = icon or PREVIEW_ICON
+		icon = icon or Helper.PREVIEW_ICON
 		cache[entry.itemID] = icon
 		return icon
 	end
@@ -796,12 +507,12 @@ local function getEntryIcon(entry)
 				local _, _, _, _, instantIcon = GetItemInfoInstantFn(itemID)
 				icon = instantIcon
 			end
-			icon = icon or PREVIEW_ICON
+			icon = icon or Helper.PREVIEW_ICON
 			cache[itemID] = icon
 			return icon
 		end
 	end
-	return PREVIEW_ICON
+	return Helper.PREVIEW_ICON
 end
 
 local SLOT_LABELS = {}
@@ -1680,8 +1391,8 @@ local function getPanelRowCount(panel, layout)
 	if not panel or not layout then return 1, true end
 	local count = panel.order and #panel.order or 0
 	if count < 1 then count = 1 end
-	local wrapCount = clampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
-	local direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local wrapCount = Helper.ClampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
+	local direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
 	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
 	local _, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
 	return rows, primaryHorizontal
@@ -1713,22 +1424,22 @@ end
 
 local function applyIconLayout(frame, count, layout)
 	if not frame then return end
-	local iconSize = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
-	local spacing = clampInt(layout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
-	local direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
-	local wrapCount = clampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
-	local wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
-	local growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+	local iconSize = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+	local spacing = Helper.ClampInt(layout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local wrapCount = Helper.ClampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
+	local wrapDirection = Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
+	local growthPoint = Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
-	local stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
-	local stackX = clampInt(layout.stackX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackX)
-	local stackY = clampInt(layout.stackY, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackY)
-	local chargesAnchor = normalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
-	local chargesX = clampInt(layout.chargesX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesX)
-	local chargesY = clampInt(layout.chargesY, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesY)
-	local keybindAnchor = normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
-	local keybindX = clampInt(layout.keybindX, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
-	local keybindY = clampInt(layout.keybindY, -OFFSET_RANGE, OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
+	local stackAnchor = Helper.NormalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
+	local stackX = Helper.ClampInt(layout.stackX, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackX)
+	local stackY = Helper.ClampInt(layout.stackY, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.stackY)
+	local chargesAnchor = Helper.NormalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
+	local chargesX = Helper.ClampInt(layout.chargesX, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesX)
+	local chargesY = Helper.ClampInt(layout.chargesY, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.chargesY)
+	local keybindAnchor = Helper.NormalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
+	local keybindX = Helper.ClampInt(layout.keybindX, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
+	local keybindY = Helper.ClampInt(layout.keybindY, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -1747,7 +1458,7 @@ local function applyIconLayout(frame, count, layout)
 			local rowSize = baseIconSize
 			if type(layout.rowSizes) == "table" then
 				local override = tonumber(layout.rowSizes[rowIndex])
-				if override then rowSize = clampInt(override, 12, 128, baseIconSize) end
+				if override then rowSize = Helper.ClampInt(override, 12, 128, baseIconSize) end
 			end
 			rowSizes[rowIndex] = rowSize
 			rowOffsets[rowIndex] = totalHeight
@@ -1780,17 +1491,17 @@ local function applyIconLayout(frame, count, layout)
 
 	frame:SetSize(width, height)
 	ensureIconCount(frame, count)
-	local fontPath, fontSize, fontStyle = getCountFontDefaults(frame)
-	local countFontPath = resolveFontPath(layout.stackFont, fontPath)
-	local countFontSize = clampInt(layout.stackFontSize, 6, 64, fontSize or 12)
-	local countFontStyle = normalizeFontStyle(layout.stackFontStyle, fontStyle)
-	local chargesFontPath, chargesFontSize, chargesFontStyle = getChargesFontDefaults(frame)
-	local chargesPath = resolveFontPath(layout.chargesFont, chargesFontPath)
-	local chargesSize = clampInt(layout.chargesFontSize, 6, 64, chargesFontSize or 12)
-	local chargesStyle = normalizeFontStyle(layout.chargesFontStyle, chargesFontStyle)
-	local keybindFontPath = resolveFontPath(layout.keybindFont, countFontPath)
-	local keybindFontSize = clampInt(layout.keybindFontSize, 6, 64, Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or math.min(countFontSize, 10))
-	local keybindFontStyle = normalizeFontStyle(layout.keybindFontStyle, countFontStyle)
+	local fontPath, fontSize, fontStyle = Helper.GetCountFontDefaults(frame)
+	local countFontPath = Helper.ResolveFontPath(layout.stackFont, fontPath)
+	local countFontSize = Helper.ClampInt(layout.stackFontSize, 6, 64, fontSize or 12)
+	local countFontStyle = Helper.NormalizeFontStyle(layout.stackFontStyle, fontStyle)
+	local chargesFontPath, chargesFontSize, chargesFontStyle = Helper.GetChargesFontDefaults(frame)
+	local chargesPath = Helper.ResolveFontPath(layout.chargesFont, chargesFontPath)
+	local chargesSize = Helper.ClampInt(layout.chargesFontSize, 6, 64, chargesFontSize or 12)
+	local chargesStyle = Helper.NormalizeFontStyle(layout.chargesFontStyle, chargesFontStyle)
+	local keybindFontPath = Helper.ResolveFontPath(layout.keybindFont, countFontPath)
+	local keybindFontSize = Helper.ClampInt(layout.keybindFontSize, 6, 64, Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or math.min(countFontSize, 10))
+	local keybindFontStyle = Helper.NormalizeFontStyle(layout.keybindFontStyle, countFontStyle)
 
 	local function getAnchorComponents(point)
 		local h = "CENTER"
@@ -2042,137 +1753,6 @@ local function applyInsetBorder(frame, offset)
 	right:SetVertTile(true)
 end
 
-local function createLabel(parent, text, size, style)
-	local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	label:SetText(text or "")
-	label:SetFont((addon.variables and addon.variables.defaultFont) or label:GetFont(), size or 12, style or "OUTLINE")
-	label:SetTextColor(1, 0.82, 0, 1)
-	return label
-end
-
-local function createButton(parent, text, width, height)
-	local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	btn:SetText(text or "")
-	btn:SetSize(width or 120, height or 22)
-	return btn
-end
-
-local function utf8iter(str) return (str or ""):gmatch("[%z\1-\127\194-\244][\128-\191]*") end
-
-local function utf8len(str)
-	local len = 0
-	for _ in utf8iter(str) do
-		len = len + 1
-	end
-	return len
-end
-
-local function utf8sub(str, i, j)
-	str = str or ""
-	if str == "" then return "" end
-	i = i or 1
-	j = j or -1
-	if i < 1 then i = 1 end
-	local len = utf8len(str)
-	if j < 0 then j = len + j + 1 end
-	if j > len then j = len end
-	if i > j then return "" end
-	local pos = 1
-	local startByte, endByte
-	local idx = 0
-	for char in utf8iter(str) do
-		idx = idx + 1
-		if idx == i then startByte = pos end
-		if idx == j then
-			endByte = pos + #char - 1
-			break
-		end
-		pos = pos + #char
-	end
-	return str:sub(startByte or 1, endByte or #str)
-end
-
-local function ellipsizeFontString(fontString, text, maxWidth)
-	if not fontString or maxWidth <= 0 then return text end
-	text = text or ""
-	fontString:SetText(text)
-	if fontString:GetStringWidth() <= maxWidth then return text end
-	local ellipsis = "..."
-	fontString:SetText(ellipsis)
-	if fontString:GetStringWidth() > maxWidth then return ellipsis end
-	local length = utf8len(text)
-	local low, high = 1, length
-	local best = ellipsis
-	while low <= high do
-		local mid = math.floor((low + high) / 2)
-		local candidate = utf8sub(text, 1, mid) .. ellipsis
-		fontString:SetText(candidate)
-		if fontString:GetStringWidth() <= maxWidth then
-			best = candidate
-			low = mid + 1
-		else
-			high = mid - 1
-		end
-	end
-	return best
-end
-
-local function setButtonTextEllipsized(button, text)
-	if not button then return end
-	local fontString = button.Text or button:GetFontString()
-	if not fontString then
-		button:SetText(text or "")
-		return
-	end
-	local maxWidth = (button:GetWidth() or 0) - 12
-	if maxWidth <= 0 then
-		button:SetText(text or "")
-		return
-	end
-	fontString:SetWidth(maxWidth)
-	if fontString.SetMaxLines then fontString:SetMaxLines(1) end
-	if fontString.SetWordWrap then fontString:SetWordWrap(false) end
-	button:SetText(ellipsizeFontString(fontString, text or "", maxWidth))
-end
-
-local function createEditBox(parent, width, height)
-	local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-	box:SetSize(width or 120, height or 22)
-	box:SetAutoFocus(false)
-	box:SetFontObject(GameFontHighlightSmall)
-	return box
-end
-
-local function createCheck(parent, text)
-	local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-	cb.Text:SetText(text or "")
-	cb.Text:SetTextColor(1, 1, 1, 1)
-	return cb
-end
-
-local function createSlider(parent, width, minValue, maxValue, step)
-	local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
-	slider:SetMinMaxValues(minValue or 0, maxValue or 1)
-	slider:SetValueStep(step or 1)
-	slider:SetObeyStepOnDrag(true)
-	slider:SetWidth(width or 180)
-	if slider.Low then slider.Low:SetText(tostring(minValue or 0)) end
-	if slider.High then slider.High:SetText(tostring(maxValue or 1)) end
-	return slider
-end
-
-local function createRowButton(parent, height)
-	local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
-	row:SetHeight(height or 28)
-	row.bg = row:CreateTexture(nil, "BACKGROUND")
-	row.bg:SetAllPoints(row)
-	row.bg:SetColorTexture(0, 0, 0, 0.2)
-	row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
-	row.highlight:SetAllPoints(row)
-	row.highlight:SetColorTexture(1, 1, 1, 0.06)
-	return row
-end
-
 local function showEditorDragIcon(editor, texture)
 	if not editor then return end
 	if not editor.dragIcon then
@@ -2183,7 +1763,7 @@ local function showEditorDragIcon(editor, texture)
 		frame.texture:SetAllPoints()
 		editor.dragIcon = frame
 	end
-	editor.dragIcon.texture:SetTexture(texture or PREVIEW_ICON)
+	editor.dragIcon.texture:SetTexture(texture or Helper.PREVIEW_ICON)
 	editor.dragIcon:SetScript("OnUpdate", function(f)
 		local x, y = GetCursorPosition()
 		local scale = UIParent:GetEffectiveScale()
@@ -2348,7 +1928,7 @@ local function ensureEditor()
 	applyInsetBorder(left, -4)
 	frame.left = left
 
-	local panelTitle = createLabel(left, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
+	local panelTitle = Helper.CreateLabel(left, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
 	panelTitle:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -12)
 
 	local panelScroll = CreateFrame("ScrollFrame", nil, left, "UIPanelScrollFrameTemplate")
@@ -2360,10 +1940,10 @@ local function ensureEditor()
 	panelContent:SetWidth(panelScroll:GetWidth() or 1)
 	panelScroll:SetScript("OnSizeChanged", function(self) panelContent:SetWidth(self:GetWidth() or 1) end)
 
-	local addPanel = createButton(left, L["CooldownPanelAddPanel"] or "Add Panel", 96, 22)
+	local addPanel = Helper.CreateButton(left, L["CooldownPanelAddPanel"] or "Add Panel", 96, 22)
 	addPanel:SetPoint("BOTTOMLEFT", left, "BOTTOMLEFT", 12, 12)
 
-	local deletePanel = createButton(left, L["CooldownPanelDeletePanel"] or "Delete Panel", 96, 22)
+	local deletePanel = Helper.CreateButton(left, L["CooldownPanelDeletePanel"] or "Delete Panel", 96, 22)
 	deletePanel:SetPoint("BOTTOMRIGHT", left, "BOTTOMRIGHT", -12, 12)
 
 	local right = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -2386,35 +1966,35 @@ local function ensureEditor()
 	rightContent:SetWidth(rightScroll:GetWidth() or 1)
 	rightScroll:SetScript("OnSizeChanged", function(self) rightContent:SetWidth(self:GetWidth() or 1) end)
 
-	local panelHeader = createLabel(rightContent, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
+	local panelHeader = Helper.CreateLabel(rightContent, L["CooldownPanelPanels"] or "Panels", 12, "OUTLINE")
 	panelHeader:SetPoint("TOPLEFT", rightContent, "TOPLEFT", 2, -2)
 	panelHeader:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local panelNameLabel = createLabel(rightContent, L["CooldownPanelPanelName"] or "Panel name", 11, "OUTLINE")
+	local panelNameLabel = Helper.CreateLabel(rightContent, L["CooldownPanelPanelName"] or "Panel name", 11, "OUTLINE")
 	panelNameLabel:SetPoint("TOPLEFT", panelHeader, "BOTTOMLEFT", 0, -8)
 	panelNameLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local panelNameBox = createEditBox(rightContent, 200, 20)
+	local panelNameBox = Helper.CreateEditBox(rightContent, 200, 20)
 	panelNameBox:SetPoint("TOPLEFT", panelNameLabel, "BOTTOMLEFT", 0, -4)
 
-	local panelEnabled = createCheck(rightContent, L["CooldownPanelEnabled"] or "Enabled")
+	local panelEnabled = Helper.CreateCheck(rightContent, L["CooldownPanelEnabled"] or "Enabled")
 	panelEnabled:SetPoint("TOPLEFT", panelNameBox, "BOTTOMLEFT", -2, -6)
 
-	local panelSpecLabel = createLabel(rightContent, L["CooldownPanelSpecFilter"] or "Show only for spec", 11, "OUTLINE")
+	local panelSpecLabel = Helper.CreateLabel(rightContent, L["CooldownPanelSpecFilter"] or "Show only for spec", 11, "OUTLINE")
 	panelSpecLabel:SetPoint("TOPLEFT", panelEnabled, "BOTTOMLEFT", 2, -8)
 	panelSpecLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local panelSpecButton = createButton(rightContent, L["CooldownPanelSpecAny"] or "All specs", 200, 20)
+	local panelSpecButton = Helper.CreateButton(rightContent, L["CooldownPanelSpecAny"] or "All specs", 200, 20)
 	panelSpecButton:SetPoint("TOPLEFT", panelSpecLabel, "BOTTOMLEFT", 0, -4)
 
-	local entryHeader = createLabel(rightContent, L["CooldownPanelEntry"] or "Entry", 12, "OUTLINE")
+	local entryHeader = Helper.CreateLabel(rightContent, L["CooldownPanelEntry"] or "Entry", 12, "OUTLINE")
 	entryHeader:SetPoint("TOPLEFT", panelSpecButton, "BOTTOMLEFT", 2, -16)
 	entryHeader:SetTextColor(0.9, 0.9, 0.9, 1)
 
 	local entryIcon = rightContent:CreateTexture(nil, "ARTWORK")
 	entryIcon:SetSize(36, 36)
 	entryIcon:SetPoint("TOPLEFT", entryHeader, "BOTTOMLEFT", 0, -6)
-	entryIcon:SetTexture(PREVIEW_ICON)
+	entryIcon:SetTexture(Helper.PREVIEW_ICON)
 
 	local entryName = rightContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	entryName:SetPoint("LEFT", entryIcon, "RIGHT", 8, 8)
@@ -2426,44 +2006,44 @@ local function ensureEditor()
 	entryType:SetPoint("TOPLEFT", entryName, "BOTTOMLEFT", 0, -2)
 	entryType:SetJustifyH("LEFT")
 
-	local entryIdBox = createEditBox(rightContent, 120, 20)
+	local entryIdBox = Helper.CreateEditBox(rightContent, 120, 20)
 	entryIdBox:SetPoint("TOPLEFT", entryIcon, "BOTTOMLEFT", 0, -8)
 	entryIdBox:SetNumeric(true)
 
-	local cbCooldownText = createCheck(rightContent, L["CooldownPanelShowCooldownText"] or "Show cooldown text")
+	local cbCooldownText = Helper.CreateCheck(rightContent, L["CooldownPanelShowCooldownText"] or "Show cooldown text")
 	cbCooldownText:SetPoint("TOPLEFT", entryIdBox, "BOTTOMLEFT", -2, -6)
 
-	local cbCharges = createCheck(rightContent, L["CooldownPanelShowCharges"] or "Show charges")
+	local cbCharges = Helper.CreateCheck(rightContent, L["CooldownPanelShowCharges"] or "Show charges")
 	cbCharges:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
-	local cbStacks = createCheck(rightContent, L["CooldownPanelShowStacks"] or "Show stack count")
+	local cbStacks = Helper.CreateCheck(rightContent, L["CooldownPanelShowStacks"] or "Show stack count")
 	cbStacks:SetPoint("TOPLEFT", cbCharges, "BOTTOMLEFT", 0, -4)
 
-	local cbItemCount = createCheck(rightContent, L["CooldownPanelShowItemCount"] or "Show item count")
+	local cbItemCount = Helper.CreateCheck(rightContent, L["CooldownPanelShowItemCount"] or "Show item count")
 	cbItemCount:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
-	local cbItemUses = createCheck(rightContent, L["CooldownPanelShowItemUses"] or "Show item uses")
+	local cbItemUses = Helper.CreateCheck(rightContent, L["CooldownPanelShowItemUses"] or "Show item uses")
 	cbItemUses:SetPoint("TOPLEFT", cbItemCount, "BOTTOMLEFT", 0, -4)
 
-	local cbShowWhenEmpty = createCheck(rightContent, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
+	local cbShowWhenEmpty = Helper.CreateCheck(rightContent, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
 	cbShowWhenEmpty:SetPoint("TOPLEFT", cbItemUses, "BOTTOMLEFT", 0, -4)
 
-	local cbShowWhenNoCooldown = createCheck(rightContent, L["CooldownPanelShowWhenNoCooldown"] or "Show even without cooldown")
+	local cbShowWhenNoCooldown = Helper.CreateCheck(rightContent, L["CooldownPanelShowWhenNoCooldown"] or "Show even without cooldown")
 	cbShowWhenNoCooldown:SetPoint("TOPLEFT", cbShowWhenEmpty, "BOTTOMLEFT", 0, -4)
 
-	local cbGlow = createCheck(rightContent, L["CooldownPanelGlowReady"] or "Glow when ready")
+	local cbGlow = Helper.CreateCheck(rightContent, L["CooldownPanelGlowReady"] or "Glow when ready")
 	cbGlow:SetPoint("TOPLEFT", cbStacks, "BOTTOMLEFT", 0, -4)
 
-	local glowDuration = createSlider(rightContent, 180, 0, 30, 1)
+	local glowDuration = Helper.CreateSlider(rightContent, 180, 0, 30, 1)
 	glowDuration:SetPoint("TOPLEFT", cbGlow, "BOTTOMLEFT", 18, -8)
 
-	local cbSound = createCheck(rightContent, L["CooldownPanelSoundReady"] or "Sound when ready")
+	local cbSound = Helper.CreateCheck(rightContent, L["CooldownPanelSoundReady"] or "Sound when ready")
 	cbSound:SetPoint("TOPLEFT", glowDuration, "BOTTOMLEFT", -18, -6)
 
-	local soundButton = createButton(rightContent, "", 180, 20)
+	local soundButton = Helper.CreateButton(rightContent, "", 180, 20)
 	soundButton:SetPoint("TOPLEFT", cbSound, "BOTTOMLEFT", 18, -6)
 
-	local removeEntry = createButton(rightContent, L["CooldownPanelRemoveEntry"] or "Remove entry", 180, 22)
+	local removeEntry = Helper.CreateButton(rightContent, L["CooldownPanelRemoveEntry"] or "Remove entry", 180, 22)
 	removeEntry:SetPoint("TOP", cbSound, "BOTTOM", 0, -12)
 
 	local middle = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -2476,7 +2056,7 @@ local function ensureEditor()
 	applyInsetBorder(middle, -4)
 	frame.middle = middle
 
-	local previewTitle = createLabel(middle, L["CooldownPanelPreview"] or "Preview", 12, "OUTLINE")
+	local previewTitle = Helper.CreateLabel(middle, L["CooldownPanelPreview"] or "Preview", 12, "OUTLINE")
 	previewTitle:SetPoint("TOPLEFT", middle, "TOPLEFT", 12, -12)
 
 	local previewFrame = CreateFrame("Frame", nil, middle, "BackdropTemplate")
@@ -2520,7 +2100,7 @@ local function ensureEditor()
 	previewHintLabel:SetJustifyH("RIGHT")
 	previewHintLabel:SetText(L["CooldownPanelPreviewHint"] or "Drag spells/items here to add")
 
-	local entryTitle = createLabel(middle, L["CooldownPanelEntries"] or "Entries", 12, "OUTLINE")
+	local entryTitle = Helper.CreateLabel(middle, L["CooldownPanelEntries"] or "Entries", 12, "OUTLINE")
 	entryTitle:SetPoint("TOPLEFT", previewFrame, "BOTTOMLEFT", 0, -12)
 
 	local entryScroll = CreateFrame("ScrollFrame", nil, middle, "UIPanelScrollFrameTemplate")
@@ -2537,27 +2117,27 @@ local function ensureEditor()
 	entryHint:SetJustifyH("RIGHT")
 	entryHint:SetText(L["CooldownPanelEntriesHint"] or "Drag entries to reorder")
 
-	local addSpellLabel = createLabel(middle, L["CooldownPanelAddSpellID"] or "Add Spell ID", 11, "OUTLINE")
+	local addSpellLabel = Helper.CreateLabel(middle, L["CooldownPanelAddSpellID"] or "Add Spell ID", 11, "OUTLINE")
 	addSpellLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 46)
 	addSpellLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local addSpellBox = createEditBox(middle, 80, 20)
+	local addSpellBox = Helper.CreateEditBox(middle, 80, 20)
 	addSpellBox:SetPoint("LEFT", addSpellLabel, "RIGHT", 6, 0)
 	addSpellBox:SetNumeric(true)
 
-	local addItemLabel = createLabel(middle, L["CooldownPanelAddItemID"] or "Add Item ID", 11, "OUTLINE")
+	local addItemLabel = Helper.CreateLabel(middle, L["CooldownPanelAddItemID"] or "Add Item ID", 11, "OUTLINE")
 	addItemLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 20)
 	addItemLabel:SetTextColor(0.9, 0.9, 0.9, 1)
 
-	local addItemBox = createEditBox(middle, 80, 20)
+	local addItemBox = Helper.CreateEditBox(middle, 80, 20)
 	addItemBox:SetPoint("LEFT", addItemLabel, "RIGHT", 6, 0)
 	addItemBox:SetNumeric(true)
 
-	local editModeButton = createButton(middle, _G.HUD_EDIT_MODE_MENU or L["CooldownPanelEditModeButton"] or "Edit Mode", 110, 20)
-	editModeButton:SetPoint("LEFT", addItemBox, "RIGHT", 12, 0)
+	local editModeButton = Helper.CreateButton(middle, _G.HUD_EDIT_MODE_MENU or L["CooldownPanelEditModeButton"] or "Edit Mode", 110, 20)
+	editModeButton:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 44)
 
-	local slotButton = createButton(middle, L["CooldownPanelAddSlot"] or "Add Slot", 120, 20)
-	slotButton:SetPoint("LEFT", editModeButton, "RIGHT", 12, 0)
+	local slotButton = Helper.CreateButton(middle, L["CooldownPanelAddSlot"] or "Add Slot", 120, 20)
+	slotButton:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -12, 18)
 
 	local function updateEditModeButton()
 		if not editModeButton then return end
@@ -2772,7 +2352,7 @@ local function ensureEditor()
 			local panel = panelId and CooldownPanels:GetPanel(panelId)
 			local entry = panel and panel.entries and panel.entries[entryId]
 			if not entry then return end
-			local clamped = clampInt(value, minValue, maxValue, entry[field] or 0)
+			local clamped = Helper.ClampInt(value, minValue, maxValue, entry[field] or 0)
 			entry[field] = clamped
 			if self.Text then self.Text:SetText((L["CooldownPanelGlowDuration"] or "Glow duration") .. ": " .. tostring(clamped) .. "s") end
 			CooldownPanels:RefreshPanel(panelId)
@@ -2866,7 +2446,7 @@ local function refreshPanelList(editor, root)
 			index = index + 1
 			local row = editor.panelRows[index]
 			if not row then
-				row = createRowButton(content, rowHeight)
+				row = Helper.CreateRowButton(content, rowHeight)
 				row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 				row.label:SetPoint("LEFT", row, "LEFT", 8, 0)
 				row.label:SetTextColor(1, 1, 1, 1)
@@ -2878,7 +2458,7 @@ local function refreshPanelList(editor, root)
 					editor.dragPanelId = self.panelId
 					editor.dragTargetPanelId = nil
 					editor.draggingPanel = true
-					showEditorDragIcon(editor, PREVIEW_ICON)
+					showEditorDragIcon(editor, Helper.PREVIEW_ICON)
 					self:SetAlpha(0.6)
 				end)
 				row:SetScript("OnDragStop", function(self)
@@ -2964,7 +2544,7 @@ local function refreshEntryList(editor, panel)
 				index = index + 1
 				local row = editor.entryRows[index]
 				if not row then
-					row = createRowButton(content, rowHeight)
+					row = Helper.CreateRowButton(content, rowHeight)
 					row.icon = row:CreateTexture(nil, "ARTWORK")
 					row.icon:SetSize(22, 22)
 					row.icon:SetPoint("LEFT", row, "LEFT", 6, 0)
@@ -3073,29 +2653,29 @@ end
 local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
-	local baseIconSize = clampInt(baseLayout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
-	previewLayout.iconSize = PREVIEW_ICON_SIZE
+	local baseIconSize = Helper.ClampInt(baseLayout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+	previewLayout.iconSize = Helper.PREVIEW_ICON_SIZE
 	if type(baseLayout.rowSizes) == "table" then
-		local scale = baseIconSize > 0 and (PREVIEW_ICON_SIZE / baseIconSize) or 1
+		local scale = baseIconSize > 0 and (Helper.PREVIEW_ICON_SIZE / baseIconSize) or 1
 		previewLayout.rowSizes = {}
 		for index, size in pairs(baseLayout.rowSizes) do
 			local num = tonumber(size)
-			if num then previewLayout.rowSizes[index] = clampInt(num * scale, 12, 128, PREVIEW_ICON_SIZE) end
+			if num then previewLayout.rowSizes[index] = Helper.ClampInt(num * scale, 12, 128, Helper.PREVIEW_ICON_SIZE) end
 		end
 	end
 	local stackSize = tonumber(previewLayout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize
-	previewLayout.stackFontSize = math.max(stackSize, PREVIEW_COUNT_FONT_MIN)
+	previewLayout.stackFontSize = math.max(stackSize, Helper.PREVIEW_COUNT_FONT_MIN)
 	local chargesSize = tonumber(previewLayout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize
-	previewLayout.chargesFontSize = math.max(chargesSize, PREVIEW_COUNT_FONT_MIN)
+	previewLayout.chargesFontSize = math.max(chargesSize, Helper.PREVIEW_COUNT_FONT_MIN)
 	local keybindSize = tonumber(previewLayout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize
-	previewLayout.keybindFontSize = math.max(keybindSize, PREVIEW_COUNT_FONT_MIN)
+	previewLayout.keybindFontSize = math.max(keybindSize, Helper.PREVIEW_COUNT_FONT_MIN)
 
 	if not previewFrame or not count or count < 1 then return previewLayout end
 
-	local iconSize = PREVIEW_ICON_SIZE
-	local spacing = clampInt(baseLayout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
-	local direction = normalizeDirection(baseLayout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
-	local wrapCount = clampInt(baseLayout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
+	local iconSize = Helper.PREVIEW_ICON_SIZE
+	local spacing = Helper.ClampInt(baseLayout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local direction = Helper.NormalizeDirection(baseLayout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local wrapCount = Helper.ClampInt(baseLayout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 
 	local width = previewFrame:GetWidth() or 0
 	local height = previewFrame:GetHeight() or 0
@@ -3122,12 +2702,12 @@ local function refreshPreview(editor, panel)
 	local canvas = preview.canvas or preview
 	if not panel then
 		if editor.previewHintLabel then editor.previewHintLabel:Hide() end
-		applyIconLayout(canvas, DEFAULT_PREVIEW_COUNT, Helper.PANEL_LAYOUT_DEFAULTS)
+		applyIconLayout(canvas, Helper.DEFAULT_PREVIEW_COUNT, Helper.PANEL_LAYOUT_DEFAULTS)
 		canvas:ClearAllPoints()
 		canvas:SetPoint("CENTER", preview, "CENTER")
-		for i = 1, DEFAULT_PREVIEW_COUNT do
+		for i = 1, Helper.DEFAULT_PREVIEW_COUNT do
 			local icon = canvas.icons[i]
-			icon.texture:SetTexture(PREVIEW_ICON)
+			icon.texture:SetTexture(Helper.PREVIEW_ICON)
 			icon.entryId = nil
 			if icon.previewSoundBorder then icon.previewSoundBorder:Hide() end
 		end
@@ -3346,7 +2926,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.panelName:Enable()
 		inspector.panelEnabled:Enable()
 		if inspector.panelSpecButton then
-			setButtonTextEllipsized(inspector.panelSpecButton, getSpecFilterLabel(panel))
+			Helper.SetButtonTextEllipsized(inspector.panelSpecButton, getSpecFilterLabel(panel))
 			inspector.panelSpecButton:Enable()
 		end
 		if inspector.panelSpecLabel then inspector.panelSpecLabel:Show() end
@@ -3356,7 +2936,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.panelEnabled:SetChecked(false)
 		inspector.panelEnabled:Disable()
 		if inspector.panelSpecButton then
-			setButtonTextEllipsized(inspector.panelSpecButton, L["CooldownPanelSpecAny"] or "All specs")
+			Helper.SetButtonTextEllipsized(inspector.panelSpecButton, L["CooldownPanelSpecAny"] or "All specs")
 			inspector.panelSpecButton:Disable()
 		end
 		if inspector.panelSpecLabel then inspector.panelSpecLabel:Hide() end
@@ -3379,7 +2959,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.cbSound:SetChecked(entry.soundReady and true or false)
 		if inspector.soundButton then inspector.soundButton:SetText(getSoundButtonText(entry.soundReadyFile)) end
 		if inspector.glowDuration then
-			local duration = clampInt(entry.glowDuration, 0, 30, 0)
+			local duration = Helper.ClampInt(entry.glowDuration, 0, 30, 0)
 			inspector.glowDuration._suspend = true
 			inspector.glowDuration:SetValue(duration)
 			inspector.glowDuration._suspend = nil
@@ -3392,7 +2972,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.removeEntry:Enable()
 		layoutInspectorToggles(inspector, entry)
 	else
-		inspector.entryIcon:SetTexture(PREVIEW_ICON)
+		inspector.entryIcon:SetTexture(Helper.PREVIEW_ICON)
 		inspector.entryName:SetText(L["CooldownPanelSelectEntry"] or "Select an entry.")
 		inspector.entryType:SetText("")
 		inspector.entryId:SetText("")
@@ -3519,7 +3099,7 @@ function CooldownPanels:ApplyLayout(panelId, countOverride)
 	local count = countOverride or getPreviewCount(panel)
 	applyIconLayout(frame, count, layout)
 
-	frame:SetFrameStrata(normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata))
+	frame:SetFrameStrata(Helper.NormalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata))
 	if frame.label then frame.label:SetText(panel.name or "Cooldown Panel") end
 end
 
@@ -3675,10 +3255,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
 	local checkPower = layout.checkPower == true
-	local powerTintR, powerTintG, powerTintB = resolveColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
-	local unusableTintR, unusableTintG, unusableTintB = resolveColor(layout.unusableTintColor, Helper.PANEL_LAYOUT_DEFAULTS.unusableTintColor)
+	local powerTintR, powerTintG, powerTintB = Helper.ResolveColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
+	local unusableTintR, unusableTintG, unusableTintB = Helper.ResolveColor(layout.unusableTintColor, Helper.PANEL_LAYOUT_DEFAULTS.unusableTintColor)
 	local rangeOverlayEnabled = layout.rangeOverlayEnabled == true
-	local rangeOverlayR, rangeOverlayG, rangeOverlayB, rangeOverlayA = resolveColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
+	local rangeOverlayR, rangeOverlayG, rangeOverlayB, rangeOverlayA = Helper.ResolveColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
@@ -3711,7 +3291,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local showWhenNoCooldown = entry.type == "SLOT" and entry.showWhenNoCooldown == true
 			local alwaysShow = entry.alwaysShow ~= false
 			local glowReady = entry.glowReady ~= false
-			local glowDuration = clampInt(entry.glowDuration, 0, 30, 0)
+			local glowDuration = Helper.ClampInt(entry.glowDuration, 0, 30, 0)
 			local soundReady = entry.soundReady == true
 			local soundName = normalizeSoundName(entry.soundReadyFile)
 			local shared = CooldownPanels.runtime -- Root runtime (global state)
@@ -3867,7 +3447,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					data = {}
 					visible[visibleCount] = data
 				end
-				data.icon = iconTexture or PREVIEW_ICON
+				data.icon = iconTexture or Helper.PREVIEW_ICON
 				data.showCooldown = showCooldown
 				data.showCooldownText = showCooldownText
 				data.showCharges = showCharges
@@ -3928,7 +3508,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local data = visible[i]
 		local icon = frame.icons[i]
 		entryToIcon[data.entryId] = icon
-		icon.texture:SetTexture(data.icon or PREVIEW_ICON)
+		icon.texture:SetTexture(data.icon or Helper.PREVIEW_ICON)
 		applyIconTooltip(icon, data.entry, showTooltips)
 		icon.cooldown:SetHideCountdownNumbers(not data.showCooldownText)
 
@@ -4148,8 +3728,8 @@ function CooldownPanels:ApplyPanelPosition(panelId)
 	local frame = runtime.frame
 	if not frame then return end
 	local anchor = ensurePanelAnchor(panel)
-	local point = normalizeAnchor(anchor and anchor.point, panel.point or "CENTER")
-	local relativePoint = normalizeAnchor(anchor and anchor.relativePoint, point)
+	local point = Helper.NormalizeAnchor(anchor and anchor.point, panel.point or "CENTER")
+	local relativePoint = Helper.NormalizeAnchor(anchor and anchor.relativePoint, point)
 	local x = tonumber(anchor and anchor.x) or 0
 	local y = tonumber(anchor and anchor.y) or 0
 	local relativeFrame = resolveAnchorFrame(anchor)
@@ -4194,8 +3774,8 @@ function CooldownPanels:UpdatePanelOpacity(panelId)
 	local layout = panel.layout
 	local fallbackOut = Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat
 	local fallbackIn = Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat
-	local outAlpha = normalizeOpacity(layout.opacityOutOfCombat, fallbackOut)
-	local inAlpha = normalizeOpacity(layout.opacityInCombat, fallbackIn)
+	local outAlpha = Helper.NormalizeOpacity(layout.opacityOutOfCombat, fallbackOut)
+	local inAlpha = Helper.NormalizeOpacity(layout.opacityInCombat, fallbackIn)
 	local alpha
 	if self:IsInEditMode() == true then
 		alpha = 1
@@ -4284,70 +3864,70 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 	local rowSizeIndex = field and field:match("^rowSize(%d+)$")
 
 	if field == "iconSize" then
-		layout.iconSize = clampInt(value, 12, 128, layout.iconSize)
+		layout.iconSize = Helper.ClampInt(value, 12, 128, layout.iconSize)
 	elseif field == "spacing" then
-		layout.spacing = clampInt(value, 0, 50, layout.spacing)
+		layout.spacing = Helper.ClampInt(value, 0, 50, layout.spacing)
 	elseif field == "direction" then
-		layout.direction = normalizeDirection(value, layout.direction)
+		layout.direction = Helper.NormalizeDirection(value, layout.direction)
 	elseif field == "wrapCount" then
-		layout.wrapCount = clampInt(value, 0, 40, layout.wrapCount)
+		layout.wrapCount = Helper.ClampInt(value, 0, 40, layout.wrapCount)
 	elseif field == "wrapDirection" then
-		layout.wrapDirection = normalizeDirection(value, layout.wrapDirection)
+		layout.wrapDirection = Helper.NormalizeDirection(value, layout.wrapDirection)
 	elseif field == "growthPoint" then
-		layout.growthPoint = normalizeGrowthPoint(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+		layout.growthPoint = Helper.NormalizeGrowthPoint(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
 	elseif field == "rangeOverlayEnabled" then
 		layout.rangeOverlayEnabled = value == true
 		if updateRangeCheckSpells then updateRangeCheckSpells() end
 	elseif field == "rangeOverlayColor" then
-		layout.rangeOverlayColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
+		layout.rangeOverlayColor = Helper.NormalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor)
 	elseif field == "checkPower" then
 		layout.checkPower = value == true
 		CooldownPanels:RebuildPowerIndex()
 	elseif field == "powerTintColor" then
-		layout.powerTintColor = normalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
+		layout.powerTintColor = Helper.NormalizeColor(value, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
 	elseif field == "strata" then
-		layout.strata = normalizeStrata(value, layout.strata)
+		layout.strata = Helper.NormalizeStrata(value, layout.strata)
 	elseif field == "stackAnchor" then
-		layout.stackAnchor = normalizeAnchor(value, layout.stackAnchor or Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
+		layout.stackAnchor = Helper.NormalizeAnchor(value, layout.stackAnchor or Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
 	elseif field == "stackX" then
-		layout.stackX = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX)
+		layout.stackX = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX)
 	elseif field == "stackY" then
-		layout.stackY = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY)
+		layout.stackY = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY)
 	elseif field == "stackFont" then
 		if type(value) == "string" and value ~= "" then layout.stackFont = value end
 	elseif field == "stackFontSize" then
-		layout.stackFontSize = clampInt(value, 6, 64, layout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize)
+		layout.stackFontSize = Helper.ClampInt(value, 6, 64, layout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize)
 	elseif field == "stackFontStyle" then
-		layout.stackFontStyle = normalizeFontStyleChoice(value, layout.stackFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.stackFontStyle)
+		layout.stackFontStyle = Helper.NormalizeFontStyleChoice(value, layout.stackFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.stackFontStyle)
 	elseif field == "chargesAnchor" then
-		layout.chargesAnchor = normalizeAnchor(value, layout.chargesAnchor or Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
+		layout.chargesAnchor = Helper.NormalizeAnchor(value, layout.chargesAnchor or Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
 	elseif field == "chargesX" then
-		layout.chargesX = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX)
+		layout.chargesX = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX)
 	elseif field == "chargesY" then
-		layout.chargesY = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY)
+		layout.chargesY = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY)
 	elseif field == "chargesFont" then
 		if type(value) == "string" and value ~= "" then layout.chargesFont = value end
 	elseif field == "chargesFontSize" then
-		layout.chargesFontSize = clampInt(value, 6, 64, layout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize)
+		layout.chargesFontSize = Helper.ClampInt(value, 6, 64, layout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize)
 	elseif field == "chargesFontStyle" then
-		layout.chargesFontStyle = normalizeFontStyleChoice(value, layout.chargesFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontStyle)
+		layout.chargesFontStyle = Helper.NormalizeFontStyleChoice(value, layout.chargesFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontStyle)
 	elseif field == "keybindsEnabled" then
 		layout.keybindsEnabled = value == true
 		Keybinds.MarkPanelsDirty()
 	elseif field == "keybindsIgnoreItems" then
 		layout.keybindsIgnoreItems = value == true
 	elseif field == "keybindAnchor" then
-		layout.keybindAnchor = normalizeAnchor(value, layout.keybindAnchor or Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
+		layout.keybindAnchor = Helper.NormalizeAnchor(value, layout.keybindAnchor or Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
 	elseif field == "keybindX" then
-		layout.keybindX = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
+		layout.keybindX = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX)
 	elseif field == "keybindY" then
-		layout.keybindY = clampInt(value, -OFFSET_RANGE, OFFSET_RANGE, layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
+		layout.keybindY = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY)
 	elseif field == "keybindFont" then
 		if type(value) == "string" and value ~= "" then layout.keybindFont = value end
 	elseif field == "keybindFontSize" then
-		layout.keybindFontSize = clampInt(value, 6, 64, layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize)
+		layout.keybindFontSize = Helper.ClampInt(value, 6, 64, layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize)
 	elseif field == "keybindFontStyle" then
-		layout.keybindFontStyle = normalizeFontStyleChoice(value, layout.keybindFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontStyle)
+		layout.keybindFontStyle = Helper.NormalizeFontStyleChoice(value, layout.keybindFontStyle or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontStyle)
 	elseif field == "cooldownDrawEdge" then
 		layout.cooldownDrawEdge = value ~= false
 	elseif field == "cooldownDrawBling" then
@@ -4365,13 +3945,13 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 	elseif field == "showTooltips" then
 		layout.showTooltips = value == true
 	elseif field == "opacityOutOfCombat" then
-		layout.opacityOutOfCombat = normalizeOpacity(value, layout.opacityOutOfCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
+		layout.opacityOutOfCombat = Helper.NormalizeOpacity(value, layout.opacityOutOfCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
 	elseif field == "opacityInCombat" then
-		layout.opacityInCombat = normalizeOpacity(value, layout.opacityInCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat)
+		layout.opacityInCombat = Helper.NormalizeOpacity(value, layout.opacityInCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat)
 	elseif rowSizeIndex then
 		local index = tonumber(rowSizeIndex)
-		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
-		local newSize = clampInt(value, 12, 128, base)
+		local base = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local newSize = Helper.ClampInt(value, 12, 128, base)
 		layout.rowSizes = layout.rowSizes or {}
 		if newSize == base then
 			layout.rowSizes[index] = nil
@@ -4385,13 +3965,13 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 
 	local syncValue = layout[field]
 	if rowSizeIndex then
-		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local base = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 		local idx = tonumber(rowSizeIndex)
 		syncValue = (layout.rowSizes and layout.rowSizes[idx]) or base
 	end
 	syncEditModeValue(panelId, field, syncValue)
 	if field == "iconSize" then
-		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local base = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 		for i = 1, 6 do
 			if not layout.rowSizes or layout.rowSizes[i] == nil then syncEditModeValue(panelId, "rowSize" .. i, base) end
 		end
@@ -4481,13 +4061,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 
 	panel.layout = panel.layout or Helper.CopyTableShallow(Helper.PANEL_LAYOUT_DEFAULTS)
 	local layout = panel.layout
-	local baseIconSize = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+	local baseIconSize = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 	local anchor = ensurePanelAnchor(panel)
 	local panelKey = normalizeId(panelId)
-	local countFontPath, countFontSize, countFontStyle = getCountFontDefaults(frame)
-	local chargesFontPath, chargesFontSize, chargesFontStyle = getChargesFontDefaults(frame)
-	local fontOptions = getFontOptions(countFontPath)
-	local chargesFontOptions = getFontOptions(chargesFontPath)
+	local countFontPath, countFontSize, countFontStyle = Helper.GetCountFontDefaults(frame)
+	local chargesFontPath, chargesFontSize, chargesFontStyle = Helper.GetChargesFontDefaults(frame)
+	local fontOptions = Helper.GetFontOptions(countFontPath)
+	local chargesFontOptions = Helper.GetFontOptions(chargesFontPath)
 	local function ensureAnchorTable() return ensurePanelAnchor(panel) end
 	local function syncPanelPositionFromAnchor()
 		local a = ensureAnchorTable()
@@ -4549,10 +4129,10 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 		end
 	end
 	local function getRowSizeValue(index)
-		local base = clampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+		local base = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 		local rowSizes = layout.rowSizes
 		local value = rowSizes and tonumber(rowSizes[index]) or nil
-		return clampInt(value, 12, 128, base)
+		return Helper.ClampInt(value, 12, 128, base)
 	end
 	local function shouldShowRowSize(index)
 		local rows, primaryHorizontal = getPanelRowCount(panel, layout)
@@ -4571,8 +4151,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			end
 
 			add("UIParent", "UIParent")
-			for _, key in ipairs(GENERIC_ANCHOR_ORDER) do
-				local info = GENERIC_ANCHORS[key]
+			for _, key in ipairs(Helper.GENERIC_ANCHOR_ORDER) do
+				local info = Helper.GENERIC_ANCHORS[key]
 				if info then add(key, info.label) end
 			end
 
@@ -4603,7 +4183,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 
 		local function validateRelativeFrame(a)
 			if not a then return "UIParent" end
-			local cur = normalizeRelativeFrameName(a.relativeFrame)
+			local cur = Helper.NormalizeRelativeFrameName(a.relativeFrame)
 			local entries = relativeFrameEntries()
 			for _, entry in ipairs(entries) do
 				if entry.key == cur then return cur end
@@ -4632,7 +4212,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				set = function(_, value)
 					local a = ensureAnchorTable()
 					if not a then return end
-					local target = normalizeRelativeFrameName(value)
+					local target = Helper.NormalizeRelativeFrameName(value)
 					if wouldCauseLoop(target) then target = "UIParent" end
 					a.relativeFrame = target
 					applyAnchorDefaults(a, target)
@@ -4669,12 +4249,12 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				height = 160,
 				get = function()
 					local a = ensureAnchorTable()
-					return normalizeAnchor(a and a.point, "CENTER")
+					return Helper.NormalizeAnchor(a and a.point, "CENTER")
 				end,
 				set = function(_, value)
 					local a = ensureAnchorTable()
 					if not a then return end
-					a.point = normalizeAnchor(value, a.point or "CENTER")
+					a.point = Helper.NormalizeAnchor(value, a.point or "CENTER")
 					if not a.relativePoint then a.relativePoint = a.point end
 					applyAnchorPosition()
 				end,
@@ -4682,7 +4262,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 					for _, option in ipairs(anchorOptions) do
 						root:CreateRadio(option.label, function()
 							local a = ensureAnchorTable()
-							return normalizeAnchor(a and a.point, "CENTER") == option.value
+							return Helper.NormalizeAnchor(a and a.point, "CENTER") == option.value
 						end, function()
 							local a = ensureAnchorTable()
 							if not a then return end
@@ -4701,19 +4281,19 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				height = 160,
 				get = function()
 					local a = ensureAnchorTable()
-					return normalizeAnchor(a and a.relativePoint, a and a.point or "CENTER")
+					return Helper.NormalizeAnchor(a and a.relativePoint, a and a.point or "CENTER")
 				end,
 				set = function(_, value)
 					local a = ensureAnchorTable()
 					if not a then return end
-					a.relativePoint = normalizeAnchor(value, a.relativePoint or "CENTER")
+					a.relativePoint = Helper.NormalizeAnchor(value, a.relativePoint or "CENTER")
 					applyAnchorPosition()
 				end,
 				generator = function(_, root)
 					for _, option in ipairs(anchorOptions) do
 						root:CreateRadio(option.label, function()
 							local a = ensureAnchorTable()
-							return normalizeAnchor(a and a.relativePoint, a and a.point or "CENTER") == option.value
+							return Helper.NormalizeAnchor(a and a.relativePoint, a and a.point or "CENTER") == option.value
 						end, function()
 							local a = ensureAnchorTable()
 							if not a then return end
@@ -4807,13 +4387,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "direction",
 				parentId = "cooldownPanelLayout",
 				height = 120,
-				get = function() return normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) end,
+				get = function() return Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) end,
 				set = function(_, value) applyEditLayout(panelId, "direction", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(directionOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) == option.value end,
+							function() return Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) == option.value end,
 							function() applyEditLayout(panelId, "direction", option.value) end
 						)
 					end
@@ -4839,13 +4419,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				parentId = "cooldownPanelLayout",
 				height = 120,
 				disabled = function() return (layout.wrapCount or 0) == 0 end,
-				get = function() return normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") end,
+				get = function() return Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") end,
 				set = function(_, value) applyEditLayout(panelId, "wrapDirection", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(directionOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") == option.value end,
+							function() return Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") == option.value end,
 							function() applyEditLayout(panelId, "wrapDirection", option.value) end
 						)
 					end
@@ -4858,13 +4438,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				parentId = "cooldownPanelLayout",
 				height = 90,
 				disabled = function() return (layout.wrapCount or 0) == 0 end,
-				get = function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
+				get = function() return Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
 				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(growthPointOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
+							function() return Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) == option.value end,
 							function() applyEditLayout(panelId, "growthPoint", option.value) end
 						)
 					end
@@ -4876,13 +4456,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "strata",
 				parentId = "cooldownPanelLayout",
 				height = 200,
-				get = function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) end,
+				get = function() return Helper.NormalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) end,
 				set = function(_, value) applyEditLayout(panelId, "strata", value) end,
 				generator = function(_, root)
-					for _, option in ipairs(STRATA_ORDER) do
+					for _, option in ipairs(Helper.STRATA_ORDER) do
 						root:CreateRadio(
 							option,
-							function() return normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) == option end,
+							function() return Helper.NormalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata) == option end,
 							function() applyEditLayout(panelId, "strata", option) end
 						)
 					end
@@ -5005,12 +4585,12 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				kind = SettingType.Slider,
 				field = "opacityOutOfCombat",
 				parentId = "cooldownPanelDisplay",
-				default = normalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
+				default = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
 				minValue = 0,
 				maxValue = 1,
 				valueStep = 0.05,
 				allowInput = true,
-				get = function() return normalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat) end,
+				get = function() return Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat) end,
 				set = function(_, value) applyEditLayout(panelId, "opacityOutOfCombat", value) end,
 				formatter = function(value)
 					local num = tonumber(value) or 0
@@ -5022,12 +4602,12 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				kind = SettingType.Slider,
 				field = "opacityInCombat",
 				parentId = "cooldownPanelDisplay",
-				default = normalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
+				default = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
 				minValue = 0,
 				maxValue = 1,
 				valueStep = 0.05,
 				allowInput = true,
-				get = function() return normalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat) end,
+				get = function() return Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat) end,
 				set = function(_, value) applyEditLayout(panelId, "opacityInCombat", value) end,
 				formatter = function(value)
 					local num = tonumber(value) or 0
@@ -5047,7 +4627,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				default = layout.rangeOverlayEnabled == true,
 				get = function() return layout.rangeOverlayEnabled == true end,
 				set = function(_, value) applyEditLayout(panelId, "rangeOverlayEnabled", value) end,
-				colorDefault = normalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor),
+				colorDefault = Helper.NormalizeColor(layout.rangeOverlayColor, Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor),
 				colorGet = function() return layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor end,
 				colorSet = function(_, value) applyEditLayout(panelId, "rangeOverlayColor", value) end,
 				hasOpacity = true,
@@ -5059,7 +4639,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				default = layout.checkPower == true,
 				get = function() return layout.checkPower == true end,
 				set = function(_, value) applyEditLayout(panelId, "checkPower", value) end,
-				colorDefault = normalizeColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor),
+				colorDefault = Helper.NormalizeColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor),
 				colorGet = function() return layout.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor end,
 				colorSet = function(_, value) applyEditLayout(panelId, "powerTintColor", value) end,
 			},
@@ -5075,13 +4655,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "stackAnchor",
 				parentId = "cooldownPanelStacks",
 				height = 160,
-				get = function() return normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor) end,
+				get = function() return Helper.NormalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor) end,
 				set = function(_, value) applyEditLayout(panelId, "stackAnchor", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(anchorOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor) == option.value end,
+							function() return Helper.NormalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor) == option.value end,
 							function() applyEditLayout(panelId, "stackAnchor", option.value) end
 						)
 					end
@@ -5093,8 +4673,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "stackX",
 				parentId = "cooldownPanelStacks",
 				default = layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX end,
 				set = function(_, value) applyEditLayout(panelId, "stackX", value) end,
@@ -5106,8 +4686,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "stackY",
 				parentId = "cooldownPanelStacks",
 				default = layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY end,
 				set = function(_, value) applyEditLayout(panelId, "stackY", value) end,
@@ -5133,13 +4713,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "stackFontStyle",
 				parentId = "cooldownPanelStacks",
 				height = 120,
-				get = function() return normalizeFontStyleChoice(layout.stackFontStyle, countFontStyle) end,
+				get = function() return Helper.NormalizeFontStyleChoice(layout.stackFontStyle, countFontStyle) end,
 				set = function(_, value) applyEditLayout(panelId, "stackFontStyle", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(fontStyleOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeFontStyleChoice(layout.stackFontStyle, countFontStyle) == option.value end,
+							function() return Helper.NormalizeFontStyleChoice(layout.stackFontStyle, countFontStyle) == option.value end,
 							function() applyEditLayout(panelId, "stackFontStyle", option.value) end
 						)
 					end
@@ -5170,13 +4750,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "chargesAnchor",
 				parentId = "cooldownPanelCharges",
 				height = 160,
-				get = function() return normalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor) end,
+				get = function() return Helper.NormalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor) end,
 				set = function(_, value) applyEditLayout(panelId, "chargesAnchor", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(anchorOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor) == option.value end,
+							function() return Helper.NormalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor) == option.value end,
 							function() applyEditLayout(panelId, "chargesAnchor", option.value) end
 						)
 					end
@@ -5188,8 +4768,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "chargesX",
 				parentId = "cooldownPanelCharges",
 				default = layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX end,
 				set = function(_, value) applyEditLayout(panelId, "chargesX", value) end,
@@ -5201,8 +4781,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "chargesY",
 				parentId = "cooldownPanelCharges",
 				default = layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY end,
 				set = function(_, value) applyEditLayout(panelId, "chargesY", value) end,
@@ -5232,13 +4812,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "chargesFontStyle",
 				parentId = "cooldownPanelCharges",
 				height = 120,
-				get = function() return normalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle) end,
+				get = function() return Helper.NormalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle) end,
 				set = function(_, value) applyEditLayout(panelId, "chargesFontStyle", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(fontStyleOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle) == option.value end,
+							function() return Helper.NormalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle) == option.value end,
 							function() applyEditLayout(panelId, "chargesFontStyle", option.value) end
 						)
 					end
@@ -5287,13 +4867,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "keybindAnchor",
 				parentId = "cooldownPanelKeybinds",
 				height = 160,
-				get = function() return normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) end,
+				get = function() return Helper.NormalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) end,
 				set = function(_, value) applyEditLayout(panelId, "keybindAnchor", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(anchorOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) == option.value end,
+							function() return Helper.NormalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor) == option.value end,
 							function() applyEditLayout(panelId, "keybindAnchor", option.value) end
 						)
 					end
@@ -5305,8 +4885,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "keybindX",
 				parentId = "cooldownPanelKeybinds",
 				default = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX end,
 				set = function(_, value) applyEditLayout(panelId, "keybindX", value) end,
@@ -5318,8 +4898,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "keybindY",
 				parentId = "cooldownPanelKeybinds",
 				default = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY,
-				minValue = -OFFSET_RANGE,
-				maxValue = OFFSET_RANGE,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
 				valueStep = 1,
 				get = function() return layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY end,
 				set = function(_, value) applyEditLayout(panelId, "keybindY", value) end,
@@ -5349,13 +4929,13 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "keybindFontStyle",
 				parentId = "cooldownPanelKeybinds",
 				height = 120,
-				get = function() return normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) end,
+				get = function() return Helper.NormalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) end,
 				set = function(_, value) applyEditLayout(panelId, "keybindFontStyle", value) end,
 				generator = function(_, root)
 					for _, option in ipairs(fontStyleOptions) do
 						root:CreateRadio(
 							option.label,
-							function() return normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) == option.value end,
+							function() return Helper.NormalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle) == option.value end,
 							function() applyEditLayout(panelId, "keybindFontStyle", option.value) end
 						)
 					end
@@ -5456,41 +5036,41 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			y = (anchor and anchor.y) or panel.y or 0,
 			iconSize = layout.iconSize,
 			spacing = layout.spacing,
-			direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
+			direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
 			wrapCount = layout.wrapCount or 0,
-			wrapDirection = normalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
+			wrapDirection = Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
 			rowSize1 = (layout.rowSizes and layout.rowSizes[1]) or baseIconSize,
 			rowSize2 = (layout.rowSizes and layout.rowSizes[2]) or baseIconSize,
 			rowSize3 = (layout.rowSizes and layout.rowSizes[3]) or baseIconSize,
 			rowSize4 = (layout.rowSizes and layout.rowSizes[4]) or baseIconSize,
 			rowSize5 = (layout.rowSizes and layout.rowSizes[5]) or baseIconSize,
 			rowSize6 = (layout.rowSizes and layout.rowSizes[6]) or baseIconSize,
-			growthPoint = normalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
+			growthPoint = Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
 			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
 			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
 			checkPower = layout.checkPower == true,
 			powerTintColor = layout.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor,
-			strata = normalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata),
-			stackAnchor = normalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor),
+			strata = Helper.NormalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata),
+			stackAnchor = Helper.NormalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor),
 			stackX = layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX,
 			stackY = layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY,
 			stackFont = layout.stackFont or countFontPath,
 			stackFontSize = layout.stackFontSize or countFontSize or 12,
-			stackFontStyle = normalizeFontStyleChoice(layout.stackFontStyle, countFontStyle),
-			chargesAnchor = normalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor),
+			stackFontStyle = Helper.NormalizeFontStyleChoice(layout.stackFontStyle, countFontStyle),
+			chargesAnchor = Helper.NormalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor),
 			chargesX = layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX,
 			chargesY = layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY,
 			chargesFont = layout.chargesFont or chargesFontPath,
 			chargesFontSize = layout.chargesFontSize or chargesFontSize or 12,
-			chargesFontStyle = normalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle),
+			chargesFontStyle = Helper.NormalizeFontStyleChoice(layout.chargesFontStyle, chargesFontStyle),
 			keybindsEnabled = layout.keybindsEnabled == true,
 			keybindsIgnoreItems = layout.keybindsIgnoreItems == true,
-			keybindAnchor = normalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor),
+			keybindAnchor = Helper.NormalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor),
 			keybindX = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX,
 			keybindY = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY,
 			keybindFont = layout.keybindFont or countFontPath,
 			keybindFontSize = layout.keybindFontSize or Helper.PANEL_LAYOUT_DEFAULTS.keybindFontSize or 10,
-			keybindFontStyle = normalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle),
+			keybindFontStyle = Helper.NormalizeFontStyleChoice(layout.keybindFontStyle, countFontStyle),
 			cooldownDrawEdge = layout.cooldownDrawEdge ~= false,
 			cooldownDrawBling = layout.cooldownDrawBling ~= false,
 			cooldownDrawSwipe = layout.cooldownDrawSwipe ~= false,
@@ -5498,8 +5078,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			cooldownGcdDrawEdge = layout.cooldownGcdDrawEdge == true,
 			cooldownGcdDrawBling = layout.cooldownGcdDrawBling == true,
 			cooldownGcdDrawSwipe = layout.cooldownGcdDrawSwipe == true,
-			opacityOutOfCombat = normalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
-			opacityInCombat = normalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
+			opacityOutOfCombat = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
+			opacityInCombat = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
 			showTooltips = layout.showTooltips == true,
 		},
 		onApply = function(_, _, data)
@@ -5823,6 +5403,72 @@ local function clearReadyGlowForSpell(spellId)
 	return true
 end
 
+local function triggerProcSoundForSpell(spellId)
+	local id = tonumber(spellId)
+	if not id then return end
+
+	local index = CooldownPanels.runtime and CooldownPanels.runtime.spellIndex
+	if not index then return end
+
+	local panels
+	local function mergePanels(map)
+		if not map then return end
+		panels = panels or {}
+		for panelId in pairs(map) do
+			panels[panelId] = true
+		end
+	end
+
+	mergePanels(index[id])
+	local baseId = getBaseSpellId(id)
+	if baseId and baseId ~= id then mergePanels(index[baseId]) end
+	local effectiveId = getEffectiveSpellId(id)
+	if effectiveId and effectiveId ~= id then mergePanels(index[effectiveId]) end
+	if not panels then return end
+
+	-- EINMAL spielen, auch wenn der Spell in mehreren Panels vorkommt.
+	local root = ensureRoot()
+	local panelOrder = root and root.order
+
+	local function scanPanel(panelId)
+		local panel = CooldownPanels:GetPanel(panelId)
+		if not (panel and panel.order and panel.entries) then return false end
+
+		for _, entryId in ipairs(panel.order) do
+			local entry = panel.entries[entryId]
+			if entry and entry.type == "SPELL" and entry.spellID then
+				local entryBaseId = tonumber(entry.spellID)
+				if entryBaseId then
+					local entryEffId = getEffectiveSpellId(entryBaseId) or entryBaseId
+					if entryBaseId == id or entryEffId == id then
+						if entry.soundReady == true then
+							local soundName = normalizeSoundName(entry.soundReadyFile)
+							if soundName and soundName ~= "None" then
+								playReadySound(soundName)
+								return true
+							end
+						end
+					end
+				end
+			end
+		end
+
+		return false
+	end
+
+	-- deterministisch: erst Root-Panel-Reihenfolge
+	if panelOrder then
+		for _, panelId in ipairs(panelOrder) do
+			if panels[panelId] and scanPanel(panelId) then return end
+		end
+	end
+
+	-- fallback: irgend eins
+	for panelId in pairs(panels) do
+		if scanPanel(panelId) then return end
+	end
+end
+
 local function setOverlayGlowForSpell(spellId, enabled)
 	local id = tonumber(spellId)
 	if not id then return false end
@@ -5831,6 +5477,9 @@ local function setOverlayGlowForSpell(spellId, enabled)
 	runtime.overlayGlowSpells = runtime.overlayGlowSpells or {}
 	local baseId = getBaseSpellId(id)
 	local effectiveId = getEffectiveSpellId(id)
+	local wasEnabled = runtime.overlayGlowSpells[id] == true
+	if not wasEnabled and baseId then wasEnabled = runtime.overlayGlowSpells[baseId] == true end
+	if not wasEnabled and effectiveId then wasEnabled = runtime.overlayGlowSpells[effectiveId] == true end
 	local function setFlag(spellIdentifier, value)
 		if spellIdentifier then runtime.overlayGlowSpells[spellIdentifier] = value end
 	end
@@ -5843,6 +5492,8 @@ local function setOverlayGlowForSpell(spellId, enabled)
 		if baseId and baseId ~= id then setFlag(baseId, nil) end
 		if effectiveId and effectiveId ~= id then setFlag(effectiveId, nil) end
 	end
+	-- Sound nur wenn es frisch "an" ging.
+	if enabled and not wasEnabled then triggerProcSoundForSpell(id) end
 	if refreshPanelsForSpell and refreshPanelsForSpell(id) then return true end
 	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate("OverlayGlow") end
 	return true
