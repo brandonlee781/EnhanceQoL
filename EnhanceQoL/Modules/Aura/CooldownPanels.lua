@@ -1911,6 +1911,95 @@ local function saveEditorPosition(frame)
 end
 
 local ensureDeletePopup
+local ensureCopyPopup
+
+local function copyPanelSettings(targetPanelId, sourcePanelId)
+	local root = ensureRoot()
+	if not root or not root.panels then return false end
+	local target = root.panels[targetPanelId]
+	local source = root.panels[sourcePanelId]
+	if not target or not source then return false end
+
+	local copier = CopyTable or Helper.CopyTableShallow
+	target.layout = copier(source.layout or {})
+	target.anchor = copier(source.anchor or {})
+	target.point = source.point
+	target.x = source.x
+	target.y = source.y
+	target.specFilter = copier(source.specFilter or {})
+
+	Helper.NormalizePanel(target, root.defaults)
+	CooldownPanels:RebuildSpellIndex()
+	CooldownPanels:ApplyPanelPosition(targetPanelId)
+	local runtime = CooldownPanels.runtime and CooldownPanels.runtime[targetPanelId]
+	if runtime and runtime.editModeId and EditMode and EditMode.EnsureLayoutData and EditMode.GetActiveLayoutName then
+		local anchor = ensurePanelAnchor(target)
+		local layout = target.layout or {}
+		local layoutName = EditMode:GetActiveLayoutName()
+		local data = EditMode:EnsureLayoutData(runtime.editModeId, layoutName)
+		if data then
+			if anchor then
+				data.point = anchor.point or target.point or "CENTER"
+				data.relativePoint = anchor.relativePoint or data.point
+				data.x = anchor.x or 0
+				data.y = anchor.y or 0
+			end
+			local baseIconSize = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+			data.iconSize = layout.iconSize
+			data.spacing = layout.spacing
+			data.direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+			data.wrapCount = layout.wrapCount or 0
+			data.wrapDirection = Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
+			data.rowSize1 = (layout.rowSizes and layout.rowSizes[1]) or baseIconSize
+			data.rowSize2 = (layout.rowSizes and layout.rowSizes[2]) or baseIconSize
+			data.rowSize3 = (layout.rowSizes and layout.rowSizes[3]) or baseIconSize
+			data.rowSize4 = (layout.rowSizes and layout.rowSizes[4]) or baseIconSize
+			data.rowSize5 = (layout.rowSizes and layout.rowSizes[5]) or baseIconSize
+			data.rowSize6 = (layout.rowSizes and layout.rowSizes[6]) or baseIconSize
+			data.growthPoint = Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+			data.rangeOverlayEnabled = layout.rangeOverlayEnabled == true
+			data.rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor
+			data.checkPower = layout.checkPower == true
+			data.powerTintColor = layout.powerTintColor or Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor
+			data.strata = Helper.NormalizeStrata(layout.strata, Helper.PANEL_LAYOUT_DEFAULTS.strata)
+			data.stackAnchor = Helper.NormalizeAnchor(layout.stackAnchor, Helper.PANEL_LAYOUT_DEFAULTS.stackAnchor)
+			data.stackX = layout.stackX or Helper.PANEL_LAYOUT_DEFAULTS.stackX
+			data.stackY = layout.stackY or Helper.PANEL_LAYOUT_DEFAULTS.stackY
+			data.stackFont = layout.stackFont or data.stackFont
+			data.stackFontSize = layout.stackFontSize or data.stackFontSize
+			data.stackFontStyle = Helper.NormalizeFontStyleChoice(layout.stackFontStyle, data.stackFontStyle)
+			data.chargesAnchor = Helper.NormalizeAnchor(layout.chargesAnchor, Helper.PANEL_LAYOUT_DEFAULTS.chargesAnchor)
+			data.chargesX = layout.chargesX or Helper.PANEL_LAYOUT_DEFAULTS.chargesX
+			data.chargesY = layout.chargesY or Helper.PANEL_LAYOUT_DEFAULTS.chargesY
+			data.chargesFont = layout.chargesFont or data.chargesFont
+			data.chargesFontSize = layout.chargesFontSize or data.chargesFontSize
+			data.chargesFontStyle = Helper.NormalizeFontStyleChoice(layout.chargesFontStyle, data.chargesFontStyle)
+			data.keybindsEnabled = layout.keybindsEnabled == true
+			data.keybindsIgnoreItems = layout.keybindsIgnoreItems == true
+			data.keybindAnchor = Helper.NormalizeAnchor(layout.keybindAnchor, Helper.PANEL_LAYOUT_DEFAULTS.keybindAnchor)
+			data.keybindX = layout.keybindX or Helper.PANEL_LAYOUT_DEFAULTS.keybindX
+			data.keybindY = layout.keybindY or Helper.PANEL_LAYOUT_DEFAULTS.keybindY
+			data.keybindFont = layout.keybindFont or data.keybindFont
+			data.keybindFontSize = layout.keybindFontSize or data.keybindFontSize
+			data.keybindFontStyle = Helper.NormalizeFontStyleChoice(layout.keybindFontStyle, data.keybindFontStyle)
+			data.cooldownDrawEdge = layout.cooldownDrawEdge ~= false
+			data.cooldownDrawBling = layout.cooldownDrawBling ~= false
+			data.cooldownDrawSwipe = layout.cooldownDrawSwipe ~= false
+			data.showChargesCooldown = layout.showChargesCooldown == true
+			data.cooldownGcdDrawEdge = layout.cooldownGcdDrawEdge == true
+			data.cooldownGcdDrawBling = layout.cooldownGcdDrawBling == true
+			data.cooldownGcdDrawSwipe = layout.cooldownGcdDrawSwipe == true
+			data.opacityOutOfCombat = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
+			data.opacityInCombat = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat)
+			data.showTooltips = layout.showTooltips == true
+		end
+	end
+	if runtime and runtime.editModeId and EditMode and EditMode.RefreshFrame then EditMode:RefreshFrame(runtime.editModeId) end
+	refreshEditModeSettingValues()
+	CooldownPanels:RefreshPanel(targetPanelId)
+	CooldownPanels:RefreshEditor()
+	return true
+end
 
 local function applySettingsIcon(texture)
 	if not texture then return end
@@ -2471,6 +2560,23 @@ ensureDeletePopup = function()
 			if not data or not data.panelId then return end
 			CooldownPanels:DeletePanel(data.panelId)
 			CooldownPanels:RefreshEditor()
+		end,
+	}
+end
+
+ensureCopyPopup = function()
+	if StaticPopupDialogs["EQOL_COOLDOWN_PANEL_COPY_SETTINGS"] then return end
+	StaticPopupDialogs["EQOL_COOLDOWN_PANEL_COPY_SETTINGS"] = {
+		text = L["CooldownPanelCopySettingsConfirm"] or "Copy settings from %s to this panel?",
+		button1 = YES,
+		button2 = CANCEL,
+		timeout = 0,
+		whileDead = true,
+		hideOnEscape = true,
+		preferredIndex = 3,
+		OnAccept = function(self, data)
+			if not data or not data.targetPanelId or not data.sourcePanelId then return end
+			copyPanelSettings(data.targetPanelId, data.sourcePanelId)
 		end,
 	}
 end
@@ -4161,6 +4267,34 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	if self:IsEditorOpen() then self:RefreshEditor() end
 end
 
+local function getCopySettingsEntries(panelKey)
+	local root = CooldownPanels:GetRoot()
+	if not root or not root.panels then return {} end
+	local entries = {}
+	local seen = {}
+	if type(root.order) == "table" then
+		for _, id in ipairs(root.order) do
+			local otherId = normalizeId(id)
+			if otherId ~= panelKey then
+				local other = root.panels[otherId]
+				if other then
+					local label = string.format("Panel %s: %s", tostring(otherId), other.name or "Cooldown Panel")
+					entries[#entries + 1] = { id = otherId, label = label }
+					seen[otherId] = true
+				end
+			end
+		end
+	end
+	for id, other in pairs(root.panels) do
+		local otherId = normalizeId(id)
+		if other and otherId ~= panelKey and not seen[otherId] then
+			local label = string.format("Panel %s: %s", tostring(otherId), other.name or "Cooldown Panel")
+			entries[#entries + 1] = { id = otherId, label = label }
+		end
+	end
+	return entries
+end
+
 function CooldownPanels:RegisterEditModePanel(panelId)
 	local panel = self:GetPanel(panelId)
 	if not panel then return end
@@ -4311,6 +4445,34 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 		end
 
 		settings = {
+			{
+				name = L["CooldownPanelCopySettingsHeader"] or "Copy Settings",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelCopySettings",
+				defaultCollapsed = true,
+			},
+			{
+				name = L["CooldownPanelCopySettings"] or "Copy Settings",
+				kind = SettingType.Dropdown,
+				field = "copySettingsFrom",
+				parentId = "cooldownPanelCopySettings",
+				height = 140,
+				get = function() return nil end,
+				set = function() end,
+				generator = function(_, root)
+					local entries = getCopySettingsEntries(panelKey)
+					if not entries or #entries == 0 then
+						if root.CreateTitle then root:CreateTitle(L["CooldownPanelCopySettingsNone"] or "No other panels") end
+						return
+					end
+					for _, entry in ipairs(entries) do
+						root:CreateRadio(entry.label, function() return false end, function()
+							ensureCopyPopup()
+							StaticPopup_Show("EQOL_COOLDOWN_PANEL_COPY_SETTINGS", entry.label, nil, { targetPanelId = panelId, sourcePanelId = entry.id })
+						end)
+					end
+				end,
+			},
 			{
 				name = "Anchor",
 				kind = SettingType.Collapsible,

@@ -8,6 +8,7 @@
 - Resource Bars: Gradiant color works horizontal now too
 - Cooldown Panels: Option to enable charge duration show
 - Cooldown Panels: Added anchor points for ElvUI, Unhalted Unit Frames, and more MSUF frames (ToT/Focus/Pet/Boss).
+- Cooldown Panels: Edit Mode panel filters (only show panels of your class) and Copy Settings dropdown to clone layout/anchor settings (keeps entries + enabled state untouched).
 
 ### 🔁 Changed
 
@@ -18,6 +19,7 @@
 - Mover: MailFrame/SendMail and Open Mail are now movable.
 - Cooldown Panels: Spell usable checks are now evaluated correctly.
 - Cooldown Panels: Overlay glow now resolves override spell IDs (talent replacements) correctly.
+- UF Plus: Cast bar icons now fade with the interrupt animation for target/focus enemies.
 
 ---
 

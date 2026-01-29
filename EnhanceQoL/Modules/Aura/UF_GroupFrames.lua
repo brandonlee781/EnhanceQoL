@@ -207,9 +207,7 @@ end
 
 local function getUnitRoleKey(unit)
 	local roleEnum
-	if UnitGroupRolesAssignedEnum then
-		roleEnum = UnitGroupRolesAssignedEnum(unit)
-	end
+	if UnitGroupRolesAssignedEnum then roleEnum = UnitGroupRolesAssignedEnum(unit) end
 	if roleEnum and Enum and Enum.LFGRole then
 		if roleEnum == Enum.LFGRole.Tank then return "TANK" end
 		if roleEnum == Enum.LFGRole.Healer then return "HEALER" end
@@ -500,23 +498,14 @@ local function getCfg(kind)
 	return db[kind] or DEFAULTS[kind]
 end
 
-local function isFeatureEnabled()
-	return addon.db and addon.db.ufEnableGroupFrames == true
-end
+local function isFeatureEnabled() return addon.db and addon.db.ufEnableGroupFrames == true end
 
 -- Expose config for Settings / Edit Mode integration
-function GF:GetConfig(kind)
-	return getCfg(kind)
-end
+function GF:GetConfig(kind) return getCfg(kind) end
 
-function GF:IsFeatureEnabled()
-	return isFeatureEnabled()
-end
+function GF:IsFeatureEnabled() return isFeatureEnabled() end
 
-function GF:EnsureDB()
-	return ensureDB()
-end
-
+function GF:EnsureDB() return ensureDB() end
 
 -- -----------------------------------------------------------------------------
 -- Internal state
@@ -595,9 +584,7 @@ function GF:BuildButton(self)
 		st.power:SetMinMaxValues(0, 1)
 		st.power:SetValue(0)
 	end
-	if st.power.SetStatusBarTexture and UFHelper and UFHelper.resolveTexture then
-		st.power:SetStatusBarTexture(UFHelper.resolveTexture(pcfg.texture))
-	end
+	if st.power.SetStatusBarTexture and UFHelper and UFHelper.resolveTexture then st.power:SetStatusBarTexture(UFHelper.resolveTexture(pcfg.texture)) end
 	applyBarBackdrop(st.power, pcfg)
 	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(false) end
 
@@ -640,9 +627,7 @@ function GF:BuildButton(self)
 	-- Layout updates on resize
 	if not st._sizeHooked then
 		st._sizeHooked = true
-		self:HookScript("OnSizeChanged", function(btn)
-			GF:LayoutButton(btn)
-		end)
+		self:HookScript("OnSizeChanged", function(btn) GF:LayoutButton(btn) end)
 	end
 
 	self:SetClampedToScreen(true)
@@ -651,9 +636,7 @@ function GF:BuildButton(self)
 	-- Menu function used by the secure "togglemenu" click.
 	if not st._menuHooked then
 		st._menuHooked = true
-		self.menu = function(btn)
-			GF:OpenUnitMenu(btn)
-		end
+		self.menu = function(btn) GF:OpenUnitMenu(btn) end
 	end
 
 	hookTextFrameLevels(st)
@@ -693,9 +676,7 @@ function GF:LayoutButton(self)
 	local rc = cfg.roleIcon or {}
 	local rolePad = 0
 	if rc.enabled ~= false then
-		if not st.roleIcon then
-			st.roleIcon = st.health:CreateTexture(nil, "OVERLAY")
-		end
+		if not st.roleIcon then st.roleIcon = st.health:CreateTexture(nil, "OVERLAY") end
 		local size = rc.size or 14
 		local point = rc.point or "LEFT"
 		local relPoint = rc.relativePoint or "LEFT"
@@ -795,13 +776,9 @@ function GF:UpdateRoleIcon(self)
 		if st.roleIcon then st.roleIcon:Hide() end
 		return
 	end
-	if not st.roleIcon then
-		st.roleIcon = (st.health or st.barGroup or st.frame):CreateTexture(nil, "OVERLAY")
-	end
+	if not st.roleIcon then st.roleIcon = (st.health or st.barGroup or st.frame):CreateTexture(nil, "OVERLAY") end
 	local roleEnum
-	if UnitGroupRolesAssignedEnum then
-		roleEnum = UnitGroupRolesAssignedEnum(unit)
-	end
+	if UnitGroupRolesAssignedEnum then roleEnum = UnitGroupRolesAssignedEnum(unit) end
 	local atlas
 	if roleEnum and Enum and Enum.LFGRole then
 		if roleEnum == Enum.LFGRole.Tank then
@@ -931,9 +908,7 @@ function GF:UpdateAuras(self)
 
 	updateAuraType("buff", false)
 	updateAuraType("debuff", true)
-	updateAuraType("externals", false, function(aura)
-		return aura and aura.sourceUnit and aura.sourceUnit ~= unit
-	end)
+	updateAuraType("externals", false, function(aura) return aura and aura.sourceUnit and aura.sourceUnit ~= unit end)
 end
 
 function GF:UpdateName(self)
@@ -950,12 +925,8 @@ function GF:UpdateName(self)
 	local tc = cfg and cfg.text or {}
 	local maxChars = cfg and cfg.text and cfg.text.nameMaxChars
 	maxChars = tonumber(maxChars)
-	if maxChars and maxChars > 0 and name and #name > maxChars then
-		name = name:sub(1, maxChars)
-	end
-	if UnitIsConnected and not UnitIsConnected(unit) then
-		name = (name and name ~= "") and (name .. " |cffff6666DC|r") or "|cffff6666DC|r"
-	end
+	if maxChars and maxChars > 0 and name and #name > maxChars then name = name:sub(1, maxChars) end
+	if UnitIsConnected and not UnitIsConnected(unit) then name = (name and name ~= "") and (name .. " |cffff6666DC|r") or "|cffff6666DC|r" end
 	name = name or ""
 	if st._lastName ~= name then
 		fs:SetText(name)
@@ -967,7 +938,9 @@ function GF:UpdateName(self)
 	if tc.useClassColor ~= false and UnitIsPlayer and UnitIsPlayer(unit) and UnitClass then
 		local _, class = UnitClass(unit)
 		local cr, cg, cb, ca = getClassColor(class)
-		if cr then r, g, b, a = cr, cg, cb, ca or 1 end
+		if cr then
+			r, g, b, a = cr, cg, cb, ca or 1
+		end
 	end
 	if UnitIsConnected and not UnitIsConnected(unit) then
 		r, g, b, a = 0.7, 0.7, 0.7, 1
@@ -1020,7 +993,9 @@ function GF:UpdateHealth(self)
 	if hc.useClassColor == true and UnitIsPlayer and UnitIsPlayer(unit) and UnitClass then
 		local _, class = UnitClass(unit)
 		local cr, cg, cb = getClassColor(class)
-		if cr then r, g, b = cr, cg, cb end
+		if cr then
+			r, g, b = cr, cg, cb
+		end
 	end
 	if UnitIsConnected and not UnitIsConnected(unit) then
 		r, g, b = 0.5, 0.5, 0.5
@@ -1037,9 +1012,7 @@ function GF:UpdateHealth(self)
 		local canShowPct = false
 		if showPct then
 			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
-				if maxv and maxv > 0 then
-					canShowPct = true
-				end
+				if maxv and maxv > 0 then canShowPct = true end
 			end
 		end
 		if canShowPct then
@@ -1139,7 +1112,9 @@ function GF:UpdatePower(self)
 			pr, pg, pb, pa = c.r or c[1] or 0, c.g or c[2] or 0, c.b or c[3] or 1, c.a or c[4] or 1
 		end
 	end
-	if not pr then pr, pg, pb, pa = 0, 0.5, 1, 1 end
+	if not pr then
+		pr, pg, pb, pa = 0, 0.5, 1, 1
+	end
 	local colorKey = tostring(pr) .. "|" .. tostring(pg) .. "|" .. tostring(pb) .. "|" .. tostring(pa)
 	if st._lastPowerColor ~= colorKey then
 		st._lastPowerColor = colorKey
@@ -1152,9 +1127,7 @@ function GF:UpdatePower(self)
 		local canShowPct = false
 		if showPct then
 			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
-				if maxv and maxv > 0 then
-					canShowPct = true
-				end
+				if maxv and maxv > 0 then canShowPct = true end
 			end
 		end
 		if canShowPct then
@@ -1210,9 +1183,7 @@ function GF:OpenUnitMenu(self)
 	-- We fall back to UnitPopup_ShowMenu + a shared dropdown.
 	if UnitPopup_OpenMenu then
 		-- Try the modern API signature first.
-		pcall(function()
-			UnitPopup_OpenMenu(resolveMenuType(unit), { unit = unit })
-		end)
+		pcall(function() UnitPopup_OpenMenu(resolveMenuType(unit), { unit = unit }) end)
 		return
 	end
 
@@ -1232,9 +1203,7 @@ function GF.UnitButton_OnLoad(self)
 	-- Detect whether this button belongs to the party or raid header.
 	-- (The secure header is the parent; we tag headers with _eqolKind.)
 	local parent = self and self.GetParent and self:GetParent()
-	if parent and parent._eqolKind then
-		self._eqolGroupKind = parent._eqolKind
-	end
+	if parent and parent._eqolKind then self._eqolGroupKind = parent._eqolKind end
 
 	GF:BuildButton(self)
 
@@ -1253,9 +1222,7 @@ function GF:UnitButton_SetUnit(self, unit)
 	self.unit = unit
 
 	-- Re-register unit events for the new unit.
-	if self.UnregisterAllEvents then
-		self:UnregisterAllEvents()
-	end
+	if self.UnregisterAllEvents then self:UnregisterAllEvents() end
 
 	-- Important: some events should *not* be unit-filtered, but for the scaffold
 	-- we keep it simple and just register a few relevant unit events.
@@ -1395,9 +1362,6 @@ function GF:UpdateAnchorSize(kind)
 	if kind == "raid" then
 		unitsPer = max(1, floor((tonumber(cfg.unitsPerColumn) or 5) + 0.5))
 		columns = max(1, floor((tonumber(cfg.maxColumns) or 8) + 0.5))
-	elseif kind == "party" and growth == "RIGHT" then
-		unitsPer = 1
-		columns = 5
 	end
 
 	local totalW, totalH
@@ -1419,9 +1383,7 @@ local function applyVisibility(header, kind, cfg)
 	if not header or not cfg or not RegisterStateDriver then return end
 	if InCombatLockdown and InCombatLockdown() then return end
 
-	if UnregisterStateDriver then
-		UnregisterStateDriver(header, "visibility")
-	end
+	if UnregisterStateDriver then UnregisterStateDriver(header, "visibility") end
 
 	local cond = "hide"
 	if header._eqolForceShow then
@@ -1489,13 +1451,8 @@ function GF:ApplyHeaderAttributes(kind)
 		header:SetAttribute("showSolo", cfg.showSolo and true or false)
 		header:SetAttribute("sortMethod", "INDEX")
 		header:SetAttribute("sortDir", "ASC")
-		if growth == "RIGHT" then
-			header:SetAttribute("maxColumns", 5)
-			header:SetAttribute("unitsPerColumn", 1)
-		else
-			header:SetAttribute("maxColumns", 1)
-			header:SetAttribute("unitsPerColumn", 5)
-		end
+		header:SetAttribute("maxColumns", 1)
+		header:SetAttribute("unitsPerColumn", 5)
 	elseif kind == "raid" then
 		header:SetAttribute("showParty", false)
 		header:SetAttribute("showRaid", true)
@@ -1509,7 +1466,6 @@ function GF:ApplyHeaderAttributes(kind)
 		header:SetAttribute("maxColumns", tonumber(cfg.maxColumns) or 8)
 	end
 
-
 	-- Edit mode preview override: keep the header visible for positioning.
 	if header._eqolForceShow then
 		header:SetAttribute("showParty", true)
@@ -1518,15 +1474,14 @@ function GF:ApplyHeaderAttributes(kind)
 		header:SetAttribute("showSolo", true)
 	end
 
-
 	-- Growth / spacing
 	if growth == "RIGHT" then
 		if kind == "party" then
-			header:SetAttribute("point", "TOP")
-			header:SetAttribute("xOffset", 0)
+			header:SetAttribute("point", "LEFT")
+			header:SetAttribute("xOffset", spacing)
 			header:SetAttribute("yOffset", 0)
 			header:SetAttribute("columnSpacing", spacing)
-			header:SetAttribute("columnAnchorPoint", "LEFT")
+			header:SetAttribute("columnAnchorPoint", "TOP")
 		else
 			header:SetAttribute("point", "LEFT")
 			header:SetAttribute("xOffset", spacing)
@@ -1550,13 +1505,20 @@ function GF:ApplyHeaderAttributes(kind)
 	local h = tonumber(cfg.height) or 24
 	w = floor(w + 0.5)
 	h = floor(h + 0.5)
-	header:SetAttribute("initialConfigFunction", string.format([[
+	header:SetAttribute(
+		"initialConfigFunction",
+		string.format(
+			[[
 		self:SetWidth(%d)
 		self:SetHeight(%d)
 		self:SetAttribute('*type1','target')
 		self:SetAttribute('*type2','togglemenu')
 		RegisterUnitWatch(self)
-	]], w, h))
+	]],
+			w,
+			h
+		)
+	)
 
 	-- Also apply size to existing children.
 	forEachChild(header, function(child)
@@ -1589,12 +1551,8 @@ function GF:EnsureHeaders()
 	local parent = _G.PetBattleFrameHider or UIParent
 
 	-- Movers (for Edit Mode positioning)
-	if not GF.anchors.party then
-		ensureAnchor("party", parent)
-	end
-	if not GF.anchors.raid then
-		ensureAnchor("raid", parent)
-	end
+	if not GF.anchors.party then ensureAnchor("party", parent) end
+	if not GF.anchors.raid then ensureAnchor("raid", parent) end
 
 	if not GF.headers.party then
 		GF.headers.party = CreateFrame("Frame", "EQOLUFPartyHeader", parent, "SecureGroupHeaderTemplate")
@@ -1720,16 +1678,12 @@ local function copySelectionMap(selection)
 	if type(selection) ~= "table" then return copy end
 	if #selection > 0 then
 		for _, value in ipairs(selection) do
-			if value ~= nil and (type(value) == "string" or type(value) == "number") then
-				copy[value] = true
-			end
+			if value ~= nil and (type(value) == "string" or type(value) == "number") then copy[value] = true end
 		end
 		return copy
 	end
 	for key, value in pairs(selection) do
-		if value and (type(key) == "string" or type(key) == "number") then
-			copy[key] = true
-		end
+		if value and (type(key) == "string" or type(key) == "number") then copy[key] = true end
 	end
 	return copy
 end
@@ -1753,9 +1707,7 @@ local function buildSpecOptions()
 	if GetNumSpecializations and GetSpecializationInfo then
 		for i = 1, GetNumSpecializations() do
 			local specId, name = GetSpecializationInfo(i)
-			if specId and name then
-				opts[#opts + 1] = { value = specId, label = name }
-			end
+			if specId and name then opts[#opts + 1] = { value = specId, label = name } end
 		end
 	end
 	return opts
@@ -2748,24 +2700,12 @@ local function applyEditModeData(kind, data)
 		if not cfg.relativeTo or cfg.relativeTo == "" then cfg.relativeTo = "UIParent" end
 	end
 
-	if data.width ~= nil then
-		cfg.width = clampNumber(data.width, 40, 600, cfg.width or 100)
-	end
-	if data.height ~= nil then
-		cfg.height = clampNumber(data.height, 10, 200, cfg.height or 24)
-	end
-	if data.powerHeight ~= nil then
-		cfg.powerHeight = clampNumber(data.powerHeight, 0, 50, cfg.powerHeight or 6)
-	end
-	if data.spacing ~= nil then
-		cfg.spacing = clampNumber(data.spacing, 0, 40, cfg.spacing or 0)
-	end
-	if data.growth then
-		cfg.growth = tostring(data.growth):upper()
-	end
-	if data.enabled ~= nil then
-		cfg.enabled = data.enabled and true or false
-	end
+	if data.width ~= nil then cfg.width = clampNumber(data.width, 40, 600, cfg.width or 100) end
+	if data.height ~= nil then cfg.height = clampNumber(data.height, 10, 200, cfg.height or 24) end
+	if data.powerHeight ~= nil then cfg.powerHeight = clampNumber(data.powerHeight, 0, 50, cfg.powerHeight or 6) end
+	if data.spacing ~= nil then cfg.spacing = clampNumber(data.spacing, 0, 40, cfg.spacing or 0) end
+	if data.growth then cfg.growth = tostring(data.growth):upper() end
+	if data.enabled ~= nil then cfg.enabled = data.enabled and true or false end
 	if data.nameClassColor ~= nil then
 		cfg.text = cfg.text or {}
 		cfg.text.useClassColor = data.nameClassColor and true or false
@@ -2824,9 +2764,7 @@ local function applyEditModeData(kind, data)
 			local v = clampNumber(data.maxColumns, 1, 10, cfg.maxColumns or 8)
 			cfg.maxColumns = floor(v + 0.5)
 		end
-		if data.columnSpacing ~= nil then
-			cfg.columnSpacing = clampNumber(data.columnSpacing, 0, 40, cfg.columnSpacing or 0)
-		end
+		if data.columnSpacing ~= nil then cfg.columnSpacing = clampNumber(data.columnSpacing, 0, 40, cfg.columnSpacing or 0) end
 	end
 
 	GF:ApplyHeaderAttributes(kind)
@@ -2909,16 +2847,12 @@ function GF:EnsureEditMode()
 				enableOverlayToggle = true,
 			})
 
-			if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then
-				addon.EditModeLib:SetFrameResetVisible(anchor, false)
-			end
+			if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then addon.EditModeLib:SetFrameResetVisible(anchor, false) end
 		end
 	end
 
 	GF._editModeRegistered = true
-	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then
-		addon.EditModeLib.internal:RefreshSettingValues()
-	end
+	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 end
 
 function GF:OnEnterEditMode(kind)

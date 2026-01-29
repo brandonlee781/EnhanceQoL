@@ -2434,6 +2434,7 @@ local function stopCast(unit)
 	if st.castName then st.castName:SetText("") end
 	if st.castDuration then st.castDuration:SetText("") end
 	if st.castIcon then st.castIcon:Hide() end
+	st.castIconTexture = nil
 	st.castTarget = nil
 	st.castInfo = nil
 	if castOnUpdateHandlers[unit] then
@@ -2571,7 +2572,10 @@ local function configureCastStatic(unit, ccfg, defc)
 	if st.castIcon then
 		local showIcon = ccfg.showIcon ~= false and st.castInfo.texture ~= nil
 		st.castIcon:SetShown(showIcon)
-		if showIcon then st.castIcon:SetTexture(st.castInfo.texture) end
+		if showIcon then
+			st.castIcon:SetTexture(st.castInfo.texture)
+			st.castIconTexture = st.castInfo.texture
+		end
 	end
 	if st.castDuration then st.castDuration:SetShown(ccfg.showDuration ~= false) end
 	st.castBar:Show()
@@ -2770,9 +2774,13 @@ function UF.ShowCastInterrupt(unit, event)
 		st.castName:SetShown(ccfg.showName ~= false)
 	end
 	if st.castIcon then
-		local showIcon = ccfg.showIcon ~= false and st.castInfo and st.castInfo.texture ~= nil
+		local iconTexture = (st.castInfo and st.castInfo.texture) or st.castIconTexture
+		local showIcon = ccfg.showIcon ~= false and iconTexture ~= nil
 		st.castIcon:SetShown(showIcon)
-		if showIcon then st.castIcon:SetTexture(st.castInfo.texture) end
+		if showIcon then
+			st.castIcon:SetTexture(iconTexture)
+			st.castIconTexture = iconTexture
+		end
 	end
 
 	local glowAlpha = useDefault and 0.4 or 0.25
@@ -2930,7 +2938,10 @@ local function setCastInfoFromUnit(unit)
 			if st.castIcon then
 				local showIcon = ccfg.showIcon ~= false and texture ~= nil
 				st.castIcon:SetShown(showIcon)
-				if showIcon then st.castIcon:SetTexture(texture) end
+				if showIcon then
+					st.castIcon:SetTexture(texture)
+					st.castIconTexture = texture
+				end
 			end
 			local clr = ccfg.color or defc.color or { 0.9, 0.7, 0.2, 1 }
 			local nclr = ccfg.notInterruptibleColor or defc.notInterruptibleColor or { 204 / 255, 204 / 255, 204 / 255, 1 }
