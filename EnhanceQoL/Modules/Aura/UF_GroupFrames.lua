@@ -46,6 +46,8 @@ local UnitHealthMax = UnitHealthMax
 local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local UnitPowerType = UnitPowerType
+local UnitGUID = UnitGUID
+local C_Timer = C_Timer
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGroupRolesAssignedEnum = UnitGroupRolesAssignedEnum
 local GetSpecialization = GetSpecialization
@@ -469,10 +471,16 @@ local DEFAULTS = {
 	},
 }
 
+local DB
+
 local function ensureDB()
 	addon.db = addon.db or {}
 	addon.db.ufGroupFrames = addon.db.ufGroupFrames or {}
 	local db = addon.db.ufGroupFrames
+	if db._eqolInited then
+		DB = db
+		return db
+	end
 	for kind, def in pairs(DEFAULTS) do
 		db[kind] = db[kind] or {}
 		local t = db[kind]
@@ -490,11 +498,13 @@ local function ensureDB()
 			end
 		end
 	end
+	db._eqolInited = true
+	DB = db
 	return db
 end
 
 local function getCfg(kind)
-	local db = ensureDB()
+	local db = DB or ensureDB()
 	return db[kind] or DEFAULTS[kind]
 end
 
@@ -530,6 +540,96 @@ local function getState(self)
 	return st
 end
 
+local function updateButtonConfig(self, cfg)
+	if not self then return end
+	cfg = cfg or self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	self._eqolCfg = cfg
+	local st = getState(self)
+	if not (st and cfg) then return end
+
+	local tc = cfg.text or {}
+	local pcfg = cfg.power or {}
+	local ac = cfg.auras
+
+	st._wantsName = true
+	st._wantsHealthPct = tc.showHealthPercent == true
+	st._wantsPowerPct = tc.showPowerPercent == true
+
+	local wantsPower = true
+	local powerHeight = cfg.powerHeight
+	if powerHeight ~= nil and tonumber(powerHeight) <= 0 then wantsPower = false end
+	if type(pcfg.showRoles) == "table" and not selectionHasAny(pcfg.showRoles) then wantsPower = false end
+	if type(pcfg.showSpecs) == "table" and not selectionHasAny(pcfg.showSpecs) then wantsPower = false end
+	st._wantsPower = wantsPower
+
+	local wantsAuras = false
+	if ac then
+		if ac.enabled == true then
+			wantsAuras = true
+		elseif ac.enabled == false then
+			wantsAuras = false
+		else
+			wantsAuras = (ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled) or false
+		end
+	end
+	st._wantsAuras = wantsAuras
+end
+
+local auraUpdateQueue = {}
+local auraUpdateScheduled = false
+
+local function processAuraQueue()
+	auraUpdateScheduled = false
+	for btn, info in pairs(auraUpdateQueue) do
+		auraUpdateQueue[btn] = nil
+		if btn and btn._eqolUFState then
+			local st = btn._eqolUFState
+			local updateInfo = info or st._auraPendingInfo
+			st._auraPendingInfo = nil
+			GF:UpdateAuras(btn, updateInfo)
+		end
+	end
+end
+
+function GF:RequestAuraUpdate(self, updateInfo)
+	local st = getState(self)
+	if not st then return end
+	if updateInfo ~= nil then st._auraPendingInfo = updateInfo end
+	auraUpdateQueue[self] = st._auraPendingInfo
+	if not auraUpdateScheduled then
+		auraUpdateScheduled = true
+		if C_Timer and C_Timer.After then
+			C_Timer.After(0, processAuraQueue)
+		else
+			processAuraQueue()
+		end
+	end
+end
+
+function GF:CacheUnitStatic(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st) then return end
+
+	local guid = UnitGUID and UnitGUID(unit)
+	if st._guid == guid and st._unitToken == unit then return end
+	st._guid = guid
+	st._unitToken = unit
+
+	if guid and UnitIsPlayer and UnitIsPlayer(unit) and UnitClass then
+		local _, class = UnitClass(unit)
+		st._class = class
+		if class then
+			st._classR, st._classG, st._classB, st._classA = getClassColor(class)
+		else
+			st._classR, st._classG, st._classB, st._classA = nil, nil, nil, nil
+		end
+	else
+		st._class = nil
+		st._classR, st._classG, st._classB, st._classA = nil, nil, nil, nil
+	end
+end
+
 -- -----------------------------------------------------------------------------
 -- Unit button construction
 -- -----------------------------------------------------------------------------
@@ -539,6 +639,9 @@ function GF:BuildButton(self)
 
 	local kind = self._eqolGroupKind or "party"
 	local cfg = getCfg(kind)
+	self._eqolCfg = cfg
+	updateButtonConfig(self, cfg)
+	GF:LayoutAuras(self)
 	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
 	local tc = cfg.text or {}
@@ -649,7 +752,7 @@ function GF:LayoutButton(self)
 	if not (st and st.barGroup and st.health and st.power) then return end
 
 	local kind = self._eqolGroupKind -- set by header helper
-	local cfg = getCfg(kind or "party")
+	local cfg = self._eqolCfg or getCfg(kind or "party")
 	local powerH = tonumber(cfg.powerHeight) or 5
 	if st._powerHidden then powerH = 0 end
 	local w, h = self:GetSize()
@@ -810,13 +913,169 @@ function GF:UpdateRoleIcon(self)
 	end
 end
 
-function GF:UpdateAuras(self)
+local function externalAuraPredicate(aura, unit)
+	if not (aura and aura.sourceUnit) then return false end
+	if issecretvalue and (issecretvalue(aura.sourceUnit) or issecretvalue(unit)) then return false end
+	return aura.sourceUnit ~= unit
+end
+
+local AURA_TYPE_META = {
+	buff = {
+		containerKey = "buffContainer",
+		buttonsKey = "buffButtons",
+		filter = "HELPFUL",
+		isDebuff = false,
+	},
+	debuff = {
+		containerKey = "debuffContainer",
+		buttonsKey = "debuffButtons",
+		filter = "HARMFUL",
+		isDebuff = true,
+	},
+	externals = {
+		containerKey = "externalContainer",
+		buttonsKey = "externalButtons",
+		filter = "HELPFUL",
+		isDebuff = false,
+		predicate = externalAuraPredicate,
+	},
+}
+
+function GF:LayoutAuras(self)
+	local st = getState(self)
+	if not st then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local ac = cfg and cfg.auras
+	if not ac or ac.enabled == false then return end
+
+	st._auraLayout = st._auraLayout or {}
+	st._auraLayoutKey = st._auraLayoutKey or {}
+	st._auraStyle = st._auraStyle or {}
+
+	local parent = st.barGroup or st.frame
+
+	for kindKey, meta in pairs(AURA_TYPE_META) do
+		local typeCfg = ac[kindKey] or {}
+		if typeCfg.enabled == false then
+			local container = st[meta.containerKey]
+			if container then container:Hide() end
+			hideAuraButtons(st[meta.buttonsKey], 1)
+			st._auraLayout[kindKey] = nil
+			st._auraLayoutKey[kindKey] = nil
+		else
+			local anchorPoint, growthX, growthY = resolveAuraGrowth(typeCfg.anchorPoint, typeCfg.growthX, typeCfg.growthY)
+			local size = tonumber(typeCfg.size) or 16
+			local spacing = tonumber(typeCfg.spacing) or 2
+			local perRow = tonumber(typeCfg.perRow) or tonumber(typeCfg.max) or 6
+			if perRow < 1 then perRow = 1 end
+			local maxCount = tonumber(typeCfg.max) or perRow
+			if maxCount < 0 then maxCount = 0 end
+			local x = tonumber(typeCfg.x) or 0
+			local y = tonumber(typeCfg.y) or 0
+
+			local key = anchorPoint .. "|" .. growthX .. "|" .. growthY .. "|" .. size .. "|" .. spacing .. "|" .. perRow .. "|" .. maxCount .. "|" .. x .. "|" .. y
+			local layout = st._auraLayout[kindKey] or {}
+			layout.anchorPoint = anchorPoint
+			layout.growthX = growthX
+			layout.growthY = growthY
+			layout.size = size
+			layout.spacing = spacing
+			layout.perRow = perRow
+			layout.maxCount = maxCount
+			layout.x = x
+			layout.y = y
+			layout.key = key
+			st._auraLayout[kindKey] = layout
+
+			if st._auraLayoutKey[kindKey] ~= key then
+				st._auraLayoutKey[kindKey] = key
+				local container = ensureAuraContainer(st, meta.containerKey)
+				if container then
+					container:ClearAllPoints()
+					container:SetPoint(anchorPoint, parent, anchorPoint, x, y)
+				end
+				local buttons = st[meta.buttonsKey]
+				if buttons and container then
+					for i, btn in ipairs(buttons) do
+						positionAuraButton(btn, container, anchorPoint, i, perRow, size, spacing, growthX, growthY)
+						btn._auraLayoutKey = key
+					end
+				end
+			end
+
+			local style = st._auraStyle[kindKey] or {}
+			style.size = size
+			style.padding = spacing
+			style.showTooltip = typeCfg.showTooltip ~= false
+			style.showCooldown = typeCfg.showCooldown ~= false
+			style.countFont = typeCfg.countFont
+			style.countFontSize = typeCfg.countFontSize
+			style.countFontOutline = typeCfg.countFontOutline
+			style.cooldownFontSize = typeCfg.cooldownFontSize
+			st._auraStyle[kindKey] = style
+		end
+	end
+end
+
+local function updateAuraType(self, unit, st, ac, kindKey)
+	local meta = AURA_TYPE_META[kindKey]
+	if not meta then return end
+	local typeCfg = ac and ac[kindKey] or {}
+	if typeCfg.enabled == false then
+		local container = st[meta.containerKey]
+		if container then container:Hide() end
+		hideAuraButtons(st[meta.buttonsKey], 1)
+		return
+	end
+
+	local layout = st._auraLayout and st._auraLayout[kindKey]
+	local style = st._auraStyle and st._auraStyle[kindKey]
+	if not (layout and style) then return end
+
+	local container = ensureAuraContainer(st, meta.containerKey)
+	if not container then return end
+	container:Show()
+
+	local buttons = st[meta.buttonsKey]
+	if not buttons then
+		buttons = {}
+		st[meta.buttonsKey] = buttons
+	end
+
+	local filter = meta.filter
+	local shown = 0
+	local maxCount = layout.maxCount or 0
+	local scanIndex = 1
+	while shown < maxCount do
+		local aura = C_UnitAuras.GetAuraDataByIndex(unit, scanIndex, filter)
+		if not aura then break end
+		scanIndex = scanIndex + 1
+		if meta.predicate and not meta.predicate(aura, unit) then
+			-- skip non-matching aura
+		else
+			shown = shown + 1
+			local btn = AuraUtil.ensureAuraButton(container, buttons, shown, style)
+			AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
+			if btn._auraLayoutKey ~= layout.key then
+				positionAuraButton(btn, container, layout.anchorPoint, shown, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
+				btn._auraLayoutKey = layout.key
+			end
+			btn:Show()
+		end
+	end
+
+	hideAuraButtons(buttons, shown + 1)
+end
+
+function GF:UpdateAuras(self, updateInfo)
 	local unit = getUnit(self)
 	local st = getState(self)
 	if not (unit and st and C_UnitAuras and AuraUtil) then return end
-	local cfg = getCfg(self._eqolGroupKind or "party")
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
-	if ac.enabled == false then
+	local wantsAuras = st._wantsAuras
+	if wantsAuras == nil then wantsAuras = (ac and ac.enabled ~= false and ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled))) or false end
+	if wantsAuras == false or ac.enabled == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
 		if st.externalContainer then st.externalContainer:Hide() end
@@ -826,89 +1085,11 @@ function GF:UpdateAuras(self)
 		return
 	end
 
-	local parent = st.barGroup or st.frame
+	if not st._auraLayout then GF:LayoutAuras(self) end
 
-	local function updateAuraType(kindKey, isDebuff, predicate)
-		local typeCfg = ac and ac[kindKey] or {}
-		if typeCfg.enabled == false then
-			if kindKey == "buff" then
-				if st.buffContainer then st.buffContainer:Hide() end
-				hideAuraButtons(st.buffButtons, 1)
-			elseif kindKey == "debuff" then
-				if st.debuffContainer then st.debuffContainer:Hide() end
-				hideAuraButtons(st.debuffButtons, 1)
-			else
-				if st.externalContainer then st.externalContainer:Hide() end
-				hideAuraButtons(st.externalButtons, 1)
-			end
-			return
-		end
-
-		local anchorPoint, growthX, growthY = resolveAuraGrowth(typeCfg.anchorPoint, typeCfg.growthX, typeCfg.growthY)
-		local size = tonumber(typeCfg.size) or 16
-		local spacing = tonumber(typeCfg.spacing) or 2
-		local perRow = tonumber(typeCfg.perRow) or tonumber(typeCfg.max) or 6
-		if perRow < 1 then perRow = 1 end
-		local maxCount = tonumber(typeCfg.max) or perRow
-		if maxCount < 0 then maxCount = 0 end
-
-		local containerKey = "buffContainer"
-		local buttonsKey = "buffButtons"
-		if kindKey == "debuff" then
-			containerKey = "debuffContainer"
-			buttonsKey = "debuffButtons"
-		elseif kindKey == "externals" then
-			containerKey = "externalContainer"
-			buttonsKey = "externalButtons"
-		end
-		local container = ensureAuraContainer(st, containerKey)
-		if not container then return end
-		container:ClearAllPoints()
-		container:SetPoint(anchorPoint, parent, anchorPoint, typeCfg.x or 0, typeCfg.y or 0)
-		container:Show()
-
-		local buttons = st[buttonsKey]
-		if not buttons then
-			buttons = {}
-			st[buttonsKey] = buttons
-		end
-
-		local filter = isDebuff and "HARMFUL" or "HELPFUL"
-		local shown = 0
-		local auraStyle = {
-			size = size,
-			padding = spacing,
-			showTooltip = typeCfg.showTooltip ~= false,
-			showCooldown = typeCfg.showCooldown ~= false,
-			countFont = typeCfg.countFont,
-			countFontSize = typeCfg.countFontSize,
-			countFontOutline = typeCfg.countFontOutline,
-			cooldownFontSize = typeCfg.cooldownFontSize,
-		}
-
-		local scanIndex = 1
-		while shown < maxCount do
-			local aura = C_UnitAuras.GetAuraDataByIndex(unit, scanIndex, filter)
-			if not aura then break end
-			scanIndex = scanIndex + 1
-			if predicate and not predicate(aura) then
-				-- skip non-matching aura
-			else
-				shown = shown + 1
-				local btn = AuraUtil.ensureAuraButton(container, buttons, shown, auraStyle)
-				btn:SetSize(size, size)
-				AuraUtil.applyAuraToButton(btn, aura, auraStyle, isDebuff, unit)
-				positionAuraButton(btn, container, anchorPoint, shown, perRow, size, spacing, growthX, growthY)
-				btn:Show()
-			end
-		end
-
-		hideAuraButtons(buttons, shown + 1)
-	end
-
-	updateAuraType("buff", false)
-	updateAuraType("debuff", true)
-	updateAuraType("externals", false, function(aura) return aura and aura.sourceUnit and aura.sourceUnit ~= unit end)
+	updateAuraType(self, unit, st, ac, "buff")
+	updateAuraType(self, unit, st, ac, "debuff")
+	updateAuraType(self, unit, st, ac, "externals")
 end
 
 function GF:UpdateName(self)
@@ -916,12 +1097,13 @@ function GF:UpdateName(self)
 	local st = getState(self)
 	local fs = st and (st.nameText or st.name)
 	if not (unit and st and fs) then return end
+	if st._wantsName == false then return end
 	if UnitExists and not UnitExists(unit) then
 		fs:SetText("")
 		return
 	end
 	local name = UnitName and UnitName(unit) or ""
-	local cfg = getCfg(self._eqolGroupKind or "party")
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local tc = cfg and cfg.text or {}
 	local maxChars = cfg and cfg.text and cfg.text.nameMaxChars
 	maxChars = tonumber(maxChars)
@@ -935,24 +1117,19 @@ function GF:UpdateName(self)
 
 	-- Name coloring (simple: class color for players, grey if offline)
 	local r, g, b, a = 1, 1, 1, 1
-	if tc.useClassColor ~= false and UnitIsPlayer and UnitIsPlayer(unit) and UnitClass then
-		local _, class = UnitClass(unit)
-		local cr, cg, cb, ca = getClassColor(class)
-		if cr then
-			r, g, b, a = cr, cg, cb, ca or 1
-		end
+	if tc.useClassColor ~= false and st._classR then
+		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	end
 	if UnitIsConnected and not UnitIsConnected(unit) then
 		r, g, b, a = 0.7, 0.7, 0.7, 1
 	end
-	local colorKey = tostring(r) .. "|" .. tostring(g) .. "|" .. tostring(b) .. "|" .. tostring(a)
-	if st._lastNameColor ~= colorKey then
-		st._lastNameColor = colorKey
+	if st._lastNameR ~= r or st._lastNameG ~= g or st._lastNameB ~= b or st._lastNameA ~= a then
+		st._lastNameR, st._lastNameG, st._lastNameB, st._lastNameA = r, g, b, a
 		if fs.SetTextColor then fs:SetTextColor(r, g, b, a) end
 	end
 end
 
-function GF:UpdateHealth(self)
+function GF:UpdateHealthValue(self)
 	local unit = getUnit(self)
 	local st = getState(self)
 	if not (unit and st and st.health) then return end
@@ -986,28 +1163,10 @@ function GF:UpdateHealth(self)
 		end
 	end
 
-	-- Simple coloring: class color for players, green fallback.
-	local r, g, b = 0.2, 1, 0.2
-	local cfg = getCfg(self._eqolGroupKind or "party")
-	local hc = cfg and cfg.health or {}
-	if hc.useClassColor == true and UnitIsPlayer and UnitIsPlayer(unit) and UnitClass then
-		local _, class = UnitClass(unit)
-		local cr, cg, cb = getClassColor(class)
-		if cr then
-			r, g, b = cr, cg, cb
-		end
-	end
-	if UnitIsConnected and not UnitIsConnected(unit) then
-		r, g, b = 0.5, 0.5, 0.5
-	end
-	local colorKey = tostring(r) .. "|" .. tostring(g) .. "|" .. tostring(b)
-	if st._lastHealthColor ~= colorKey then
-		st._lastHealthColor = colorKey
-		st.health:SetStatusBarColor(r, g, b, 1)
-	end
-
 	-- Optional: health percent on the right (kept simple but matches your text slots)
-	local showPct = cfg and cfg.text and cfg.text.showHealthPercent
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local showPct = st._wantsHealthPct
+	if showPct == nil then showPct = cfg and cfg.text and cfg.text.showHealthPercent end
 	if st.healthTextRight then
 		local canShowPct = false
 		if showPct then
@@ -1016,33 +1175,65 @@ function GF:UpdateHealth(self)
 			end
 		end
 		if canShowPct then
-			local pct = floor((cur / maxv) * 100 + 0.5)
-			local pctText = pct .. "%"
-			if st._lastHealthPct ~= pctText then
-				st._lastHealthPct = pctText
-				st.healthTextRight:SetText(pctText)
+			local pct = floor((cur * 100) / maxv + 0.5)
+			if st._lastHealthPctVal ~= pct then
+				st._lastHealthPctVal = pct
+				st.healthTextRight:SetText(pct .. "%")
 			end
 		else
-			if st._lastHealthPct ~= "" then
-				st._lastHealthPct = ""
+			if st._lastHealthPctVal ~= nil then
+				st._lastHealthPctVal = nil
 				st.healthTextRight:SetText("")
 			end
 		end
 	end
 end
 
-function GF:UpdatePower(self)
+function GF:UpdateHealthStyle(self)
 	local unit = getUnit(self)
 	local st = getState(self)
-	if not (unit and st and st.power) then return end
-	if UnitExists and not UnitExists(unit) then
-		st.power:SetMinMaxValues(0, 1)
-		st.power:SetValue(0)
-		return
+	if not (unit and st and st.health) then return end
+	if UnitExists and not UnitExists(unit) then return end
+
+	-- Simple coloring: class color for players, green fallback.
+	local r, g, b = 0.2, 1, 0.2
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local hc = cfg and cfg.health or {}
+	if hc.useClassColor == true and st._classR then
+		r, g, b = st._classR, st._classG, st._classB
 	end
+	if UnitIsConnected and not UnitIsConnected(unit) then
+		r, g, b = 0.5, 0.5, 0.5
+	end
+	if st._lastHealthR ~= r or st._lastHealthG ~= g or st._lastHealthB ~= b then
+		st._lastHealthR, st._lastHealthG, st._lastHealthB = r, g, b
+		st.health:SetStatusBarColor(r, g, b, 1)
+	end
+end
+
+function GF:UpdateHealth(self)
+	GF:UpdateHealthStyle(self)
+	GF:UpdateHealthValue(self)
+end
+
+function GF:UpdatePowerVisibility(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.power) then return false end
 	local kind = self._eqolGroupKind or "party"
-	local cfg = getCfg(kind)
+	local cfg = self._eqolCfg or getCfg(kind)
 	local pcfg = cfg and cfg.power or {}
+	if st._wantsPower == false then
+		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextCenter then st.powerTextCenter:SetText("") end
+		if st.powerTextRight then st.powerTextRight:SetText("") end
+		if st.power:IsShown() then st.power:Hide() end
+		if not st._powerHidden then
+			st._powerHidden = true
+			GF:LayoutButton(self)
+		end
+		return false
+	end
 	local showPower = shouldShowPowerForRole(pcfg, unit) and shouldShowPowerForSpec(pcfg)
 	if not showPower then
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
@@ -1053,15 +1244,31 @@ function GF:UpdatePower(self)
 			st._powerHidden = true
 			GF:LayoutButton(self)
 		end
-		return
+		return false
 	end
 	if st._powerHidden then
 		st._powerHidden = nil
 		GF:LayoutButton(self)
 	end
 	if not st.power:IsShown() then st.power:Show() end
+	return true
+end
 
-	local powerType, powerToken = UnitPowerType and UnitPowerType(unit)
+function GF:UpdatePowerValue(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.power) then return end
+	if st._wantsPower == false or st._powerHidden then return end
+	if UnitExists and not UnitExists(unit) then
+		st.power:SetMinMaxValues(0, 1)
+		st.power:SetValue(0)
+		return
+	end
+	local powerType = st._powerType
+	if powerType == nil and UnitPowerType then
+		powerType, st._powerToken = UnitPowerType(unit)
+		st._powerType = powerType
+	end
 	local cur = UnitPower and UnitPower(unit, powerType)
 	if cur == nil then cur = 0 end
 	local maxv = UnitPowerMax and UnitPowerMax(unit, powerType)
@@ -1087,6 +1294,43 @@ function GF:UpdatePower(self)
 		end
 	end
 
+	-- Optional: power percent on the right
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local showPct = st._wantsPowerPct
+	if showPct == nil then showPct = cfg and cfg.text and cfg.text.showPowerPercent end
+	if st.powerTextRight then
+		local canShowPct = false
+		if showPct then
+			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
+				if maxv and maxv > 0 then canShowPct = true end
+			end
+		end
+		if canShowPct then
+			local pct = floor((cur * 100) / maxv + 0.5)
+			if st._lastPowerPctVal ~= pct then
+				st._lastPowerPctVal = pct
+				st.powerTextRight:SetText(pct .. "%")
+			end
+		else
+			if st._lastPowerPctVal ~= nil then
+				st._lastPowerPctVal = nil
+				st.powerTextRight:SetText("")
+			end
+		end
+	end
+end
+
+function GF:UpdatePowerStyle(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.power) then return end
+	if st._wantsPower == false or st._powerHidden then return end
+	if not UnitPowerType then return end
+	local powerType, powerToken = UnitPowerType(unit)
+	st._powerType, st._powerToken = powerType, powerToken
+
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local pcfg = cfg and cfg.power or {}
 	local powerKey = powerToken or powerType or "MANA"
 	-- Apply special atlas textures for default texture keys (mirrors UF.lua behavior)
 	if UFHelper and UFHelper.configureSpecialTexture then
@@ -1115,35 +1359,17 @@ function GF:UpdatePower(self)
 	if not pr then
 		pr, pg, pb, pa = 0, 0.5, 1, 1
 	end
-	local colorKey = tostring(pr) .. "|" .. tostring(pg) .. "|" .. tostring(pb) .. "|" .. tostring(pa)
-	if st._lastPowerColor ~= colorKey then
-		st._lastPowerColor = colorKey
+	local alpha = pa or 1
+	if st._lastPowerR ~= pr or st._lastPowerG ~= pg or st._lastPowerB ~= pb or st._lastPowerA ~= alpha then
+		st._lastPowerR, st._lastPowerG, st._lastPowerB, st._lastPowerA = pr, pg, pb, alpha
 		st.power:SetStatusBarColor(pr, pg, pb, pa or 1)
 	end
+end
 
-	-- Optional: power percent on the right
-	local showPct = cfg and cfg.text and cfg.text.showPowerPercent
-	if st.powerTextRight then
-		local canShowPct = false
-		if showPct then
-			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
-				if maxv and maxv > 0 then canShowPct = true end
-			end
-		end
-		if canShowPct then
-			local pct = floor((cur / maxv) * 100 + 0.5)
-			local pctText = pct .. "%"
-			if st._lastPowerPct ~= pctText then
-				st._lastPowerPct = pctText
-				st.powerTextRight:SetText(pctText)
-			end
-		else
-			if st._lastPowerPct ~= "" then
-				st._lastPowerPct = ""
-				st.powerTextRight:SetText("")
-			end
-		end
-	end
+function GF:UpdatePower(self)
+	if not GF:UpdatePowerVisibility(self) then return end
+	GF:UpdatePowerStyle(self)
+	GF:UpdatePowerValue(self)
 end
 
 function GF:UpdateAll(self)
@@ -1220,52 +1446,113 @@ end
 function GF:UnitButton_SetUnit(self, unit)
 	if not self then return end
 	self.unit = unit
+	GF:CacheUnitStatic(self)
 
-	-- Re-register unit events for the new unit.
-	if self.UnregisterAllEvents then self:UnregisterAllEvents() end
-
-	-- Important: some events should *not* be unit-filtered, but for the scaffold
-	-- we keep it simple and just register a few relevant unit events.
-	self:RegisterUnitEvent("UNIT_HEALTH", unit)
-	self:RegisterUnitEvent("UNIT_MAXHEALTH", unit)
-	self:RegisterUnitEvent("UNIT_POWER_UPDATE", unit)
-	self:RegisterUnitEvent("UNIT_MAXPOWER", unit)
-	self:RegisterUnitEvent("UNIT_DISPLAYPOWER", unit)
-	self:RegisterUnitEvent("UNIT_NAME_UPDATE", unit)
-	self:RegisterUnitEvent("UNIT_CONNECTION", unit)
-	self:RegisterUnitEvent("UNIT_AURA", unit)
+	GF:UnitButton_RegisterUnitEvents(self, unit)
 
 	GF:UpdateAll(self)
+end
+
+function GF:UnitButton_ClearUnit(self)
+	if not self then return end
+	self.unit = nil
+	auraUpdateQueue[self] = nil
+	if self._eqolRegEv then
+		for ev in pairs(self._eqolRegEv) do
+			if self.UnregisterEvent then self:UnregisterEvent(ev) end
+			self._eqolRegEv[ev] = nil
+		end
+	end
+	local st = self._eqolUFState
+	if st then
+		st._guid = nil
+		st._unitToken = nil
+		st._class = nil
+		st._powerType = nil
+		st._powerToken = nil
+		st._classR, st._classG, st._classB, st._classA = nil, nil, nil, nil
+	end
+end
+
+function GF:UnitButton_RegisterUnitEvents(self, unit)
+	if not (self and unit) then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	updateButtonConfig(self, cfg)
+
+	self._eqolRegEv = self._eqolRegEv or {}
+	for ev in pairs(self._eqolRegEv) do
+		if self.UnregisterEvent then self:UnregisterEvent(ev) end
+		self._eqolRegEv[ev] = nil
+	end
+
+	local function reg(ev)
+		self:RegisterUnitEvent(ev, unit)
+		self._eqolRegEv[ev] = true
+	end
+
+	reg("UNIT_CONNECTION")
+	reg("UNIT_HEALTH")
+	reg("UNIT_MAXHEALTH")
+
+	local powerH = cfg and cfg.powerHeight or 0
+	local wantsPower = self._eqolUFState and self._eqolUFState._wantsPower
+	if wantsPower == nil then wantsPower = true end
+	if powerH and powerH > 0 and wantsPower then
+		reg("UNIT_POWER_UPDATE")
+		reg("UNIT_MAXPOWER")
+		reg("UNIT_DISPLAYPOWER")
+	end
+
+	reg("UNIT_NAME_UPDATE")
+
+	if self._eqolUFState and self._eqolUFState._wantsAuras then reg("UNIT_AURA") end
 end
 
 function GF.UnitButton_OnAttributeChanged(self, name, value)
 	if name ~= "unit" then return end
 	if value == nil or value == "" then
 		-- Unit cleared
-		self.unit = nil
+		GF:UnitButton_ClearUnit(self)
 		GF:UpdateAll(self)
 		return
 	end
+	if self.unit == value then return end
 	GF:UnitButton_SetUnit(self, value)
 end
 
-function GF.UnitButton_OnEvent(self, event, arg1)
-	if not isFeatureEnabled() then return end
-	-- If we're using the non-RegisterUnitEvent fallback, filter by unit.
-	local unit = getUnit(self)
-	if arg1 and unit and arg1 ~= unit then return end
+local function dispatchUnitHealth(btn) GF:UpdateHealthValue(btn) end
+local function dispatchUnitPower(btn) GF:UpdatePowerValue(btn) end
+local function dispatchUnitDisplayPower(btn) GF:UpdatePower(btn) end
+local function dispatchUnitName(btn)
+	GF:CacheUnitStatic(btn)
+	GF:UpdateName(btn)
+end
+local function dispatchUnitConnection(btn)
+	GF:UpdateHealthStyle(btn)
+	GF:UpdateHealthValue(btn)
+	GF:UpdatePowerValue(btn)
+	GF:UpdateName(btn)
+end
+local function dispatchUnitAura(btn, updateInfo) GF:RequestAuraUpdate(btn, updateInfo) end
 
-	if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
-		GF:UpdateHealth(self)
-	elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
-		GF:UpdatePower(self)
-	elseif event == "UNIT_NAME_UPDATE" then
-		GF:UpdateName(self)
-	elseif event == "UNIT_CONNECTION" then
-		GF:UpdateAll(self)
-	elseif event == "UNIT_AURA" then
-		GF:UpdateAuras(self)
-	end
+local UNIT_DISPATCH = {
+	UNIT_HEALTH = dispatchUnitHealth,
+	UNIT_MAXHEALTH = dispatchUnitHealth,
+	UNIT_POWER_UPDATE = dispatchUnitPower,
+	UNIT_MAXPOWER = dispatchUnitPower,
+	UNIT_DISPLAYPOWER = dispatchUnitDisplayPower,
+	UNIT_NAME_UPDATE = dispatchUnitName,
+	UNIT_CONNECTION = dispatchUnitConnection,
+	UNIT_AURA = dispatchUnitAura,
+}
+
+function GF.UnitButton_OnEvent(self, event, unit, ...)
+	if not isFeatureEnabled() then return end
+	local u = getUnit(self)
+	if not u or (unit and unit ~= u) then return end
+
+	local fn = UNIT_DISPATCH[event]
+	if fn then fn(self, ...) end
 end
 
 function GF.UnitButton_OnEnter(self)
@@ -1425,7 +1712,11 @@ function GF:RefreshPowerVisibility()
 	if not isFeatureEnabled() then return end
 	for _, header in pairs(GF.headers or {}) do
 		forEachChild(header, function(child)
-			if child then GF:UpdatePower(child) end
+			if child then
+				updateButtonConfig(child, child._eqolCfg)
+				if child.unit then GF:UnitButton_RegisterUnitEvents(child, child.unit) end
+				GF:UpdatePower(child)
+			end
 		end)
 	end
 end
@@ -1523,6 +1814,10 @@ function GF:ApplyHeaderAttributes(kind)
 	-- Also apply size to existing children.
 	forEachChild(header, function(child)
 		child._eqolGroupKind = kind
+		child._eqolCfg = cfg
+		updateButtonConfig(child, cfg)
+		GF:LayoutAuras(child)
+		if child.unit then GF:UnitButton_RegisterUnitEvents(child, child.unit) end
 		child:SetSize(w, h)
 		if child._eqolUFState then
 			GF:LayoutButton(child)

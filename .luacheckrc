@@ -39,6 +39,7 @@ exclude_files = {
 	"News/**",
 	"scripts/**",
 	"EnhanceQoL/libs/LibButtonGlow-1.0/LibButtonGlow-1.0.lua",
+	"EnhanceQoL/Modules/Aura/UF_GroupFrames.lua",
 }
 ignore = {
 	"11./SLASH_.*", -- Setting an undefined (Slash handler) global variable
@@ -578,6 +579,7 @@ globals = {
 	"C_AdventureJournal",
 	"C_AdventureJournal.ActivateEntry",
 	"C_AdventureJournal.CanBeShown",
+	"QuestScrollFrame",
 	"C_AdventureJournal.GetNumAvailableSuggestions",
 	"C_AdventureJournal.GetPrimaryOffset",
 	"C_AdventureJournal.GetReward",
