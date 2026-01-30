@@ -5439,12 +5439,31 @@ end
 
 local function registerCooldownPanelsSlashCommand()
 	if not SlashCmdList then return end
-	local command = "/ecd"
-	if isSlashCommandRegistered(command) then
-		local owned = SlashCmdList["EQOLCP"] and type(_G.SLASH_EQOLCP1) == "string" and _G.SLASH_EQOLCP1:lower() == command
-		if not owned then return end
+	local commands = { "/ecd", "/cpe" }
+	local assigned = false
+	local slot = 1
+	for _, command in ipairs(commands) do
+		local lower = command:lower()
+		if isSlashCommandRegistered(lower) then
+			local owned = false
+			if SlashCmdList["EQOLCP"] then
+				for i = 1, 5 do
+					local key = _G["SLASH_EQOLCP" .. i]
+					if type(key) == "string" and key:lower() == lower then
+						owned = true
+						break
+					end
+				end
+			end
+			if not owned then command = nil end
+		end
+		if command then
+			_G["SLASH_EQOLCP" .. slot] = lower
+			slot = slot + 1
+			assigned = true
+		end
 	end
-	_G.SLASH_EQOLCP1 = command
+	if not assigned then return end
 	SlashCmdList["EQOLCP"] = function()
 		local panels = addon.Aura and addon.Aura.CooldownPanels
 		if not panels then return end
