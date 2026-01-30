@@ -234,6 +234,41 @@ local function GetNPCIDFromGUID(guid)
 	return nil
 end
 
+local function FormatUnitName(unit)
+	if not unit then return nil end
+	if UnitIsUnit and UnitIsUnit(unit, "player") then return "<YOU>" end
+	local name, realm = UnitName(unit)
+	if not name then return nil end
+	if issecretvalue and issecretvalue(name) then return nil end
+	if realm and realm ~= "" then name = name .. "-" .. realm end
+	return name
+end
+
+local function GetUnitMountInfo(unit)
+	if not unit or not UnitIsPlayer or not UnitIsPlayer(unit) then return nil end
+	if not (C_UnitAuras and C_UnitAuras.GetUnitAuras) then return nil end
+	if not (C_MountJournal and C_MountJournal.GetMountFromSpell and C_MountJournal.GetMountInfoByID) then return nil end
+	if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then return nil end
+	local auras = C_UnitAuras.GetUnitAuras(unit, "HELPFUL")
+	if type(auras) ~= "table" then return nil end
+	for i = 1, #auras do
+		local aura = auras[i]
+		local spellID = aura and aura.spellId
+		if spellID and (not issecretvalue or not issecretvalue(spellID)) then
+			local mountID = C_MountJournal.GetMountFromSpell(spellID)
+			if mountID then
+				local name, _, icon = C_MountJournal.GetMountInfoByID(mountID)
+				if not name or name == "" then
+					if C_Spell and C_Spell.GetSpellName then name = C_Spell.GetSpellName(spellID) end
+					if not name and GetSpellInfo then name = GetSpellInfo(spellID) end
+				end
+				if name and name ~= "" then return name, icon end
+			end
+		end
+	end
+	return nil
+end
+
 local function fmtNum(n)
 	if BreakUpLargeNumbers then
 		return BreakUpLargeNumbers(n or 0)
@@ -465,6 +500,23 @@ local function checkAdditionalTooltip(tooltip)
 			end
 		end
 	end
+
+	if unit and addon.db["TooltipUnitShowTargetOfTarget"] then
+		local targetUnit = unit .. "target"
+		if UnitExists(targetUnit) then
+			local targetName = FormatUnitName(targetUnit)
+			if targetName then tooltip:AddDoubleLine(L["TooltipTargeting"] or "Targeting", targetName) end
+		end
+	end
+
+	if unit and addon.db["TooltipUnitShowMount"] and UnitIsPlayer(unit) then
+		local mountName, mountIcon = GetUnitMountInfo(unit)
+		if mountName then
+			if mountIcon then mountName = ("|T%d:16:16:0:0|t %s"):format(mountIcon, mountName) end
+			tooltip:AddDoubleLine(L["TooltipMount"] or "Mount", mountName)
+		end
+	end
+
 	local showMythic = addon.db["TooltipShowMythicScore"] and unit and UnitExists(unit) and UnitCanAttack("player", unit) == false and addon.Tooltip.variables.maxLevel == UnitLevel(unit)
 	if showMythic and addon.db["TooltipMythicScoreRequireModifier"] and not IsConfiguredModifierDown() then showMythic = false end
 	if showMythic then
@@ -930,7 +982,7 @@ if TooltipDataProcessor then
 		if not addon.db then return end
 		if not data or not data.type then return end
 
-		if addon.functions.isRestrictedContent() then return end
+		local restricted = addon.functions.isRestrictedContent and addon.functions.isRestrictedContent()
 		local id, name, _, timeLimit, kind
 
 		if issecretvalue and issecretvalue(data.type) then
@@ -951,6 +1003,8 @@ if TooltipDataProcessor then
 		else
 			kind = addon.Tooltip.variables.kindsByID[tonumber(data.type)]
 		end
+		if restricted and kind ~= "unit" then return end
+
 		if kind == "spell" then
 			id = data.id
 			name = L["SpellID"]

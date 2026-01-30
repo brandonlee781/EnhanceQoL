@@ -39,6 +39,8 @@ function addon.Tooltip.functions.InitDB()
 	-- Gate spec/ilvl lines behind a modifier (uses same modifier as Mythic+ when enabled)
 	init("TooltipUnitInspectRequireModifier", false)
 	init("TooltipUnitHideRightClickInstruction", false)
+	init("TooltipUnitShowTargetOfTarget", false)
+	init("TooltipUnitShowMount", false)
 
 	-- Spell
 	init("TooltipSpellHideType", 1)

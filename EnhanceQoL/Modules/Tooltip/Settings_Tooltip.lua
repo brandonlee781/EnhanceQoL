@@ -401,6 +401,22 @@ data = {
 		parentSection = expandable,
 	},
 	{
+		var = "TooltipUnitShowTargetOfTarget",
+		text = L["TooltipShowTargetOfTarget"],
+		func = function(v) addon.db["TooltipUnitShowTargetOfTarget"] = v end,
+		default = false,
+		type = Settings.VarType.Boolean,
+		parentSection = expandable,
+	},
+	{
+		var = "TooltipUnitShowMount",
+		text = L["TooltipShowMount"],
+		func = function(v) addon.db["TooltipUnitShowMount"] = v end,
+		default = false,
+		type = Settings.VarType.Boolean,
+		parentSection = expandable,
+	},
+	{
 		var = "TooltipShowGuildRank",
 		text = L["TooltipShowGuildRank"],
 		func = function(v) addon.db["TooltipShowGuildRank"] = v end,
