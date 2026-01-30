@@ -9,6 +9,7 @@
 - Cooldown Panels: Option to enable charge duration show
 - Cooldown Panels: Added anchor points for ElvUI, Unhalted Unit Frames, and more MSUF frames (ToT/Focus/Pet/Boss).
 - Cooldown Panels: Edit Mode panel filters (only show panels of your class) and Copy Settings dropdown to clone layout/anchor settings (keeps entries + enabled state untouched).
+- UF Plus: Focus frame aura icons are now supported and configurable.
 - Cooldown Panels: New `/cpe` slash command alias (opens the Cooldown Panel editor).
 
 ### 🔁 Changed

@@ -494,6 +494,9 @@ local states = {}
 local targetAuras = {}
 local targetAuraOrder = {}
 local targetAuraIndexById = {}
+local focusAuras = {}
+local focusAuraOrder = {}
+local focusAuraIndexById = {}
 local playerAuras = {}
 local playerAuraOrder = {}
 local playerAuraIndexById = {}
@@ -571,6 +574,7 @@ function AuraUtil.getAuraTables(unit)
 	unit = unit or "target"
 	if unit == UNIT.PLAYER or unit == "player" then return playerAuras, playerAuraOrder, playerAuraIndexById end
 	if unit == UNIT.TARGET or unit == "target" then return targetAuras, targetAuraOrder, targetAuraIndexById end
+	if unit == UNIT.FOCUS or unit == "focus" then return focusAuras, focusAuraOrder, focusAuraIndexById end
 	if not isBossUnit(unit) or unit == "boss" then return nil end
 	local state = bossAuraStates[unit]
 	if not state then
@@ -3977,7 +3981,7 @@ local function layoutFrame(cfg, unit)
 	end
 	UFHelper.applyHighlightStyle(st, st._highlightCfg)
 
-	if (unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit)) and st.auraContainer then
+	if (unit == UNIT.PLAYER or unit == "target" or unit == UNIT.FOCUS or isBossUnit(unit)) and st.auraContainer then
 		st.auraContainer:ClearAllPoints()
 		local acfg = cfg.auraIcons or def.auraIcons or defaults.target.auraIcons or {}
 		local anchor = acfg.anchor or "BOTTOM"
@@ -4186,7 +4190,7 @@ local function ensureFrames(unit)
 		ensureRestLoop(st)
 	end
 
-	if unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit) then
+	if unit == UNIT.PLAYER or unit == "target" or unit == UNIT.FOCUS or isBossUnit(unit) then
 		st.auraContainer = CreateFrame("Frame", nil, st.frame)
 		st.debuffContainer = CreateFrame("Frame", nil, st.frame)
 		st.auraButtons = {}
@@ -4390,7 +4394,7 @@ local function applyConfig(unit)
 			ClassResourceUtil.restoreClassResourceFrames()
 			TotemFrameUtil.restoreTotemFrame()
 		end
-		if unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit) then AuraUtil.resetTargetAuras(unit) end
+		if unit == UNIT.PLAYER or unit == "target" or unit == UNIT.FOCUS or isBossUnit(unit) then AuraUtil.resetTargetAuras(unit) end
 		if unit == UNIT.PLAYER then updateRestingIndicator(cfg) end
 		if not isBossUnit(unit) then applyVisibilityRules(unit) end
 		if unit == UNIT.PLAYER and addon.functions and addon.functions.ApplyCastBarVisibility then addon.functions.ApplyCastBarVisibility() end
@@ -4461,6 +4465,8 @@ local function applyConfig(unit)
 		else
 			AuraUtil.updateTargetAuraIcons(1, unit)
 		end
+	elseif unit == UNIT.FOCUS and states[unit] and states[unit].auraContainer then
+		AuraUtil.fullScanTargetAuras(unit)
 	elseif unit == UNIT.PLAYER and states[unit] and states[unit].auraContainer then
 		AuraUtil.fullScanTargetAuras(unit)
 	elseif isBossUnit(unit) and states[unit] and states[unit].auraContainer then
@@ -5015,7 +5021,9 @@ local function updateFocusFrame(cfg, forceApply)
 		if st then
 			if st.barGroup then st.barGroup:Hide() end
 			if st.status then st.status:Hide() end
+			if st.auraContainer then AuraUtil.hideAuraContainers(st) end
 		end
+		AuraUtil.resetTargetAuras(UNIT.FOCUS)
 		updatePortrait(cfg, UNIT.FOCUS)
 		applyVisibilityRules(UNIT.FOCUS)
 		return
@@ -5045,13 +5053,16 @@ local function updateFocusFrame(cfg, forceApply)
 			updatePower(cfg, UNIT.FOCUS)
 			if st.castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			checkRaidTargetIcon(UNIT.FOCUS, st)
+			if st.auraContainer then AuraUtil.fullScanTargetAuras(UNIT.FOCUS) end
 		end
 	else
 		if st then
 			if st.barGroup then st.barGroup:Hide() end
 			if st.status then st.status:Hide() end
 			if st.castBar then stopCast(UNIT.FOCUS) end
+			if st.auraContainer then AuraUtil.hideAuraContainers(st) end
 		end
+		AuraUtil.resetTargetAuras(UNIT.FOCUS)
 	end
 	checkRaidTargetIcon(UNIT.FOCUS, st)
 	UFHelper.updatePvPIndicator(st, UNIT.FOCUS, cfg, defaultsFor(UNIT.FOCUS), not forceApply)
@@ -5198,7 +5209,7 @@ local function onEvent(self, event, unit, ...)
 		UFHelper.updatePvPIndicator(states[UNIT.TARGET], UNIT.TARGET, targetCfg, defaultsFor(UNIT.TARGET), true)
 		UFHelper.updateRoleIndicator(states[UNIT.TARGET], UNIT.TARGET, targetCfg, defaultsFor(UNIT.TARGET), true)
 		updateUnitStatusIndicator(totCfg, UNIT.TARGET_TARGET)
-	elseif event == "UNIT_AURA" and (unit == "target" or unit == UNIT.PLAYER or isBossUnit(unit)) then
+	elseif event == "UNIT_AURA" and (unit == "target" or unit == UNIT.PLAYER or unit == UNIT.FOCUS or isBossUnit(unit)) then
 		local cfg = getCfg(unit)
 		if not cfg or cfg.enabled == false then return end
 		local def = defaultsFor(unit)
@@ -5583,6 +5594,7 @@ local function ensureEventHandling()
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if ensureDB("target").enabled then AuraUtil.fullScanTargetAuras(UNIT.TARGET) end
+				if ensureDB(UNIT.FOCUS).enabled then AuraUtil.fullScanTargetAuras(UNIT.FOCUS) end
 				if states[UNIT.PLAYER] and states[UNIT.PLAYER].castBar then setCastInfoFromUnit(UNIT.PLAYER) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end

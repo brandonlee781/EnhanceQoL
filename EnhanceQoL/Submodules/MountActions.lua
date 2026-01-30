@@ -10,6 +10,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale(parentAddonName)
 
 local MountActions = addon.MountActions or {}
 addon.MountActions = MountActions
+local issecretvalue = _G.issecretvalue
 
 local RANDOM_FAVORITE_SPELL_ID = 150544
 local REPAIR_MOUNT_SPELLS = { 457485, 122708, 61425, 61447 }
@@ -117,6 +118,7 @@ end
 local function getMountedTargetSpellID()
 	if not UnitExists("target") then return nil end
 	if not C_MountJournal or not C_MountJournal.GetMountFromSpell then return nil end
+	if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then return nil end
 
 	if C_UnitAuras and C_UnitAuras.GetUnitAuras then
 		local auras = C_UnitAuras.GetUnitAuras("target", "HELPFUL")
@@ -124,6 +126,7 @@ local function getMountedTargetSpellID()
 			for i = 1, #auras do
 				local aura = auras[i]
 				local spellID = aura and aura.spellId
+				if issecretvalue and issecretvalue(spellID) then spellID = nil end
 				if spellID and C_MountJournal.GetMountFromSpell(spellID) then return spellID end
 			end
 		end
