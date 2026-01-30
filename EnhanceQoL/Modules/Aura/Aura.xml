@@ -9,6 +9,7 @@
 	<Script file="UF.lua" />
 	<!--@debug@-->
 	<Include file="UF_GroupFrames.xml" />
+	<Script file="UF_GroupFrames_Helper.lua" />
 	<Script file="UF_GroupFrames.lua" />
 	<!--@end-debug@-->
 	<Script file="ShamanMaelstromWeaponBar.lua" />
