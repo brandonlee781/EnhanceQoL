@@ -363,6 +363,34 @@ end
 
 local function textModeUsesPercent(mode) return type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil end
 
+local function setTextSlot(st, fs, cacheKey, mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+	if not (st and fs) then return end
+	local last = st[cacheKey]
+	if issecretvalue and issecretvalue(last) then last = nil end
+	if mode == "NONE" then
+		if last ~= "" then
+			st[cacheKey] = ""
+			fs:SetText("")
+		end
+		return
+	end
+	local text
+	if UFHelper and UFHelper.formatText then
+		text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+	else
+		text = tostring(cur or 0)
+	end
+	if issecretvalue and issecretvalue(text) then
+		fs:SetText(text)
+		st[cacheKey] = nil
+		return
+	end
+	if last ~= text then
+		st[cacheKey] = text
+		fs:SetText(text)
+	end
+end
+
 local function normalizeTextMode(value)
 	if value == "CURPERCENTDASH" then return "CURPERCENT" end
 	return value
@@ -989,6 +1017,19 @@ local function getState(self)
 		self._eqolUFState = st
 	end
 	return st
+end
+
+function GF:UpdateAbsorbCache(self, which)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st) then return end
+	if UnitExists and not UnitExists(unit) then
+		st._absorbAmount = 0
+		st._healAbsorbAmount = 0
+		return
+	end
+	if which == nil or which == "absorb" then st._absorbAmount = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0 end
+	if which == nil or which == "heal" then st._healAbsorbAmount = UnitGetTotalHealAbsorbs and UnitGetTotalHealAbsorbs(unit) or 0 end
 end
 
 local function updateButtonConfig(self, cfg)
@@ -1976,6 +2017,31 @@ local function updateAuraType(self, unit, st, ac, kindKey)
 	hideAuraButtons(buttons, shown + 1)
 end
 
+local function classifyAuraUpdate(updateInfo)
+	if not updateInfo or updateInfo.isFullUpdate then return true, true end
+	local helpful, harmful = false, false
+	local function scan(list)
+		if type(list) ~= "table" then return end
+		for _, aura in ipairs(list) do
+			if aura then
+				if aura.isHelpful then helpful = true end
+				if aura.isHarmful then harmful = true end
+				if helpful and harmful then return end
+			end
+		end
+	end
+	scan(updateInfo.addedAuras)
+	scan(updateInfo.updatedAuras)
+	local removed = updateInfo.removedAuraInstanceIDs
+	if type(removed) == "table" and #removed > 0 then
+		helpful, harmful = true, true
+	end
+	if not helpful and not harmful then
+		helpful, harmful = true, true
+	end
+	return helpful, harmful
+end
+
 function GF:UpdateAuras(self, updateInfo)
 	local st = getState(self)
 	if not (st and AuraUtil) then return end
@@ -2004,9 +2070,12 @@ function GF:UpdateAuras(self, updateInfo)
 
 	if not st._auraLayout then GF:LayoutAuras(self) end
 
-	updateAuraType(self, unit, st, ac, "buff")
-	updateAuraType(self, unit, st, ac, "debuff")
-	updateAuraType(self, unit, st, ac, "externals")
+	local needsHelpful, needsHarmful = classifyAuraUpdate(updateInfo)
+	if needsHelpful then
+		updateAuraType(self, unit, st, ac, "buff")
+		updateAuraType(self, unit, st, ac, "externals")
+	end
+	if needsHarmful then updateAuraType(self, unit, st, ac, "debuff") end
 end
 
 function GF:UpdateSampleAuras(self)
@@ -2239,7 +2308,8 @@ function GF:UpdateHealthValue(self)
 	local sampleMax = maxForValue
 	if (sampleAbsorb or sampleHealAbsorb) and maxIsSecret then sampleMax = EDIT_MODE_SAMPLE_MAX end
 	if absorbEnabled and st.absorb then
-		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
+		local abs = st._absorbAmount
+		if abs == nil then abs = 0 end
 		local absSecret = issecretvalue and issecretvalue(abs)
 		local absValue = abs
 		if sampleAbsorb then
@@ -2281,7 +2351,8 @@ function GF:UpdateHealthValue(self)
 	end
 
 	if healAbsorbEnabled and st.healAbsorb then
-		local healAbs = UnitGetTotalHealAbsorbs and UnitGetTotalHealAbsorbs(unit) or 0
+		local healAbs = st._healAbsorbAmount
+		if healAbs == nil then healAbs = 0 end
 		local healSecret = issecretvalue and issecretvalue(healAbs)
 		local healValue = healAbs
 		if sampleHealAbsorb then
@@ -2357,36 +2428,9 @@ function GF:UpdateHealthValue(self)
 			if UFHelper and UFHelper.textModeUsesLevel then
 				if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
 			end
-			local function setHealthText(fs, cacheKey, mode)
-				if not fs then return end
-				local last = st[cacheKey]
-				if issecretvalue and issecretvalue(last) then last = nil end
-				if mode == "NONE" then
-					if last ~= "" then
-						st[cacheKey] = ""
-						fs:SetText("")
-					end
-					return
-				end
-				local text = ""
-				if UFHelper and UFHelper.formatText then
-					text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
-				else
-					text = tostring(cur or 0)
-				end
-				if issecretvalue and issecretvalue(text) then
-					fs:SetText(text)
-					st[cacheKey] = nil
-					return
-				end
-				if last ~= text then
-					st[cacheKey] = text
-					fs:SetText(text)
-				end
-			end
-			setHealthText(st.healthTextLeft, "_lastHealthTextLeft", leftMode)
-			setHealthText(st.healthTextCenter, "_lastHealthTextCenter", centerMode)
-			setHealthText(st.healthTextRight, "_lastHealthTextRight", rightMode)
+			setTextSlot(st, st.healthTextLeft, "_lastHealthTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+			setTextSlot(st, st.healthTextCenter, "_lastHealthTextCenter", centerMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+			setTextSlot(st, st.healthTextRight, "_lastHealthTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
 		end
 	elseif st.healthTextLeft or st.healthTextCenter or st.healthTextRight then
 		if st.healthTextLeft then st.healthTextLeft:SetText("") end
@@ -2582,36 +2626,9 @@ function GF:UpdatePowerValue(self)
 				if UFHelper and UFHelper.textModeUsesLevel then
 					if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
 				end
-				local function setPowerText(fs, cacheKey, mode)
-					if not fs then return end
-					local last = st[cacheKey]
-					if issecretvalue and issecretvalue(last) then last = nil end
-					if mode == "NONE" then
-						if last ~= "" then
-							st[cacheKey] = ""
-							fs:SetText("")
-						end
-						return
-					end
-					local text = ""
-					if UFHelper and UFHelper.formatText then
-						text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
-					else
-						text = tostring(cur or 0)
-					end
-					if issecretvalue and issecretvalue(text) then
-						fs:SetText(text)
-						st[cacheKey] = nil
-						return
-					end
-					if last ~= text then
-						st[cacheKey] = text
-						fs:SetText(text)
-					end
-				end
-				setPowerText(st.powerTextLeft, "_lastPowerTextLeft", leftMode)
-				setPowerText(st.powerTextCenter, "_lastPowerTextCenter", centerMode)
-				setPowerText(st.powerTextRight, "_lastPowerTextRight", rightMode)
+				setTextSlot(st, st.powerTextLeft, "_lastPowerTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+				setTextSlot(st, st.powerTextCenter, "_lastPowerTextCenter", centerMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+				setTextSlot(st, st.powerTextRight, "_lastPowerTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
 			end
 		end
 	elseif st.powerTextLeft or st.powerTextCenter or st.powerTextRight then
@@ -2769,6 +2786,7 @@ function GF:UnitButton_SetUnit(self, unit)
 	GF:CacheUnitStatic(self)
 
 	GF:UnitButton_RegisterUnitEvents(self, unit)
+	if self._eqolUFState and self._eqolUFState._wantsAbsorb then GF:UpdateAbsorbCache(self) end
 
 	GF:UpdateAll(self)
 end
@@ -2791,6 +2809,8 @@ function GF:UnitButton_ClearUnit(self)
 		st._powerType = nil
 		st._powerToken = nil
 		st._classR, st._classG, st._classB, st._classA = nil, nil, nil, nil
+		st._absorbAmount = nil
+		st._healAbsorbAmount = nil
 	end
 end
 
@@ -2856,6 +2876,14 @@ function GF.UnitButton_OnAttributeChanged(self, name, value)
 end
 
 local function dispatchUnitHealth(btn) GF:UpdateHealthValue(btn) end
+local function dispatchUnitAbsorb(btn)
+	GF:UpdateAbsorbCache(btn, "absorb")
+	GF:UpdateHealthValue(btn)
+end
+local function dispatchUnitHealAbsorb(btn)
+	GF:UpdateAbsorbCache(btn, "heal")
+	GF:UpdateHealthValue(btn)
+end
 local function dispatchUnitPower(btn) GF:UpdatePowerValue(btn) end
 local function dispatchUnitDisplayPower(btn) GF:UpdatePower(btn) end
 local function dispatchUnitName(btn)
@@ -2881,8 +2909,8 @@ local function dispatchUnitAura(btn, updateInfo) GF:RequestAuraUpdate(btn, updat
 local UNIT_DISPATCH = {
 	UNIT_HEALTH = dispatchUnitHealth,
 	UNIT_MAXHEALTH = dispatchUnitHealth,
-	UNIT_ABSORB_AMOUNT_CHANGED = dispatchUnitHealth,
-	UNIT_HEAL_ABSORB_AMOUNT_CHANGED = dispatchUnitHealth,
+	UNIT_ABSORB_AMOUNT_CHANGED = dispatchUnitAbsorb,
+	UNIT_HEAL_ABSORB_AMOUNT_CHANGED = dispatchUnitHealAbsorb,
 	UNIT_POWER_UPDATE = dispatchUnitPower,
 	UNIT_MAXPOWER = dispatchUnitPower,
 	UNIT_DISPLAYPOWER = dispatchUnitDisplayPower,
@@ -7993,42 +8021,22 @@ local function applyEditModeData(kind, data)
 	if data.borderTexture ~= nil then cfg.border.texture = data.borderTexture end
 	if data.borderSize ~= nil then cfg.border.edgeSize = data.borderSize end
 	if data.borderOffset ~= nil then cfg.border.offset = data.borderOffset end
-	if
-		data.hoverHighlightEnabled ~= nil
-		or data.hoverHighlightColor ~= nil
-		or data.hoverHighlightTexture ~= nil
-		or data.hoverHighlightSize ~= nil
-		or data.hoverHighlightOffset ~= nil
-	then
+	if data.hoverHighlightEnabled ~= nil or data.hoverHighlightColor ~= nil or data.hoverHighlightTexture ~= nil or data.hoverHighlightSize ~= nil or data.hoverHighlightOffset ~= nil then
 		cfg.highlightHover = cfg.highlightHover or {}
 	end
 	if data.hoverHighlightEnabled ~= nil then cfg.highlightHover.enabled = data.hoverHighlightEnabled and true or false end
 	if data.hoverHighlightColor ~= nil then cfg.highlightHover.color = data.hoverHighlightColor end
 	if data.hoverHighlightTexture ~= nil then cfg.highlightHover.texture = data.hoverHighlightTexture end
-	if data.hoverHighlightSize ~= nil then
-		cfg.highlightHover.size = clampNumber(data.hoverHighlightSize, 1, 64, cfg.highlightHover.size or 2)
-	end
-	if data.hoverHighlightOffset ~= nil then
-		cfg.highlightHover.offset = clampNumber(data.hoverHighlightOffset, -64, 64, cfg.highlightHover.offset or 0)
-	end
-	if
-		data.targetHighlightEnabled ~= nil
-		or data.targetHighlightColor ~= nil
-		or data.targetHighlightTexture ~= nil
-		or data.targetHighlightSize ~= nil
-		or data.targetHighlightOffset ~= nil
-	then
+	if data.hoverHighlightSize ~= nil then cfg.highlightHover.size = clampNumber(data.hoverHighlightSize, 1, 64, cfg.highlightHover.size or 2) end
+	if data.hoverHighlightOffset ~= nil then cfg.highlightHover.offset = clampNumber(data.hoverHighlightOffset, -64, 64, cfg.highlightHover.offset or 0) end
+	if data.targetHighlightEnabled ~= nil or data.targetHighlightColor ~= nil or data.targetHighlightTexture ~= nil or data.targetHighlightSize ~= nil or data.targetHighlightOffset ~= nil then
 		cfg.highlightTarget = cfg.highlightTarget or {}
 	end
 	if data.targetHighlightEnabled ~= nil then cfg.highlightTarget.enabled = data.targetHighlightEnabled and true or false end
 	if data.targetHighlightColor ~= nil then cfg.highlightTarget.color = data.targetHighlightColor end
 	if data.targetHighlightTexture ~= nil then cfg.highlightTarget.texture = data.targetHighlightTexture end
-	if data.targetHighlightSize ~= nil then
-		cfg.highlightTarget.size = clampNumber(data.targetHighlightSize, 1, 64, cfg.highlightTarget.size or 2)
-	end
-	if data.targetHighlightOffset ~= nil then
-		cfg.highlightTarget.offset = clampNumber(data.targetHighlightOffset, -64, 64, cfg.highlightTarget.offset or 0)
-	end
+	if data.targetHighlightSize ~= nil then cfg.highlightTarget.size = clampNumber(data.targetHighlightSize, 1, 64, cfg.highlightTarget.size or 2) end
+	if data.targetHighlightOffset ~= nil then cfg.highlightTarget.offset = clampNumber(data.targetHighlightOffset, -64, 64, cfg.highlightTarget.offset or 0) end
 	if data.enabled ~= nil then cfg.enabled = data.enabled and true or false end
 	if data.showName ~= nil then
 		cfg.text = cfg.text or {}
@@ -8491,31 +8499,15 @@ function GF:EnsureEditMode()
 					or (DEFAULTS[kind] and DEFAULTS[kind].border and DEFAULTS[kind].border.edgeSize)
 					or 1,
 				hoverHighlightEnabled = (cfg.highlightHover and cfg.highlightHover.enabled) == true,
-				hoverHighlightColor = (cfg.highlightHover and cfg.highlightHover.color)
-					or (def.highlightHover and def.highlightHover.color)
-					or { 1, 1, 1, 0.9 },
-				hoverHighlightTexture = (cfg.highlightHover and cfg.highlightHover.texture)
-					or (def.highlightHover and def.highlightHover.texture)
-					or "DEFAULT",
-				hoverHighlightSize = (cfg.highlightHover and cfg.highlightHover.size)
-					or (def.highlightHover and def.highlightHover.size)
-					or 2,
-				hoverHighlightOffset = (cfg.highlightHover and cfg.highlightHover.offset)
-					or (def.highlightHover and def.highlightHover.offset)
-					or 0,
+				hoverHighlightColor = (cfg.highlightHover and cfg.highlightHover.color) or (def.highlightHover and def.highlightHover.color) or { 1, 1, 1, 0.9 },
+				hoverHighlightTexture = (cfg.highlightHover and cfg.highlightHover.texture) or (def.highlightHover and def.highlightHover.texture) or "DEFAULT",
+				hoverHighlightSize = (cfg.highlightHover and cfg.highlightHover.size) or (def.highlightHover and def.highlightHover.size) or 2,
+				hoverHighlightOffset = (cfg.highlightHover and cfg.highlightHover.offset) or (def.highlightHover and def.highlightHover.offset) or 0,
 				targetHighlightEnabled = (cfg.highlightTarget and cfg.highlightTarget.enabled) == true,
-				targetHighlightColor = (cfg.highlightTarget and cfg.highlightTarget.color)
-					or (def.highlightTarget and def.highlightTarget.color)
-					or { 1, 1, 0, 1 },
-				targetHighlightTexture = (cfg.highlightTarget and cfg.highlightTarget.texture)
-					or (def.highlightTarget and def.highlightTarget.texture)
-					or "DEFAULT",
-				targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size)
-					or (def.highlightTarget and def.highlightTarget.size)
-					or 2,
-				targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset)
-					or (def.highlightTarget and def.highlightTarget.offset)
-					or 0,
+				targetHighlightColor = (cfg.highlightTarget and cfg.highlightTarget.color) or (def.highlightTarget and def.highlightTarget.color) or { 1, 1, 0, 1 },
+				targetHighlightTexture = (cfg.highlightTarget and cfg.highlightTarget.texture) or (def.highlightTarget and def.highlightTarget.texture) or "DEFAULT",
+				targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size) or (def.highlightTarget and def.highlightTarget.size) or 2,
+				targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset) or (def.highlightTarget and def.highlightTarget.offset) or 0,
 				enabled = cfg.enabled == true,
 				showPlayer = cfg.showPlayer == true,
 				showSolo = cfg.showSolo == true,
