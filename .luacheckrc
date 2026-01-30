@@ -386,6 +386,7 @@ globals = {
 	"TransmogLocationMixin",
 	"PlayerLocationMixin",
 	"MenuUtil",
+	"C_Secrets",
 
 	-- FrameXML frames
 	"GameTooltip",

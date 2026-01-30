@@ -103,6 +103,13 @@ local floor = math.floor
 local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
+local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
+local AURA_FILTER_HARMFUL = "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY"
+local AURA_FILTER_HARMFUL_ALL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY"
+local function dprint(...)
+	if not (GF and GF._debugAuras) then return end
+	print("|cff00ff98EQOL GF|r:", ...)
+end
 
 local function resolveBorderTexture(key)
 	if UFHelper and UFHelper.resolveBorderTexture then return UFHelper.resolveBorderTexture(key) end
@@ -1834,6 +1841,85 @@ local AURA_TYPE_META = {
 	},
 }
 
+local function getAuraCache(st)
+	if not st then return nil end
+	local cache = st._auraCache
+	if not cache then
+		cache = { auras = {}, order = {}, indexById = {} }
+		st._auraCache = cache
+	end
+	return cache
+end
+
+local function resetAuraCache(st)
+	local cache = st and st._auraCache
+	if not cache then return end
+	local auras, order, indexById = cache.auras, cache.order, cache.indexById
+	for k in pairs(auras) do
+		auras[k] = nil
+	end
+	for i = #order, 1, -1 do
+		order[i] = nil
+	end
+	for k in pairs(indexById) do
+		indexById[k] = nil
+	end
+end
+
+local function addAuraToOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local indexById = cache.indexById
+	local order = cache.order
+	local existing = indexById[auraInstanceID]
+	if existing then return existing end
+	order[#order + 1] = auraInstanceID
+	indexById[auraInstanceID] = #order
+	return indexById[auraInstanceID]
+end
+
+local function removeAuraFromOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local indexById = cache.indexById
+	local order = cache.order
+	local idx = indexById[auraInstanceID]
+	if not idx then return nil end
+	table.remove(order, idx)
+	indexById[auraInstanceID] = nil
+	for i = idx, #order do
+		indexById[order[i]] = i
+	end
+	return idx
+end
+
+local function cleanupAuraOrder(cache)
+	if not cache then return end
+	local auras, order, indexById = cache.auras, cache.order, cache.indexById
+	local removed
+	for i = #order, 1, -1 do
+		local id = order[i]
+		if not id or not auras[id] then
+			table.remove(order, i)
+			if id then indexById[id] = nil end
+			removed = true
+		end
+	end
+	if removed then
+		for i = 1, #order do
+			indexById[order[i]] = i
+		end
+	end
+end
+
+local function isAuraHelpful(unit, aura, helpfulFilter)
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and helpfulFilter) then return false end
+	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, helpfulFilter)
+end
+
+local function isAuraHarmful(unit, aura, harmfulFilter)
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and harmfulFilter) then return false end
+	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, harmfulFilter)
+end
+
 local SAMPLE_BUFF_ICONS = { 136243, 135940, 136085, 136097, 136116, 136048, 135932, 136108 }
 local SAMPLE_DEBUFF_ICONS = { 136207, 136160, 136128, 135804, 136168, 132104, 136118, 136214 }
 local SAMPLE_EXTERNAL_ICONS = { 135936, 136073, 135907, 135940, 136090, 135978 }
@@ -1902,6 +1988,17 @@ function GF:LayoutAuras(self)
 	if not ac then return end
 	syncAurasEnabled(cfg)
 	if ac.enabled == false then return end
+
+	dprint(
+		"LayoutAuras",
+		getUnit(self) or "nil",
+		"buff",
+		tostring(ac.buff and ac.buff.enabled),
+		"debuff",
+		tostring(ac.debuff and ac.debuff.enabled),
+		"externals",
+		tostring(ac.externals and ac.externals.enabled)
+	)
 
 	st._auraLayout = st._auraLayout or {}
 	st._auraLayoutKey = st._auraLayoutKey or {}
@@ -1972,7 +2069,7 @@ function GF:LayoutAuras(self)
 	end
 end
 
-local function updateAuraType(self, unit, st, ac, kindKey)
+local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter, harmfulFilter)
 	local meta = AURA_TYPE_META[kindKey]
 	if not meta then return end
 	local typeCfg = ac and ac[kindKey] or {}
@@ -1996,47 +2093,83 @@ local function updateAuraType(self, unit, st, ac, kindKey)
 		buttons = {}
 		st[meta.buttonsKey] = buttons
 	end
-
-	local filter = meta.filter
+	if not cache then
+		hideAuraButtons(buttons, 1)
+		return
+	end
+	local auras = cache.auras
+	local order = cache.order
+	if not (auras and order) then
+		hideAuraButtons(buttons, 1)
+		return
+	end
+	cleanupAuraOrder(cache)
 	local shown = 0
 	local maxCount = layout.maxCount or 0
-	local scanIndex = 1
-	while shown < maxCount do
-		local aura = C_UnitAuras.GetAuraDataByIndex(unit, scanIndex, filter)
-		if not aura then break end
-		scanIndex = scanIndex + 1
-		if meta.predicate and not meta.predicate(aura, unit) then
-			-- skip non-matching aura
-		else
-			shown = shown + 1
-			local btn = AuraUtil.ensureAuraButton(container, buttons, shown, style)
-			AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
-			if btn._auraLayoutKey ~= layout.key then
-				positionAuraButton(btn, container, layout.anchorPoint, shown, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
-				btn._auraLayoutKey = layout.key
+	for i = 1, #order do
+		if shown >= maxCount then break end
+		local auraId = order[i]
+		local aura = auraId and auras[auraId]
+		if aura then
+			local isHelpful = isAuraHelpful(unit, aura, helpfulFilter)
+			local isHarmful = isAuraHarmful(unit, aura, harmfulFilter)
+			local match = false
+			if kindKey == "debuff" then
+				match = isHarmful
+			elseif kindKey == "buff" then
+				match = isHelpful
+			elseif kindKey == "externals" then
+				match = isHelpful and (not meta.predicate or meta.predicate(aura, unit))
 			end
-			btn:Show()
+			if match then
+				shown = shown + 1
+				local btn = AuraUtil.ensureAuraButton(container, buttons, shown, style)
+				AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
+				if btn._auraLayoutKey ~= layout.key then
+					positionAuraButton(btn, container, layout.anchorPoint, shown, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
+					btn._auraLayoutKey = layout.key
+				end
+				btn:Show()
+			end
 		end
 	end
-
 	hideAuraButtons(buttons, shown + 1)
 end
 
-local function classifyAuraUpdate(updateInfo)
+local function classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter)
 	if not updateInfo or updateInfo.isFullUpdate then return true, true end
 	local helpful, harmful = false, false
-	local function scan(list)
+	local function checkInstance(id)
+		if not id then return end
+		if not helpfulFilter or not harmfulFilter then
+			helpful, harmful = true, true
+			return
+		end
+		if C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit then
+			if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, id, helpfulFilter) then helpful = true end
+			if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, id, harmfulFilter) then harmful = true end
+		else
+			helpful, harmful = true, true
+		end
+	end
+	local function scanAuras(list)
 		if type(list) ~= "table" then return end
 		for _, aura in ipairs(list) do
-			if aura then
-				if aura.isHelpful then helpful = true end
-				if aura.isHarmful then harmful = true end
+			if aura and aura.auraInstanceID then
+				checkInstance(aura.auraInstanceID)
 				if helpful and harmful then return end
 			end
 		end
 	end
-	scan(updateInfo.addedAuras)
-	scan(updateInfo.updatedAuras)
+	scanAuras(updateInfo.addedAuras)
+	scanAuras(updateInfo.updatedAuras)
+	local updatedIds = updateInfo.updatedAuraInstanceIDs
+	if type(updatedIds) == "table" then
+		for _, inst in ipairs(updatedIds) do
+			checkInstance(inst)
+			if helpful and harmful then break end
+		end
+	end
 	local removed = updateInfo.removedAuraInstanceIDs
 	if type(removed) == "table" and #removed > 0 then
 		helpful, harmful = true, true
@@ -2047,11 +2180,120 @@ local function classifyAuraUpdate(updateInfo)
 	return helpful, harmful
 end
 
+local function fullScanGroupAuras(unit, st, helpfulFilter, harmfulFilter)
+	if not (unit and st and C_UnitAuras) then return end
+	local cache = getAuraCache(st)
+	if not cache then return end
+	resetAuraCache(st)
+	local auras = cache.auras
+	local function storeAura(aura)
+		if aura and aura.auraInstanceID then
+			auras[aura.auraInstanceID] = aura
+			addAuraToOrder(cache, aura.auraInstanceID)
+		end
+	end
+	if C_UnitAuras.GetUnitAuras then
+		if helpfulFilter then
+			local helpful = C_UnitAuras.GetUnitAuras(unit, helpfulFilter)
+			for i = 1, (helpful and #helpful or 0) do
+				storeAura(helpful[i])
+			end
+		end
+		if harmfulFilter then
+			local harmful = C_UnitAuras.GetUnitAuras(unit, harmfulFilter)
+			for i = 1, (harmful and #harmful or 0) do
+				storeAura(harmful[i])
+			end
+		end
+	elseif C_UnitAuras.GetAuraSlots then
+		if helpfulFilter then
+			local helpful = { C_UnitAuras.GetAuraSlots(unit, helpfulFilter) }
+			for i = 2, #helpful do
+				local aura = C_UnitAuras.GetAuraDataBySlot(unit, helpful[i])
+				storeAura(aura)
+			end
+		end
+		if harmfulFilter then
+			local harmful = { C_UnitAuras.GetAuraSlots(unit, harmfulFilter) }
+			for i = 2, #harmful do
+				local aura = C_UnitAuras.GetAuraDataBySlot(unit, harmful[i])
+				storeAura(aura)
+			end
+		end
+	end
+end
+
+local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
+	if not (unit and st and updateInfo) then return end
+	local cache = getAuraCache(st)
+	if not cache then return end
+	local auras = cache.auras
+	local wantsHelpful = ac and ((ac.buff and ac.buff.enabled ~= false) or (ac.externals and ac.externals.enabled ~= false)) or false
+	local wantsHarmful = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
+	dprint(
+		"AuraCache:update",
+		unit,
+		"added",
+		type(updateInfo.addedAuras) == "table" and #updateInfo.addedAuras or 0,
+		"updated",
+		type(updateInfo.updatedAuras) == "table" and #updateInfo.updatedAuras or 0,
+		"updatedIds",
+		type(updateInfo.updatedAuraInstanceIDs) == "table" and #updateInfo.updatedAuraInstanceIDs or 0,
+		"removed",
+		type(updateInfo.removedAuraInstanceIDs) == "table" and #updateInfo.removedAuraInstanceIDs or 0
+	)
+
+	local function handleAura(aura)
+		if not (aura and aura.auraInstanceID) then return end
+		local helpful = wantsHelpful and isAuraHelpful(unit, aura, helpfulFilter)
+		local harmful = wantsHarmful and isAuraHarmful(unit, aura, harmfulFilter)
+		if helpful or harmful then
+			auras[aura.auraInstanceID] = aura
+			addAuraToOrder(cache, aura.auraInstanceID)
+		else
+			auras[aura.auraInstanceID] = nil
+			removeAuraFromOrder(cache, aura.auraInstanceID)
+		end
+	end
+
+	if type(updateInfo.addedAuras) == "table" then
+		for _, aura in ipairs(updateInfo.addedAuras) do
+			handleAura(aura)
+		end
+	end
+	if type(updateInfo.updatedAuras) == "table" then
+		for _, aura in ipairs(updateInfo.updatedAuras) do
+			handleAura(aura)
+		end
+	end
+	if type(updateInfo.updatedAuraInstanceIDs) == "table" and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+		for _, inst in ipairs(updateInfo.updatedAuraInstanceIDs) do
+			if auras[inst] then
+				local data = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, inst)
+				if data then
+					auras[inst] = data
+				else
+					auras[inst] = nil
+					removeAuraFromOrder(cache, inst)
+				end
+			end
+		end
+	end
+	if type(updateInfo.removedAuraInstanceIDs) == "table" then
+		for _, inst in ipairs(updateInfo.removedAuraInstanceIDs) do
+			auras[inst] = nil
+			removeAuraFromOrder(cache, inst)
+		end
+	end
+end
+
 function GF:UpdateAuras(self, updateInfo)
 	local st = getState(self)
 	if not (st and AuraUtil) then return end
 	local unit = getUnit(self)
-	if isEditModeActive() then
+	local inEditMode = isEditModeActive()
+	if inEditMode or self._eqolPreview then
+		dprint("UpdateAuras", unit or "nil", "editmode", tostring(inEditMode), "preview", tostring(self._eqolPreview))
 		GF:UpdateSampleAuras(self)
 		return
 	end
@@ -2061,6 +2303,7 @@ function GF:UpdateAuras(self, updateInfo)
 	if cfg then syncAurasEnabled(cfg) end
 	local wantsAuras = st._wantsAuras
 	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
+	dprint("UpdateAuras", unit, "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
 	if wantsAuras == false or ac.enabled == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
@@ -2073,14 +2316,41 @@ function GF:UpdateAuras(self, updateInfo)
 
 	st._auraSampleActive = nil
 
-	if not st._auraLayout then GF:LayoutAuras(self) end
-
-	local needsHelpful, needsHarmful = classifyAuraUpdate(updateInfo)
-	if needsHelpful then
-		updateAuraType(self, unit, st, ac, "buff")
-		updateAuraType(self, unit, st, ac, "externals")
+	local wantBuff = ac.buff and ac.buff.enabled ~= false
+	local wantDebuff = ac.debuff and ac.debuff.enabled ~= false
+	local wantExternals = ac.externals and ac.externals.enabled ~= false
+	if
+		not st._auraLayout
+		or (wantBuff and not (st._auraLayout.buff and st._auraLayout.buff.key))
+		or (wantDebuff and not (st._auraLayout.debuff and st._auraLayout.debuff.key))
+		or (wantExternals and not (st._auraLayout.externals and st._auraLayout.externals.key))
+	then
+		GF:LayoutAuras(self)
 	end
-	if needsHarmful then updateAuraType(self, unit, st, ac, "debuff") end
+	local helpfulFilter, harmfulFilter = AuraUtil and AuraUtil.getAuraFilters and AuraUtil.getAuraFilters(unit)
+	if not helpfulFilter or not harmfulFilter then
+		helpfulFilter = AURA_FILTER_HELPFUL
+		harmfulFilter = (unit == "player") and AURA_FILTER_HARMFUL_ALL or AURA_FILTER_HARMFUL
+	end
+	local cache = getAuraCache(st)
+	if not updateInfo or updateInfo.isFullUpdate then
+		dprint("UpdateAuras", unit, "fullScan", true, "filters", helpfulFilter or "nil", harmfulFilter or "nil")
+		fullScanGroupAuras(unit, st, helpfulFilter, harmfulFilter)
+		dprint("AuraCache:full", unit, "count", cache and cache.order and #cache.order or 0)
+		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter)
+		updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter)
+		updateAuraType(self, unit, st, ac, "externals", cache, helpfulFilter, harmfulFilter)
+		return
+	end
+
+	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
+	local needsHelpful, needsHarmful = classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter)
+	dprint("UpdateAuras", unit, "partial", true, "helpful", tostring(needsHelpful), "harmful", tostring(needsHarmful))
+	if needsHelpful then
+		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter)
+		updateAuraType(self, unit, st, ac, "externals", cache, helpfulFilter, harmfulFilter)
+	end
+	if needsHarmful then updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter) end
 end
 
 function GF:UpdateSampleAuras(self)
@@ -2090,8 +2360,10 @@ function GF:UpdateSampleAuras(self)
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
 	if cfg then syncAurasEnabled(cfg) end
-	local wantsAuras = st._wantsAuras
-	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
+	local wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false
+	if ac.enabled == true then wantsAuras = true end
+	st._wantsAuras = wantsAuras
+	dprint("SampleAuras", unit or "nil", "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
 	if wantsAuras == false or ac.enabled == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
@@ -2103,7 +2375,17 @@ function GF:UpdateSampleAuras(self)
 		return
 	end
 
-	if not st._auraLayout then GF:LayoutAuras(self) end
+	local wantBuff = ac.buff and ac.buff.enabled ~= false
+	local wantDebuff = ac.debuff and ac.debuff.enabled ~= false
+	local wantExternals = ac.externals and ac.externals.enabled ~= false
+	if
+		not st._auraLayout
+		or (wantBuff and not (st._auraLayout.buff and st._auraLayout.buff.key))
+		or (wantDebuff and not (st._auraLayout.debuff and st._auraLayout.debuff.key))
+		or (wantExternals and not (st._auraLayout.externals and st._auraLayout.externals.key))
+	then
+		GF:LayoutAuras(self)
+	end
 
 	local function updateSampleType(kindKey)
 		local meta = AURA_TYPE_META[kindKey]
@@ -2788,6 +3070,8 @@ end
 function GF:UnitButton_SetUnit(self, unit)
 	if not self then return end
 	self.unit = unit
+	local st = self._eqolUFState
+	if st then st._auraCache = nil end
 	GF:CacheUnitStatic(self)
 
 	GF:UnitButton_RegisterUnitEvents(self, unit)
@@ -2816,6 +3100,7 @@ function GF:UnitButton_ClearUnit(self)
 		st._classR, st._classG, st._classB, st._classA = nil, nil, nil, nil
 		st._absorbAmount = nil
 		st._healAbsorbAmount = nil
+		st._auraCache = nil
 	end
 end
 
@@ -3141,6 +3426,7 @@ function GF:UpdatePreviewLayout(kind)
 			if btn._eqolUFState then
 				GF:LayoutButton(btn)
 				GF:UpdateAll(btn)
+				if btn._eqolPreview then GF:UpdateSampleAuras(btn) end
 			end
 		end
 	end
