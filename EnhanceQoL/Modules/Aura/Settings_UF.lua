@@ -383,7 +383,6 @@ local function getVisibilityRuleOptions(unit)
 	for key, data in pairs(GetVisibilityRuleMetadata() or {}) do
 		local allowed = data.appliesTo and data.appliesTo.frame
 		if allowed and data.unitRequirement and data.unitRequirement ~= unitToken then allowed = false end
-		if allowed and unitToken == "player" and key == "PLAYER_HEALTH_NOT_FULL" then allowed = false end
 		if allowed then options[#options + 1] = { value = key, label = data.label or key, order = data.order or 999 } end
 	end
 	table.sort(options, function(a, b)

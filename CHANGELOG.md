@@ -14,6 +14,10 @@
 
 - Cooldown Panels: Switched button glow to LibButtonGlow
 
+### ❌ Removed
+
+- Visibility: Removed "Player health below 100%" rule for Action Bars/Cooldown Viewer because secret alpha values can leak into other addons and trigger comparison errors/taint (e.g. ActionBarLabels).
+
 ### 🐛 Fixed
 
 - Mover: MailFrame/SendMail and Open Mail are now movable.
