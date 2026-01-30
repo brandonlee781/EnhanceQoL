@@ -257,12 +257,16 @@ local function GetUnitMountInfo(unit)
 		if spellID and (not issecretvalue or not issecretvalue(spellID)) then
 			local mountID = C_MountJournal.GetMountFromSpell(spellID)
 			if mountID then
-				local name, _, icon = C_MountJournal.GetMountInfoByID(mountID)
+				local name, _, icon, _, _, _, _, _, _, _, isCollected = C_MountJournal.GetMountInfoByID(mountID)
 				if not name or name == "" then
 					if C_Spell and C_Spell.GetSpellName then name = C_Spell.GetSpellName(spellID) end
 					if not name and GetSpellInfo then name = GetSpellInfo(spellID) end
 				end
-				if name and name ~= "" then return name, icon end
+				if name and name ~= "" then
+					local collected = isCollected == true
+					if issecretvalue and issecretvalue(isCollected) then collected = false end
+					return name, icon, collected
+				end
 			end
 		end
 	end
@@ -510,9 +514,10 @@ local function checkAdditionalTooltip(tooltip)
 	end
 
 	if unit and addon.db["TooltipUnitShowMount"] and UnitIsPlayer(unit) then
-		local mountName, mountIcon = GetUnitMountInfo(unit)
+		local mountName, mountIcon, mountCollected = GetUnitMountInfo(unit)
 		if mountName then
 			if mountIcon then mountName = ("|T%d:16:16:0:0|t %s"):format(mountIcon, mountName) end
+			if mountCollected then mountName = ("|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14:0:0|t %s"):format(mountName) end
 			tooltip:AddDoubleLine(L["TooltipMount"] or "Mount", mountName)
 		end
 	end
