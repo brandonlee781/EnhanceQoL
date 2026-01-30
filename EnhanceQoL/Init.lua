@@ -945,13 +945,6 @@ addon.variables.cvarOptions = {
 		description = addon.L["UberTooltips"],
 		category = "cvarCategorySystem",
 	},
-	["cooldownViewerEnabled"] = {
-		trueValue = "1",
-		falseValue = "0",
-		description = addon.L["cooldownViewerEnabled"],
-		persistent = true,
-		category = "cvarCategoryUtility",
-	},
 	["NameplatePersonalShowInCombat"] = {
 		trueValue = "1",
 		falseValue = "0",

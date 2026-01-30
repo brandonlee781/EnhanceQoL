@@ -43,25 +43,42 @@ local UnitIsConnected = UnitIsConnected
 local UnitIsPlayer = UnitIsPlayer
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
+local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
 local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local UnitPowerType = UnitPowerType
+local UnitLevel = UnitLevel
 local UnitGUID = UnitGUID
 local C_Timer = C_Timer
+local GetTime = GetTime
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGroupRolesAssignedEnum = UnitGroupRolesAssignedEnum
+local UnitIsGroupLeader = UnitIsGroupLeader
+local UnitIsGroupAssistant = UnitIsGroupAssistant
+local UnitInRaid = UnitInRaid
+local GetRaidRosterInfo = GetRaidRosterInfo
+local GetNumClasses = GetNumClasses
+local GetClassInfo = GetClassInfo
 local GetSpecialization = GetSpecialization
 local GetNumSpecializations = GetNumSpecializations
 local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecializationInfoForClassID = GetSpecializationInfoForClassID
+local GetNumSpecializationsForClassID = GetNumSpecializationsForClassID
+local UnitSex = UnitSex
 local InCombatLockdown = InCombatLockdown
 local RegisterStateDriver = RegisterStateDriver
 local UnregisterStateDriver = UnregisterStateDriver
 local issecretvalue = _G.issecretvalue
 local C_UnitAuras = C_UnitAuras
 local Enum = Enum
+local C_SpecializationInfo = C_SpecializationInfo
+local C_CreatureInfo = C_CreatureInfo
+local GetMicroIconForRole = GetMicroIconForRole
 
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PowerBarColor = PowerBarColor
+local LSM = LibStub and LibStub("LibSharedMedia-3.0")
 
 -- ----------------------------------------------------------------------------
 -- Small subset of UF.lua helpers (kept local here)
@@ -132,6 +149,17 @@ local function applyBarBackdrop(bar, cfg)
 		tile = false,
 	})
 	bar:SetBackdropColor(col[1] or 0, col[2] or 0, col[3] or 0, col[4] or 0.6)
+end
+
+local function stabilizeStatusBarTexture(bar)
+	if not (bar and bar.GetStatusBarTexture) then return end
+	local t = bar:GetStatusBarTexture()
+	if not t then return end
+	if t.SetHorizTile then t:SetHorizTile(false) end
+	if t.SetVertTile then t:SetVertTile(false) end
+	if t.SetTexCoord then t:SetTexCoord(0, 1, 0, 1) end
+	if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(true) end
+	if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
 end
 
 local function layoutTexts(bar, leftFS, centerFS, rightFS, cfg)
@@ -207,6 +235,61 @@ local function selectionHasAny(selection)
 	return false
 end
 
+local function selectionContains(selection, key)
+	if type(selection) ~= "table" or key == nil then return false end
+	if selection[key] == true then return true end
+	if #selection > 0 then
+		for _, value in ipairs(selection) do
+			if value == key then return true end
+		end
+	end
+	return false
+end
+
+local function unpackColor(color, fallback)
+	if not color then color = fallback end
+	if not color then return 1, 1, 1, 1 end
+	if color.r then return color.r, color.g, color.b, color.a or 1 end
+	return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
+end
+
+local function selectionMode(selection)
+	if type(selection) ~= "table" then return "all" end
+	if selectionHasAny(selection) then return "some" end
+	return "none"
+end
+
+local function textModeUsesPercent(mode)
+	return type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil
+end
+
+local function getHealthPercent(unit, cur, maxv)
+	if issecretvalue and ((cur and issecretvalue(cur)) or (maxv and issecretvalue(maxv))) then return nil end
+	if addon.functions and addon.functions.GetHealthPercent then return addon.functions.GetHealthPercent(unit, cur, maxv, true) end
+	if maxv and maxv > 0 then return (cur or 0) / maxv * 100 end
+	return nil
+end
+
+local function getPowerPercent(unit, powerEnum, cur, maxv)
+	if issecretvalue and ((cur and issecretvalue(cur)) or (maxv and issecretvalue(maxv))) then return nil end
+	if addon.functions and addon.functions.GetPowerPercent then return addon.functions.GetPowerPercent(unit, powerEnum, cur, maxv, true) end
+	if maxv and maxv > 0 then return (cur or 0) / maxv * 100 end
+	return nil
+end
+
+local function getSafeLevelText(unit, hideClassText)
+	if not unit then return "??" end
+	if UnitLevel then
+		local lvl = UnitLevel(unit)
+		if issecretvalue and issecretvalue(lvl) then return "??" end
+		if UFHelper and UFHelper.getUnitLevelText then return UFHelper.getUnitLevelText(unit, lvl, hideClassText) end
+		lvl = tonumber(lvl) or 0
+		if lvl > 0 then return tostring(lvl) end
+	end
+	if UFHelper and UFHelper.getUnitLevelText then return UFHelper.getUnitLevelText(unit, nil, hideClassText) end
+	return "??"
+end
+
 local function getUnitRoleKey(unit)
 	local roleEnum
 	if UnitGroupRolesAssignedEnum then roleEnum = UnitGroupRolesAssignedEnum(unit) end
@@ -220,25 +303,58 @@ local function getUnitRoleKey(unit)
 	return "NONE"
 end
 
-local function shouldShowPowerForRole(pcfg, unit)
-	if not pcfg then return true end
-	local selection = pcfg.showRoles
-	if type(selection) ~= "table" then return true end
-	if not selectionHasAny(selection) then return false end
-	local roleKey = getUnitRoleKey(unit)
-	return selection[roleKey] == true
+local function getPlayerSpecId()
+	if not GetSpecialization then return nil end
+	local specIndex = GetSpecialization()
+	if not specIndex then return nil end
+	if GetSpecializationInfo then
+		local specId = GetSpecializationInfo(specIndex)
+		return specId
+	end
+	return nil
 end
 
-local function shouldShowPowerForSpec(pcfg)
+local function shouldShowPowerForUnit(pcfg, unit)
 	if not pcfg then return true end
-	local selection = pcfg.showSpecs
-	if type(selection) ~= "table" then return true end
-	if not selectionHasAny(selection) then return false end
-	local specIndex = GetSpecialization and GetSpecialization()
-	if not specIndex then return true end
-	local specId = GetSpecializationInfo and select(1, GetSpecializationInfo(specIndex))
-	if not specId then return true end
-	return selection[specId] == true
+	local roleMode = selectionMode(pcfg.showRoles)
+	local specMode = selectionMode(pcfg.showSpecs)
+
+	if roleMode == "some" then
+		local roleKey = getUnitRoleKey(unit)
+		return selectionContains(pcfg.showRoles, roleKey)
+	end
+
+	if roleMode == "none" then
+		if specMode ~= "some" then return false end
+		local specId = getPlayerSpecId()
+		if not specId then return true end
+		return selectionContains(pcfg.showSpecs, specId)
+	end
+
+	-- roleMode == "all"
+	if specMode == "some" then
+		local specId = getPlayerSpecId()
+		if not specId then return true end
+		return selectionContains(pcfg.showSpecs, specId)
+	end
+	if specMode == "none" then return false end
+	return true
+end
+
+local function canShowPowerBySelection(pcfg)
+	if not pcfg then return true end
+	local roleMode = selectionMode(pcfg.showRoles)
+	local specMode = selectionMode(pcfg.showSpecs)
+	if roleMode == "some" then return true end
+	if roleMode == "none" then return specMode == "some" end
+	-- roleMode == "all"
+	if specMode == "none" then return false end
+	return true
+end
+
+local function isEditModeActive()
+	local lib = addon.EditModeLib
+	return lib and lib.IsInEditMode and lib:IsInEditMode()
 end
 
 -- -----------------------------------------------------------------------------
@@ -280,7 +396,28 @@ local DEFAULTS = {
 			font = nil,
 			fontSize = 12,
 			fontOutline = "OUTLINE",
+			useCustomColor = false,
 			useClassColor = false,
+			color = { 0.0, 0.8, 0.0, 1 },
+			absorbEnabled = true,
+			absorbUseCustomColor = false,
+			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
+			absorbTexture = "SOLID",
+			absorbReverseFill = false,
+			useAbsorbGlow = true,
+			healAbsorbEnabled = true,
+			healAbsorbUseCustomColor = false,
+			healAbsorbColor = { 1.0, 0.3, 0.3, 0.7 },
+			healAbsorbTexture = "SOLID",
+			healAbsorbReverseFill = true,
+			textLeft = "NONE",
+			textCenter = "NONE",
+			textRight = "PERCENT",
+			textDelimiter = " ",
+			textDelimiterSecondary = " ",
+			textDelimiterTertiary = " ",
+			useShortNumbers = true,
+			hidePercentSymbol = false,
 			offsetLeft = { x = 6, y = 0 },
 			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -6, y = 0 },
@@ -291,6 +428,14 @@ local DEFAULTS = {
 			font = nil,
 			fontSize = 10,
 			fontOutline = "OUTLINE",
+			textLeft = "NONE",
+			textCenter = "NONE",
+			textRight = "NONE",
+			textDelimiter = " ",
+			textDelimiterSecondary = " ",
+			textDelimiterTertiary = " ",
+			useShortNumbers = true,
+			hidePercentSymbol = false,
 			offsetLeft = { x = 6, y = 0 },
 			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -6, y = 0 },
@@ -306,6 +451,32 @@ local DEFAULTS = {
 			fontOutline = "OUTLINE",
 			nameOffset = { x = 6, y = 0 },
 		},
+		status = {
+			nameColorMode = "CLASS", -- CLASS or CUSTOM
+			nameColor = { 1, 1, 1, 1 },
+			levelEnabled = true,
+			hideLevelAtMax = false,
+			levelColorMode = "CUSTOM", -- CUSTOM or CLASS
+			levelColor = { 1, 0.85, 0, 1 },
+			levelAnchor = "RIGHT",
+			levelOffset = { x = -6, y = 0 },
+			leaderIcon = {
+				enabled = true,
+				size = 12,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 2,
+				y = -2,
+			},
+			assistIcon = {
+				enabled = true,
+				size = 12,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 18,
+				y = -2,
+			},
+		},
 		roleIcon = {
 			enabled = true,
 			size = 14,
@@ -314,6 +485,8 @@ local DEFAULTS = {
 			x = 2,
 			y = 0,
 			spacing = 2,
+			style = "TINY",
+			showRoles = { TANK = true, HEALER = true, DAMAGER = true },
 		},
 		auras = {
 			enabled = false,
@@ -394,7 +567,28 @@ local DEFAULTS = {
 			font = nil,
 			fontSize = 11,
 			fontOutline = "OUTLINE",
+			useCustomColor = false,
 			useClassColor = false,
+			color = { 0.0, 0.8, 0.0, 1 },
+			absorbEnabled = true,
+			absorbUseCustomColor = false,
+			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
+			absorbTexture = "SOLID",
+			absorbReverseFill = false,
+			useAbsorbGlow = true,
+			healAbsorbEnabled = true,
+			healAbsorbUseCustomColor = false,
+			healAbsorbColor = { 1.0, 0.3, 0.3, 0.7 },
+			healAbsorbTexture = "SOLID",
+			healAbsorbReverseFill = true,
+			textLeft = "NONE",
+			textCenter = "NONE",
+			textRight = "NONE",
+			textDelimiter = " ",
+			textDelimiterSecondary = " ",
+			textDelimiterTertiary = " ",
+			useShortNumbers = true,
+			hidePercentSymbol = false,
 			offsetLeft = { x = 5, y = 0 },
 			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -5, y = 0 },
@@ -405,6 +599,14 @@ local DEFAULTS = {
 			font = nil,
 			fontSize = 9,
 			fontOutline = "OUTLINE",
+			textLeft = "NONE",
+			textCenter = "NONE",
+			textRight = "NONE",
+			textDelimiter = " ",
+			textDelimiterSecondary = " ",
+			textDelimiterTertiary = " ",
+			useShortNumbers = true,
+			hidePercentSymbol = false,
 			offsetLeft = { x = 5, y = 0 },
 			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -5, y = 0 },
@@ -420,6 +622,32 @@ local DEFAULTS = {
 			fontOutline = "OUTLINE",
 			nameOffset = { x = 5, y = 0 },
 		},
+		status = {
+			nameColorMode = "CLASS",
+			nameColor = { 1, 1, 1, 1 },
+			levelEnabled = true,
+			hideLevelAtMax = false,
+			levelColorMode = "CUSTOM",
+			levelColor = { 1, 0.85, 0, 1 },
+			levelAnchor = "RIGHT",
+			levelOffset = { x = -4, y = 0 },
+			leaderIcon = {
+				enabled = true,
+				size = 10,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 1,
+				y = -1,
+			},
+			assistIcon = {
+				enabled = true,
+				size = 10,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 14,
+				y = -1,
+			},
+		},
 		roleIcon = {
 			enabled = true,
 			size = 12,
@@ -428,6 +656,8 @@ local DEFAULTS = {
 			x = 2,
 			y = 0,
 			spacing = 2,
+			style = "TINY",
+			showRoles = { TANK = true, HEALER = true, DAMAGER = true },
 		},
 		auras = {
 			enabled = false,
@@ -526,6 +756,9 @@ GF.anchors = GF.anchors or {}
 GF._pendingRefresh = GF._pendingRefresh or false
 GF._pendingDisable = GF._pendingDisable or false
 
+local registerFeatureEvents
+local unregisterFeatureEvents
+
 local function getUnit(self)
 	-- Secure headers set the "unit" attribute on the button.
 	return (self and (self.unit or (self.GetAttribute and self:GetAttribute("unit"))))
@@ -548,18 +781,19 @@ local function updateButtonConfig(self, cfg)
 	if not (st and cfg) then return end
 
 	local tc = cfg.text or {}
+	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
 	local ac = cfg.auras
+	local scfg = cfg.status or {}
 
 	st._wantsName = true
-	st._wantsHealthPct = tc.showHealthPercent == true
-	st._wantsPowerPct = tc.showPowerPercent == true
+	st._wantsLevel = scfg.levelEnabled ~= false
+	st._wantsAbsorb = (hc.absorbEnabled ~= false) or (hc.healAbsorbEnabled ~= false)
 
 	local wantsPower = true
 	local powerHeight = cfg.powerHeight
 	if powerHeight ~= nil and tonumber(powerHeight) <= 0 then wantsPower = false end
-	if type(pcfg.showRoles) == "table" and not selectionHasAny(pcfg.showRoles) then wantsPower = false end
-	if type(pcfg.showSpecs) == "table" and not selectionHasAny(pcfg.showSpecs) then wantsPower = false end
+	if wantsPower and not canShowPowerBySelection(pcfg) then wantsPower = false end
 	st._wantsPower = wantsPower
 
 	local wantsAuras = false
@@ -679,7 +913,35 @@ function GF:BuildButton(self)
 		st.health:SetStatusBarTexture(UFHelper.resolveTexture(hc.texture))
 		if UFHelper.configureSpecialTexture then UFHelper.configureSpecialTexture(st.health, "HEALTH", hc.texture, hc) end
 	end
+	stabilizeStatusBarTexture(st.health)
 	applyBarBackdrop(st.health, hc)
+
+	-- Absorb overlays
+	if not st.absorb then
+		st.absorb = CreateFrame("StatusBar", nil, st.health, "BackdropTemplate")
+		st.absorb:SetMinMaxValues(0, 1)
+		st.absorb:SetValue(0)
+		if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
+		st.absorb:Hide()
+	end
+	if not st.healAbsorb then
+		st.healAbsorb = CreateFrame("StatusBar", nil, st.health, "BackdropTemplate")
+		st.healAbsorb:SetMinMaxValues(0, 1)
+		st.healAbsorb:SetValue(0)
+		if st.healAbsorb.SetStatusBarDesaturated then st.healAbsorb:SetStatusBarDesaturated(false) end
+		st.healAbsorb:Hide()
+	end
+	if not st.overAbsorbGlow then
+		st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK", "OverAbsorbGlowTemplate")
+		if not st.overAbsorbGlow then st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK") end
+		if st.overAbsorbGlow then
+			st.overAbsorbGlow:SetTexture(798066)
+			st.overAbsorbGlow:SetBlendMode("ADD")
+			st.overAbsorbGlow:SetAlpha(0.8)
+			st.overAbsorbGlow:Hide()
+		end
+	end
+	if st.absorb then st.absorb.overAbsorbGlow = st.overAbsorbGlow end
 
 	-- Power bar
 	if not st.power then
@@ -711,6 +973,15 @@ function GF:BuildButton(self)
 
 	if not st.nameText then st.nameText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 	st.name = st.nameText
+	if not st.levelText then st.levelText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+
+	local indicatorLayer = st.healthTextLayer
+	if not st.leaderIcon then st.leaderIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
+	if not st.assistIcon then st.assistIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
+	if st.leaderIcon.GetParent and st.leaderIcon:GetParent() ~= indicatorLayer then st.leaderIcon:SetParent(indicatorLayer) end
+	if st.assistIcon.GetParent and st.assistIcon:GetParent() ~= indicatorLayer then st.assistIcon:SetParent(indicatorLayer) end
+	if st.leaderIcon.SetDrawLayer then st.leaderIcon:SetDrawLayer("OVERLAY", 7) end
+	if st.assistIcon.SetDrawLayer then st.assistIcon:SetDrawLayer("OVERLAY", 7) end
 
 	-- Apply fonts (uses your existing UFHelper logic + default font media)
 	if UFHelper and UFHelper.applyFont then
@@ -753,6 +1024,7 @@ function GF:LayoutButton(self)
 
 	local kind = self._eqolGroupKind -- set by header helper
 	local cfg = self._eqolCfg or getCfg(kind or "party")
+	local hc = cfg.health or {}
 	local powerH = tonumber(cfg.powerHeight) or 5
 	if st._powerHidden then powerH = 0 end
 	local w, h = self:GetSize()
@@ -774,12 +1046,54 @@ function GF:LayoutButton(self)
 	layoutTexts(st.health, st.healthTextLeft, st.healthTextCenter, st.healthTextRight, cfg.health)
 	layoutTexts(st.power, st.powerTextLeft, st.powerTextCenter, st.powerTextRight, cfg.power)
 
+	-- Absorb overlays
+	if st.absorb then
+		local absorbTextureKey = hc.absorbTexture or hc.texture
+		if st.absorb.SetStatusBarTexture and UFHelper and UFHelper.resolveTexture then
+			st.absorb:SetStatusBarTexture(UFHelper.resolveTexture(absorbTextureKey))
+			if UFHelper.configureSpecialTexture then UFHelper.configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc) end
+		end
+		if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
+		if UFHelper and UFHelper.applyStatusBarReverseFill then UFHelper.applyStatusBarReverseFill(st.absorb, hc.absorbReverseFill == true) end
+		stabilizeStatusBarTexture(st.absorb)
+		st.absorb:ClearAllPoints()
+		st.absorb:SetAllPoints(st.health)
+		setFrameLevelAbove(st.absorb, st.health, 1)
+	end
+	if st.healAbsorb then
+		local healAbsorbTextureKey = hc.healAbsorbTexture or hc.texture
+		if st.healAbsorb.SetStatusBarTexture and UFHelper and UFHelper.resolveTexture then
+			st.healAbsorb:SetStatusBarTexture(UFHelper.resolveTexture(healAbsorbTextureKey))
+			if UFHelper.configureSpecialTexture then UFHelper.configureSpecialTexture(st.healAbsorb, "HEALTH", healAbsorbTextureKey, hc) end
+		end
+		if st.healAbsorb.SetStatusBarDesaturated then st.healAbsorb:SetStatusBarDesaturated(false) end
+		if UFHelper and UFHelper.applyStatusBarReverseFill then UFHelper.applyStatusBarReverseFill(st.healAbsorb, hc.healAbsorbReverseFill == true) end
+		stabilizeStatusBarTexture(st.healAbsorb)
+		st.healAbsorb:ClearAllPoints()
+		st.healAbsorb:SetAllPoints(st.health)
+		setFrameLevelAbove(st.healAbsorb, st.absorb or st.health, 1)
+	end
+	if st.overAbsorbGlow then
+		st.overAbsorbGlow:ClearAllPoints()
+		local glowAnchor = st.absorb or st.health
+		st.overAbsorbGlow:SetPoint("TOPLEFT", glowAnchor, "TOPRIGHT", -7, 0)
+		st.overAbsorbGlow:SetPoint("BOTTOMLEFT", glowAnchor, "BOTTOMRIGHT", -7, 0)
+	end
+
 	-- Name + role icon layout
 	local tc = cfg.text or {}
 	local rc = cfg.roleIcon or {}
+	local sc = cfg.status or {}
 	local rolePad = 0
-	if rc.enabled ~= false then
-		if not st.roleIcon then st.roleIcon = st.health:CreateTexture(nil, "OVERLAY") end
+	local roleEnabled = rc.enabled ~= false
+	if roleEnabled and type(rc.showRoles) == "table" and not selectionHasAny(rc.showRoles) then
+		roleEnabled = false
+	end
+	if roleEnabled then
+		local indicatorLayer = st.healthTextLayer or st.health
+		if not st.roleIcon then st.roleIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
+		if st.roleIcon.GetParent and st.roleIcon:GetParent() ~= indicatorLayer then st.roleIcon:SetParent(indicatorLayer) end
+		if st.roleIcon.SetDrawLayer then st.roleIcon:SetDrawLayer("OVERLAY", 7) end
 		local size = rc.size or 14
 		local point = rc.point or "LEFT"
 		local relPoint = rc.relativePoint or "LEFT"
@@ -802,10 +1116,67 @@ function GF:LayoutButton(self)
 		local baseOffset = (cfg.health and cfg.health.offsetLeft) or {}
 		local nameX = (nameOffset.x ~= nil and nameOffset.x or baseOffset.x or 6) + rolePad
 		local nameY = nameOffset.y ~= nil and nameOffset.y or baseOffset.y or 0
+		local nameMaxChars = tonumber(tc.nameMaxChars) or 0
 		st.nameText:ClearAllPoints()
 		st.nameText:SetPoint("LEFT", st.health, "LEFT", nameX, nameY)
-		st.nameText:SetPoint("RIGHT", st.health, "RIGHT", -4, nameY)
+		if nameMaxChars <= 0 then
+			st.nameText:SetPoint("RIGHT", st.health, "RIGHT", -4, nameY)
+		end
 		st.nameText:SetJustifyH("LEFT")
+		if UFHelper and UFHelper.applyNameCharLimit then
+			local nameCfg = st._nameLimitCfg or {}
+			nameCfg.nameMaxChars = tc.nameMaxChars
+			nameCfg.font = tc.font or hc.font
+			nameCfg.fontSize = tc.fontSize or hc.fontSize or 12
+			nameCfg.fontOutline = tc.fontOutline or hc.fontOutline
+			st._nameLimitCfg = nameCfg
+			UFHelper.applyNameCharLimit(st, nameCfg, nil)
+		end
+	end
+
+	if st.levelText then
+		if UFHelper and UFHelper.applyFont then
+			local hc = cfg.health or {}
+			local levelFont = sc.levelFont or tc.font or hc.font
+			local levelFontSize = sc.levelFontSize or tc.fontSize or hc.fontSize or 12
+			local levelOutline = sc.levelFontOutline or tc.fontOutline or hc.fontOutline
+			UFHelper.applyFont(st.levelText, levelFont, levelFontSize, levelOutline)
+		end
+		local anchor = sc.levelAnchor or "RIGHT"
+		local levelOffset = sc.levelOffset or {}
+		st.levelText:ClearAllPoints()
+		st.levelText:SetPoint(anchor, st.health, anchor, levelOffset.x or 0, levelOffset.y or 0)
+		st.levelText:SetJustifyH(anchor == "LEFT" and "LEFT" or (anchor == "CENTER" and "CENTER" or "RIGHT"))
+	end
+
+	if st.leaderIcon then
+		local lc = sc.leaderIcon or {}
+		local indicatorLayer = st.healthTextLayer or st.health
+		if st.leaderIcon.GetParent and st.leaderIcon:GetParent() ~= indicatorLayer then st.leaderIcon:SetParent(indicatorLayer) end
+		if st.leaderIcon.SetDrawLayer then st.leaderIcon:SetDrawLayer("OVERLAY", 7) end
+		if lc.enabled ~= false then
+			local size = lc.size or 12
+			st.leaderIcon:ClearAllPoints()
+			st.leaderIcon:SetPoint(lc.point or "TOPLEFT", st.health, lc.relativePoint or "TOPLEFT", lc.x or 0, lc.y or 0)
+			st.leaderIcon:SetSize(size, size)
+		else
+			st.leaderIcon:Hide()
+		end
+	end
+
+	if st.assistIcon then
+		local acfg = sc.assistIcon or {}
+		local indicatorLayer = st.healthTextLayer or st.health
+		if st.assistIcon.GetParent and st.assistIcon:GetParent() ~= indicatorLayer then st.assistIcon:SetParent(indicatorLayer) end
+		if st.assistIcon.SetDrawLayer then st.assistIcon:SetDrawLayer("OVERLAY", 7) end
+		if acfg.enabled ~= false then
+			local size = acfg.size or 12
+			st.assistIcon:ClearAllPoints()
+			st.assistIcon:SetPoint(acfg.point or "TOPLEFT", st.health, acfg.relativePoint or "TOPLEFT", acfg.x or 0, acfg.y or 0)
+			st.assistIcon:SetSize(size, size)
+		else
+			st.assistIcon:Hide()
+		end
 	end
 
 	-- Keep text above bars
@@ -813,6 +1184,12 @@ function GF:LayoutButton(self)
 	st.health:SetFrameLevel(baseLevel + 1)
 	st.power:SetFrameLevel(baseLevel + 1)
 	syncTextFrameLevels(st)
+
+	-- Pixel quantization caches (reset on layout changes)
+	st._lastHealthPx = nil
+	st._lastHealthBarW = nil
+	st._lastPowerPx = nil
+	st._lastPowerBarW = nil
 end
 
 -- -----------------------------------------------------------------------------
@@ -869,38 +1246,53 @@ local function positionAuraButton(btn, container, anchorPoint, index, perRow, si
 	btn:SetPoint(anchorPoint, container, anchorPoint, col * stepX, row * stepY)
 end
 
+local function resolveRoleAtlas(roleKey, style)
+	if roleKey == "NONE" then return nil end
+	if style == "CIRCLE" then
+		if GetMicroIconForRole then
+			return GetMicroIconForRole(roleKey)
+		end
+		if roleKey == "TANK" then return "UI-LFG-RoleIcon-Tank-Micro-GroupFinder" end
+		if roleKey == "HEALER" then return "UI-LFG-RoleIcon-Healer-Micro-GroupFinder" end
+		if roleKey == "DAMAGER" then return "UI-LFG-RoleIcon-DPS-Micro-GroupFinder" end
+	end
+	if roleKey == "TANK" then return "roleicon-tiny-tank" end
+	if roleKey == "HEALER" then return "roleicon-tiny-healer" end
+	if roleKey == "DAMAGER" then return "roleicon-tiny-dps" end
+	return nil
+end
+
 function GF:UpdateRoleIcon(self)
 	local unit = getUnit(self)
 	local st = getState(self)
 	if not (unit and st) then return end
-	local cfg = getCfg(self._eqolGroupKind or "party")
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local rc = cfg and cfg.roleIcon or {}
 	if rc.enabled == false then
 		if st.roleIcon then st.roleIcon:Hide() end
 		return
 	end
-	if not st.roleIcon then st.roleIcon = (st.health or st.barGroup or st.frame):CreateTexture(nil, "OVERLAY") end
-	local roleEnum
-	if UnitGroupRolesAssignedEnum then roleEnum = UnitGroupRolesAssignedEnum(unit) end
-	local atlas
-	if roleEnum and Enum and Enum.LFGRole then
-		if roleEnum == Enum.LFGRole.Tank then
-			atlas = "roleicon-tiny-tank"
-		elseif roleEnum == Enum.LFGRole.Healer then
-			atlas = "roleicon-tiny-healer"
-		elseif roleEnum == Enum.LFGRole.Damage then
-			atlas = "roleicon-tiny-dps"
+	local indicatorLayer = st.healthTextLayer or st.health or st.barGroup or st.frame
+	if not st.roleIcon then st.roleIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
+	if st.roleIcon.GetParent and st.roleIcon:GetParent() ~= indicatorLayer then st.roleIcon:SetParent(indicatorLayer) end
+	if st.roleIcon.SetDrawLayer then st.roleIcon:SetDrawLayer("OVERLAY", 7) end
+	local roleKey = getUnitRoleKey(unit)
+	if roleKey == "NONE" and isEditModeActive() then roleKey = "DAMAGER" end
+	local selection = rc.showRoles
+	if type(selection) == "table" then
+		if not selectionHasAny(selection) then
+			st._lastRoleAtlas = nil
+			st.roleIcon:Hide()
+			return
 		end
-	else
-		local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
-		if role == "TANK" then
-			atlas = "roleicon-tiny-tank"
-		elseif role == "HEALER" then
-			atlas = "roleicon-tiny-healer"
-		elseif role == "DAMAGER" then
-			atlas = "roleicon-tiny-dps"
+		if roleKey == "NONE" or not selectionContains(selection, roleKey) then
+			st._lastRoleAtlas = nil
+			st.roleIcon:Hide()
+			return
 		end
 	end
+	local style = rc.style or "TINY"
+	local atlas = resolveRoleAtlas(roleKey, style)
 	if atlas then
 		if st._lastRoleAtlas ~= atlas then
 			st._lastRoleAtlas = atlas
@@ -910,6 +1302,56 @@ function GF:UpdateRoleIcon(self)
 	else
 		st._lastRoleAtlas = nil
 		st.roleIcon:Hide()
+	end
+end
+
+local function getUnitRaidRole(unit)
+	if not (UnitInRaid and GetRaidRosterInfo and unit) then return nil end
+	local raidID = UnitInRaid(unit)
+	if not raidID then return nil end
+	local role = select(10, GetRaidRosterInfo(raidID))
+	return role
+end
+
+function GF:UpdateGroupIcons(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (st and st.leaderIcon and st.assistIcon) then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local scfg = cfg and cfg.status or {}
+
+	-- Leader icon
+	local lc = scfg.leaderIcon or {}
+	if lc.enabled == false then
+		st.leaderIcon:Hide()
+	else
+		local showLeader = unit and UnitIsGroupLeader and UnitIsGroupLeader(unit)
+		if not showLeader and isEditModeActive() then showLeader = true end
+		if showLeader then
+			st.leaderIcon:SetAtlas("UI-HUD-UnitFrame-Player-Group-LeaderIcon", true)
+			st.leaderIcon:Show()
+		else
+			st.leaderIcon:Hide()
+		end
+	end
+
+	-- Assist icon (group assistant or MAINASSIST raid role)
+	local acfg = scfg.assistIcon or {}
+	if acfg.enabled == false then
+		st.assistIcon:Hide()
+	else
+		local showAssist = unit and UnitIsGroupAssistant and UnitIsGroupAssistant(unit)
+		if not showAssist then
+			local raidRole = getUnitRaidRole(unit)
+			showAssist = raidRole == "MAINASSIST"
+		end
+		if not showAssist and isEditModeActive() then showAssist = true end
+		if showAssist then
+			st.assistIcon:SetAtlas("RaidFrame-Icon-MainAssist", true)
+			st.assistIcon:Show()
+		else
+			st.assistIcon:Hide()
+		end
 	end
 end
 
@@ -940,6 +1382,66 @@ local AURA_TYPE_META = {
 		predicate = externalAuraPredicate,
 	},
 }
+
+local SAMPLE_BUFF_ICONS = { 136243, 135940, 136085, 136097, 136116, 136048, 135932, 136108 }
+local SAMPLE_DEBUFF_ICONS = { 136207, 136160, 136128, 135804, 136168, 132104, 136118, 136214 }
+local SAMPLE_EXTERNAL_ICONS = { 135936, 136073, 135907, 135940, 136090, 135978 }
+local SAMPLE_DISPEL_TYPES = { "Magic", "Curse", "Disease", "Poison" }
+
+local function getSampleAuraData(kindKey, index, now)
+	local duration
+	if index % 3 == 0 then
+		duration = 120
+	elseif index % 3 == 1 then
+		duration = 30
+	else
+		duration = 0
+	end
+	local expiration = duration > 0 and (now + duration) or nil
+	local stacks
+	if index % 5 == 0 then
+		stacks = 5
+	elseif index % 3 == 0 then
+		stacks = 3
+	end
+	local iconList = SAMPLE_BUFF_ICONS
+	if kindKey == "debuff" then
+		iconList = SAMPLE_DEBUFF_ICONS
+	elseif kindKey == "externals" then
+		iconList = SAMPLE_EXTERNAL_ICONS
+	end
+	local icon = iconList[((index - 1) % #iconList) + 1]
+	local dispelName = kindKey == "debuff" and SAMPLE_DISPEL_TYPES[((index - 1) % #SAMPLE_DISPEL_TYPES) + 1] or nil
+	local canActivePlayerDispel = dispelName == "Magic"
+	local base = (kindKey == "buff" and -100000) or (kindKey == "debuff" and -200000) or -300000
+	local auraId = base - index
+	return {
+		auraInstanceID = auraId,
+		icon = icon,
+		isHelpful = kindKey ~= "debuff",
+		isHarmful = kindKey == "debuff",
+		applications = stacks,
+		duration = duration,
+		expirationTime = expiration,
+		dispelName = dispelName,
+		canActivePlayerDispel = canActivePlayerDispel,
+		isSample = true,
+	}
+end
+
+local function getSampleStyle(st, kindKey, style)
+	st._auraSampleStyle = st._auraSampleStyle or {}
+	local sample = st._auraSampleStyle[kindKey]
+	if sample and sample._src == style then return sample end
+	sample = {}
+	for key, value in pairs(style or {}) do
+		sample[key] = value
+	end
+	sample.showTooltip = false
+	sample._src = style
+	st._auraSampleStyle[kindKey] = sample
+	return sample
+end
 
 function GF:LayoutAuras(self)
 	local st = getState(self)
@@ -1068,9 +1570,14 @@ local function updateAuraType(self, unit, st, ac, kindKey)
 end
 
 function GF:UpdateAuras(self, updateInfo)
-	local unit = getUnit(self)
 	local st = getState(self)
-	if not (unit and st and C_UnitAuras and AuraUtil) then return end
+	if not (st and AuraUtil) then return end
+	local unit = getUnit(self)
+	if isEditModeActive() then
+		GF:UpdateSampleAuras(self)
+		return
+	end
+	if not (unit and C_UnitAuras) then return end
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
 	local wantsAuras = st._wantsAuras
@@ -1085,11 +1592,89 @@ function GF:UpdateAuras(self, updateInfo)
 		return
 	end
 
+	st._auraSampleActive = nil
+
 	if not st._auraLayout then GF:LayoutAuras(self) end
 
 	updateAuraType(self, unit, st, ac, "buff")
 	updateAuraType(self, unit, st, ac, "debuff")
 	updateAuraType(self, unit, st, ac, "externals")
+end
+
+function GF:UpdateSampleAuras(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (st and AuraUtil) then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local ac = cfg and cfg.auras or {}
+	local wantsAuras = st._wantsAuras
+	if wantsAuras == nil then wantsAuras = (ac and ac.enabled ~= false and ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled))) or false end
+	if wantsAuras == false or ac.enabled == false then
+		if st.buffContainer then st.buffContainer:Hide() end
+		if st.debuffContainer then st.debuffContainer:Hide() end
+		if st.externalContainer then st.externalContainer:Hide() end
+		hideAuraButtons(st.buffButtons, 1)
+		hideAuraButtons(st.debuffButtons, 1)
+		hideAuraButtons(st.externalButtons, 1)
+		st._auraSampleActive = nil
+		return
+	end
+
+	if not st._auraLayout then GF:LayoutAuras(self) end
+
+	local function updateSampleType(kindKey)
+		local meta = AURA_TYPE_META[kindKey]
+		if not meta then return end
+		local typeCfg = ac and ac[kindKey] or {}
+		if typeCfg.enabled == false then
+			local container = st[meta.containerKey]
+			if container then container:Hide() end
+			hideAuraButtons(st[meta.buttonsKey], 1)
+			return
+		end
+
+		local layout = st._auraLayout and st._auraLayout[kindKey]
+		local style = st._auraStyle and st._auraStyle[kindKey]
+		if not (layout and style) then return end
+
+		local container = ensureAuraContainer(st, meta.containerKey)
+		if not container then return end
+		container:Show()
+
+		local buttons = st[meta.buttonsKey]
+		if not buttons then
+			buttons = {}
+			st[meta.buttonsKey] = buttons
+		end
+
+		local iconList = SAMPLE_BUFF_ICONS
+		if kindKey == "debuff" then
+			iconList = SAMPLE_DEBUFF_ICONS
+		elseif kindKey == "externals" then
+			iconList = SAMPLE_EXTERNAL_ICONS
+		end
+		local maxCount = layout.maxCount or 0
+		local shown = math.min(maxCount, #iconList)
+		local now = GetTime and GetTime() or 0
+		local sampleStyle = getSampleStyle(st, kindKey, style)
+		local unitToken = unit or "player"
+		for i = 1, shown do
+			local aura = getSampleAuraData(kindKey, i, now)
+			local btn = AuraUtil.ensureAuraButton(container, buttons, i, sampleStyle)
+			AuraUtil.applyAuraToButton(btn, aura, sampleStyle, meta.isDebuff, unitToken)
+			if btn._auraLayoutKey ~= layout.key then
+				positionAuraButton(btn, container, layout.anchorPoint, i, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
+				btn._auraLayoutKey = layout.key
+			end
+			btn:Show()
+		end
+		hideAuraButtons(buttons, shown + 1)
+	end
+
+	updateSampleType("buff")
+	updateSampleType("debuff")
+	updateSampleType("externals")
+	st._auraSampleActive = true
 end
 
 function GF:UpdateName(self)
@@ -1105,9 +1690,7 @@ function GF:UpdateName(self)
 	local name = UnitName and UnitName(unit) or ""
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local tc = cfg and cfg.text or {}
-	local maxChars = cfg and cfg.text and cfg.text.nameMaxChars
-	maxChars = tonumber(maxChars)
-	if maxChars and maxChars > 0 and name and #name > maxChars then name = name:sub(1, maxChars) end
+	local sc = cfg and cfg.status or {}
 	if UnitIsConnected and not UnitIsConnected(unit) then name = (name and name ~= "") and (name .. " |cffff6666DC|r") or "|cffff6666DC|r" end
 	name = name or ""
 	if st._lastName ~= name then
@@ -1117,7 +1700,11 @@ function GF:UpdateName(self)
 
 	-- Name coloring (simple: class color for players, grey if offline)
 	local r, g, b, a = 1, 1, 1, 1
-	if tc.useClassColor ~= false and st._classR then
+	local nameMode = sc.nameColorMode
+	if nameMode == nil then nameMode = (tc.useClassColor ~= false) and "CLASS" or "CUSTOM" end
+	if nameMode == "CUSTOM" then
+		r, g, b, a = unpackColor(sc.nameColor, { 1, 1, 1, 1 })
+	elseif nameMode == "CLASS" and st._classR then
 		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	end
 	if UnitIsConnected and not UnitIsConnected(unit) then
@@ -1129,6 +1716,48 @@ function GF:UpdateName(self)
 	end
 end
 
+local function shouldShowLevel(scfg, unit)
+	if not scfg or scfg.levelEnabled == false then return false end
+	if scfg.hideLevelAtMax and addon.variables and addon.variables.isMaxLevel and UnitLevel then
+		local level = UnitLevel(unit)
+		if issecretvalue and issecretvalue(level) then return true end
+		level = tonumber(level) or 0
+		if level > 0 and addon.variables.isMaxLevel[level] then return false end
+	end
+	return true
+end
+
+function GF:UpdateLevel(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (st and st.levelText) then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local scfg = cfg and cfg.status or {}
+	local show = unit and shouldShowLevel(scfg, unit)
+	if not show and isEditModeActive() then show = true end
+	st.levelText:SetShown(show)
+	if not show then return end
+
+	local levelText = "??"
+	if unit and UnitExists and UnitExists(unit) then
+		levelText = getSafeLevelText(unit, false)
+	elseif isEditModeActive() then
+		levelText = tostring(scfg.sampleLevel or 60)
+	end
+	st.levelText:SetText(levelText)
+
+	local r, g, b, a = 1, 0.85, 0, 1
+	if scfg.levelColorMode == "CUSTOM" then
+		r, g, b, a = unpackColor(scfg.levelColor, { 1, 0.85, 0, 1 })
+	elseif scfg.levelColorMode == "CLASS" and st._classR then
+		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
+	end
+	if st._lastLevelR ~= r or st._lastLevelG ~= g or st._lastLevelB ~= b or st._lastLevelA ~= a then
+		st._lastLevelR, st._lastLevelG, st._lastLevelB, st._lastLevelA = r, g, b, a
+		st.levelText:SetTextColor(r, g, b, a)
+	end
+end
+
 function GF:UpdateHealthValue(self)
 	local unit = getUnit(self)
 	local st = getState(self)
@@ -1136,6 +1765,9 @@ function GF:UpdateHealthValue(self)
 	if UnitExists and not UnitExists(unit) then
 		st.health:SetMinMaxValues(0, 1)
 		st.health:SetValue(0)
+		if st.absorb then st.absorb:Hide() end
+		if st.healAbsorb then st.healAbsorb:Hide() end
+		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
 		return
 	end
 	local cur = UnitHealth and UnitHealth(unit)
@@ -1156,36 +1788,162 @@ function GF:UpdateHealthValue(self)
 		if st._lastHealthMax ~= maxForValue then
 			st.health:SetMinMaxValues(0, maxForValue)
 			st._lastHealthMax = maxForValue
+			st._lastHealthPx = nil
+			st._lastHealthBarW = nil
 		end
-		if st._lastHealthCur ~= cur then
-			st.health:SetValue(cur)
-			st._lastHealthCur = cur
+		local w = st.health:GetWidth()
+		if w and w > 0 and maxForValue > 0 then
+			local px = floor((cur * w) / maxForValue + 0.5)
+			if st._lastHealthPx ~= px or st._lastHealthBarW ~= w then
+				st._lastHealthPx = px
+				st._lastHealthBarW = w
+				st.health:SetValue((px / w) * maxForValue)
+				st._lastHealthCur = cur
+			end
+		else
+			if st._lastHealthCur ~= cur then
+				st.health:SetValue(cur)
+				st._lastHealthCur = cur
+			end
 		end
 	end
 
-	-- Optional: health percent on the right (kept simple but matches your text slots)
+	-- Absorb overlays
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
-	local showPct = st._wantsHealthPct
-	if showPct == nil then showPct = cfg and cfg.text and cfg.text.showHealthPercent end
-	if st.healthTextRight then
-		local canShowPct = false
-		if showPct then
-			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
-				if maxv and maxv > 0 then canShowPct = true end
-			end
-		end
-		if canShowPct then
-			local pct = floor((cur * 100) / maxv + 0.5)
-			if st._lastHealthPctVal ~= pct then
-				st._lastHealthPctVal = pct
-				st.healthTextRight:SetText(pct .. "%")
-			end
+	local hc = cfg and cfg.health or {}
+	local kind = self._eqolGroupKind or "party"
+	local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+	local absorbEnabled = hc.absorbEnabled ~= false
+	local healAbsorbEnabled = hc.healAbsorbEnabled ~= false
+	local curSecret = issecretvalue and issecretvalue(cur)
+	if absorbEnabled and st.absorb then
+		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
+		local absSecret = issecretvalue and issecretvalue(abs)
+		if not absSecret then abs = tonumber(abs) or 0 end
+		local canSampleAbsorb = isEditModeActive() and not absSecret and (not issecretvalue or not issecretvalue(maxForValue))
+		if canSampleAbsorb and (not abs or abs == 0) then abs = (maxForValue or 1) * 0.6 end
+		st.absorb:SetMinMaxValues(0, maxForValue or 1)
+		st.absorb:SetValue(abs or 0)
+		if absSecret then
+			st.absorb:Show()
+		elseif abs and abs > 0 then
+			st.absorb:Show()
 		else
-			if st._lastHealthPctVal ~= nil then
-				st._lastHealthPctVal = nil
-				st.healthTextRight:SetText("")
-			end
+			st.absorb:Hide()
 		end
+		local ar, ag, ab, aa
+		if UFHelper and UFHelper.getAbsorbColor then
+			ar, ag, ab, aa = UFHelper.getAbsorbColor(hc, defH)
+		else
+			ar, ag, ab, aa = 0.85, 0.95, 1, 0.7
+		end
+		if st._lastAbsorbR ~= ar or st._lastAbsorbG ~= ag or st._lastAbsorbB ~= ab or st._lastAbsorbA ~= aa then
+			st._lastAbsorbR, st._lastAbsorbG, st._lastAbsorbB, st._lastAbsorbA = ar, ag, ab, aa
+			st.absorb:SetStatusBarColor(ar or 0.85, ag or 0.95, ab or 1, aa or 0.7)
+		end
+		if st.overAbsorbGlow then
+			local showGlow = hc.useAbsorbGlow ~= false and (not absSecret and abs and abs > 0)
+			st.overAbsorbGlow:SetShown(showGlow)
+		end
+	elseif st.absorb then
+		st.absorb:Hide()
+		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
+	end
+
+	if healAbsorbEnabled and st.healAbsorb then
+		local healAbs = UnitGetTotalHealAbsorbs and UnitGetTotalHealAbsorbs(unit) or 0
+		local healSecret = issecretvalue and issecretvalue(healAbs)
+		if not healSecret then healAbs = tonumber(healAbs) or 0 end
+		local canSampleHeal = isEditModeActive() and not healSecret and (not issecretvalue or not issecretvalue(maxForValue))
+		if canSampleHeal and (not healAbs or healAbs == 0) then healAbs = (maxForValue or 1) * 0.35 end
+		st.healAbsorb:SetMinMaxValues(0, maxForValue or 1)
+		if not healSecret and not curSecret then
+			if (cur or 0) < (healAbs or 0) then healAbs = cur or 0 end
+		end
+		st.healAbsorb:SetValue(healAbs or 0)
+		if healSecret then
+			st.healAbsorb:Show()
+		elseif healAbs and healAbs > 0 then
+			st.healAbsorb:Show()
+		else
+			st.healAbsorb:Hide()
+		end
+		local har, hag, hab, haa
+		if UFHelper and UFHelper.getHealAbsorbColor then
+			har, hag, hab, haa = UFHelper.getHealAbsorbColor(hc, defH)
+		else
+			har, hag, hab, haa = 1, 0.3, 0.3, 0.7
+		end
+		if st._lastHealAbsorbR ~= har or st._lastHealAbsorbG ~= hag or st._lastHealAbsorbB ~= hab or st._lastHealAbsorbA ~= haa then
+			st._lastHealAbsorbR, st._lastHealAbsorbG, st._lastHealAbsorbB, st._lastHealAbsorbA = har, hag, hab, haa
+			st.healAbsorb:SetStatusBarColor(har or 1, hag or 0.3, hab or 0.3, haa or 0.7)
+		end
+	elseif st.healAbsorb then
+		st.healAbsorb:Hide()
+	end
+
+	-- Health text slots (UF-like formatting, secret-safe)
+	local leftMode = (hc.textLeft ~= nil) and hc.textLeft or defH.textLeft or "NONE"
+	local centerMode = (hc.textCenter ~= nil) and hc.textCenter or defH.textCenter or "NONE"
+	local rightMode = (hc.textRight ~= nil) and hc.textRight or defH.textRight or "NONE"
+	local hasText = (leftMode ~= "NONE") or (centerMode ~= "NONE") or (rightMode ~= "NONE")
+	if hasText and (st.healthTextLeft or st.healthTextCenter or st.healthTextRight) then
+		if secretHealth then
+			if st.healthTextLeft then st.healthTextLeft:SetText("") end
+			if st.healthTextCenter then st.healthTextCenter:SetText("") end
+			if st.healthTextRight then st.healthTextRight:SetText("") end
+			st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+		else
+			local delimiter = (UFHelper and UFHelper.getTextDelimiter and UFHelper.getTextDelimiter(hc, defH)) or (hc.textDelimiter or defH.textDelimiter or " ")
+			local delimiter2 = (UFHelper and UFHelper.getTextDelimiterSecondary and UFHelper.getTextDelimiterSecondary(hc, defH, delimiter))
+				or (hc.textDelimiterSecondary or defH.textDelimiterSecondary or delimiter)
+			local delimiter3 = (UFHelper and UFHelper.getTextDelimiterTertiary and UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2))
+				or (hc.textDelimiterTertiary or defH.textDelimiterTertiary or delimiter2)
+			local useShort = hc.useShortNumbers ~= false
+			local hidePercentSymbol = hc.hidePercentSymbol == true
+			local percentVal
+			if textModeUsesPercent(leftMode) or textModeUsesPercent(centerMode) or textModeUsesPercent(rightMode) then
+				if addon.variables and addon.variables.isMidnight then
+					percentVal = getHealthPercent(unit, cur, maxv)
+				else
+					percentVal = getHealthPercent(unit, cur, maxv)
+				end
+			end
+			local levelText
+			if UFHelper and UFHelper.textModeUsesLevel then
+				if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then
+					levelText = getSafeLevelText(unit, false)
+				end
+			end
+			local function setHealthText(fs, cacheKey, mode)
+				if not fs then return end
+				if mode == "NONE" then
+					if st[cacheKey] ~= "" then
+						st[cacheKey] = ""
+						fs:SetText("")
+					end
+					return
+				end
+				local text = ""
+				if UFHelper and UFHelper.formatText then
+					text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+				else
+					text = tostring(cur or 0)
+				end
+				if st[cacheKey] ~= text then
+					st[cacheKey] = text
+					fs:SetText(text)
+				end
+			end
+			setHealthText(st.healthTextLeft, "_lastHealthTextLeft", leftMode)
+			setHealthText(st.healthTextCenter, "_lastHealthTextCenter", centerMode)
+			setHealthText(st.healthTextRight, "_lastHealthTextRight", rightMode)
+		end
+	elseif st.healthTextLeft or st.healthTextCenter or st.healthTextRight then
+		if st.healthTextLeft then st.healthTextLeft:SetText("") end
+		if st.healthTextCenter then st.healthTextCenter:SetText("") end
+		if st.healthTextRight then st.healthTextRight:SetText("") end
+		st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
 	end
 end
 
@@ -1195,19 +1953,34 @@ function GF:UpdateHealthStyle(self)
 	if not (unit and st and st.health) then return end
 	if UnitExists and not UnitExists(unit) then return end
 
-	-- Simple coloring: class color for players, green fallback.
-	local r, g, b = 0.2, 1, 0.2
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local hc = cfg and cfg.health or {}
-	if hc.useClassColor == true and st._classR then
-		r, g, b = st._classR, st._classG, st._classB
+	local kind = self._eqolGroupKind or "party"
+	local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+
+	if st.health and st.health.SetStatusBarDesaturated then
+		if st._lastHealthDesat ~= true then
+			st._lastHealthDesat = true
+			st.health:SetStatusBarDesaturated(true)
+		end
 	end
+
+	local r, g, b, a
+	local useCustom = hc.useCustomColor == true
+	if useCustom then
+		r, g, b, a = unpackColor(hc.color, defH.color or { 0, 0.8, 0, 1 })
+	elseif hc.useClassColor == true and st._classR then
+		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
+	else
+		r, g, b, a = unpackColor(hc.color, defH.color or { 0, 0.8, 0, 1 })
+	end
+
 	if UnitIsConnected and not UnitIsConnected(unit) then
-		r, g, b = 0.5, 0.5, 0.5
+		r, g, b, a = 0.5, 0.5, 0.5, 1
 	end
-	if st._lastHealthR ~= r or st._lastHealthG ~= g or st._lastHealthB ~= b then
-		st._lastHealthR, st._lastHealthG, st._lastHealthB = r, g, b
-		st.health:SetStatusBarColor(r, g, b, 1)
+	if st._lastHealthR ~= r or st._lastHealthG ~= g or st._lastHealthB ~= b or st._lastHealthA ~= a then
+		st._lastHealthR, st._lastHealthG, st._lastHealthB, st._lastHealthA = r, g, b, a
+		st.health:SetStatusBarColor(r, g, b, a or 1)
 	end
 end
 
@@ -1234,7 +2007,7 @@ function GF:UpdatePowerVisibility(self)
 		end
 		return false
 	end
-	local showPower = shouldShowPowerForRole(pcfg, unit) and shouldShowPowerForSpec(pcfg)
+	local showPower = shouldShowPowerForUnit(pcfg, unit)
 	if not showPower then
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
 		if st.powerTextCenter then st.powerTextCenter:SetText("") end
@@ -1287,36 +2060,100 @@ function GF:UpdatePowerValue(self)
 		if st._lastPowerMax ~= maxForValue then
 			st.power:SetMinMaxValues(0, maxForValue)
 			st._lastPowerMax = maxForValue
+			st._lastPowerPx = nil
+			st._lastPowerBarW = nil
 		end
-		if st._lastPowerCur ~= cur then
-			st.power:SetValue(cur)
-			st._lastPowerCur = cur
+		local w = st.power:GetWidth()
+		if w and w > 0 and maxForValue > 0 then
+			local px = floor((cur * w) / maxForValue + 0.5)
+			if st._lastPowerPx ~= px or st._lastPowerBarW ~= w then
+				st._lastPowerPx = px
+				st._lastPowerBarW = w
+				st.power:SetValue((px / w) * maxForValue)
+				st._lastPowerCur = cur
+			end
+		else
+			if st._lastPowerCur ~= cur then
+				st.power:SetValue(cur)
+				st._lastPowerCur = cur
+			end
 		end
 	end
 
-	-- Optional: power percent on the right
+	-- Power text slots (UF-like formatting, secret-safe)
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
-	local showPct = st._wantsPowerPct
-	if showPct == nil then showPct = cfg and cfg.text and cfg.text.showPowerPercent end
-	if st.powerTextRight then
-		local canShowPct = false
-		if showPct then
-			if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(maxv)) then
-				if maxv and maxv > 0 then canShowPct = true end
-			end
-		end
-		if canShowPct then
-			local pct = floor((cur * 100) / maxv + 0.5)
-			if st._lastPowerPctVal ~= pct then
-				st._lastPowerPctVal = pct
-				st.powerTextRight:SetText(pct .. "%")
-			end
+	local kind = self._eqolGroupKind or "party"
+	local pcfg = cfg and cfg.power or {}
+	local defP = (DEFAULTS[kind] and DEFAULTS[kind].power) or {}
+	local leftMode = (pcfg.textLeft ~= nil) and pcfg.textLeft or defP.textLeft or "NONE"
+	local centerMode = (pcfg.textCenter ~= nil) and pcfg.textCenter or defP.textCenter or "NONE"
+	local rightMode = (pcfg.textRight ~= nil) and pcfg.textRight or defP.textRight or "NONE"
+	local hasText = (leftMode ~= "NONE") or (centerMode ~= "NONE") or (rightMode ~= "NONE")
+	if hasText and (st.powerTextLeft or st.powerTextCenter or st.powerTextRight) then
+		if secretPower then
+			if st.powerTextLeft then st.powerTextLeft:SetText("") end
+			if st.powerTextCenter then st.powerTextCenter:SetText("") end
+			if st.powerTextRight then st.powerTextRight:SetText("") end
+			st._lastPowerTextLeft, st._lastPowerTextCenter, st._lastPowerTextRight = nil, nil, nil
 		else
-			if st._lastPowerPctVal ~= nil then
-				st._lastPowerPctVal = nil
-				st.powerTextRight:SetText("")
+			local maxZero = (maxv == 0)
+			if maxZero then
+				if st.powerTextLeft then st.powerTextLeft:SetText("") end
+				if st.powerTextCenter then st.powerTextCenter:SetText("") end
+				if st.powerTextRight then st.powerTextRight:SetText("") end
+				st._lastPowerTextLeft, st._lastPowerTextCenter, st._lastPowerTextRight = nil, nil, nil
+			else
+				local delimiter = (UFHelper and UFHelper.getTextDelimiter and UFHelper.getTextDelimiter(pcfg, defP)) or (pcfg.textDelimiter or defP.textDelimiter or " ")
+				local delimiter2 = (UFHelper and UFHelper.getTextDelimiterSecondary and UFHelper.getTextDelimiterSecondary(pcfg, defP, delimiter))
+					or (pcfg.textDelimiterSecondary or defP.textDelimiterSecondary or delimiter)
+				local delimiter3 = (UFHelper and UFHelper.getTextDelimiterTertiary and UFHelper.getTextDelimiterTertiary(pcfg, defP, delimiter, delimiter2))
+					or (pcfg.textDelimiterTertiary or defP.textDelimiterTertiary or delimiter2)
+				local useShort = pcfg.useShortNumbers ~= false
+				local hidePercentSymbol = pcfg.hidePercentSymbol == true
+				local percentVal
+				if textModeUsesPercent(leftMode) or textModeUsesPercent(centerMode) or textModeUsesPercent(rightMode) then
+					if addon.variables and addon.variables.isMidnight then
+					percentVal = getPowerPercent(unit, powerType or 0, cur, maxv)
+				else
+					percentVal = getPowerPercent(unit, powerType or 0, cur, maxv)
+				end
+			end
+				local levelText
+				if UFHelper and UFHelper.textModeUsesLevel then
+					if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then
+						levelText = getSafeLevelText(unit, false)
+					end
+				end
+				local function setPowerText(fs, cacheKey, mode)
+					if not fs then return end
+					if mode == "NONE" then
+						if st[cacheKey] ~= "" then
+							st[cacheKey] = ""
+							fs:SetText("")
+						end
+						return
+					end
+					local text = ""
+					if UFHelper and UFHelper.formatText then
+						text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+					else
+						text = tostring(cur or 0)
+					end
+					if st[cacheKey] ~= text then
+						st[cacheKey] = text
+						fs:SetText(text)
+					end
+				end
+				setPowerText(st.powerTextLeft, "_lastPowerTextLeft", leftMode)
+				setPowerText(st.powerTextCenter, "_lastPowerTextCenter", centerMode)
+				setPowerText(st.powerTextRight, "_lastPowerTextRight", rightMode)
 			end
 		end
+	elseif st.powerTextLeft or st.powerTextCenter or st.powerTextRight then
+		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextCenter then st.powerTextCenter:SetText("") end
+		if st.powerTextRight then st.powerTextRight:SetText("") end
+		st._lastPowerTextLeft, st._lastPowerTextCenter, st._lastPowerTextRight = nil, nil, nil
 	end
 end
 
@@ -1340,6 +2177,7 @@ function GF:UpdatePowerStyle(self)
 			st._lastPowerTexture = pcfg.texture
 		end
 	end
+	stabilizeStatusBarTexture(st.power)
 	if st.power.SetStatusBarDesaturated and UFHelper and UFHelper.isPowerDesaturated then
 		local desat = UFHelper.isPowerDesaturated(powerKey)
 		if st._lastPowerDesat ~= desat then
@@ -1374,9 +2212,11 @@ end
 
 function GF:UpdateAll(self)
 	GF:UpdateName(self)
+	GF:UpdateLevel(self)
 	GF:UpdateHealth(self)
 	GF:UpdatePower(self)
 	GF:UpdateRoleIcon(self)
+	GF:UpdateGroupIcons(self)
 	GF:UpdateAuras(self)
 end
 
@@ -1493,6 +2333,10 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	reg("UNIT_CONNECTION")
 	reg("UNIT_HEALTH")
 	reg("UNIT_MAXHEALTH")
+	if self._eqolUFState and self._eqolUFState._wantsAbsorb then
+		reg("UNIT_ABSORB_AMOUNT_CHANGED")
+		reg("UNIT_HEAL_ABSORB_AMOUNT_CHANGED")
+	end
 
 	local powerH = cfg and cfg.powerHeight or 0
 	local wantsPower = self._eqolUFState and self._eqolUFState._wantsPower
@@ -1504,6 +2348,17 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	end
 
 	reg("UNIT_NAME_UPDATE")
+	local wantsLevel = self._eqolUFState and self._eqolUFState._wantsLevel
+	if not wantsLevel and UFHelper and UFHelper.textModeUsesLevel then
+		local hc = cfg and cfg.health or {}
+		local pcfg = cfg and cfg.power or {}
+		if UFHelper.textModeUsesLevel(hc.textLeft) or UFHelper.textModeUsesLevel(hc.textCenter) or UFHelper.textModeUsesLevel(hc.textRight) then
+			wantsLevel = true
+		elseif UFHelper.textModeUsesLevel(pcfg.textLeft) or UFHelper.textModeUsesLevel(pcfg.textCenter) or UFHelper.textModeUsesLevel(pcfg.textRight) then
+			wantsLevel = true
+		end
+	end
+	if wantsLevel then reg("UNIT_LEVEL") end
 
 	if self._eqolUFState and self._eqolUFState._wantsAuras then reg("UNIT_AURA") end
 end
@@ -1526,22 +2381,33 @@ local function dispatchUnitDisplayPower(btn) GF:UpdatePower(btn) end
 local function dispatchUnitName(btn)
 	GF:CacheUnitStatic(btn)
 	GF:UpdateName(btn)
+	GF:UpdateHealthStyle(btn)
+	GF:UpdateLevel(btn)
+end
+local function dispatchUnitLevel(btn)
+	GF:UpdateLevel(btn)
+	GF:UpdateHealthValue(btn)
+	GF:UpdatePowerValue(btn)
 end
 local function dispatchUnitConnection(btn)
 	GF:UpdateHealthStyle(btn)
 	GF:UpdateHealthValue(btn)
 	GF:UpdatePowerValue(btn)
 	GF:UpdateName(btn)
+	GF:UpdateLevel(btn)
 end
 local function dispatchUnitAura(btn, updateInfo) GF:RequestAuraUpdate(btn, updateInfo) end
 
 local UNIT_DISPATCH = {
 	UNIT_HEALTH = dispatchUnitHealth,
 	UNIT_MAXHEALTH = dispatchUnitHealth,
+	UNIT_ABSORB_AMOUNT_CHANGED = dispatchUnitHealth,
+	UNIT_HEAL_ABSORB_AMOUNT_CHANGED = dispatchUnitHealth,
 	UNIT_POWER_UPDATE = dispatchUnitPower,
 	UNIT_MAXPOWER = dispatchUnitPower,
 	UNIT_DISPLAYPOWER = dispatchUnitDisplayPower,
 	UNIT_NAME_UPDATE = dispatchUnitName,
+	UNIT_LEVEL = dispatchUnitLevel,
 	UNIT_CONNECTION = dispatchUnitConnection,
 	UNIT_AURA = dispatchUnitAura,
 }
@@ -1704,6 +2570,15 @@ function GF:RefreshRoleIcons()
 	for _, header in pairs(GF.headers or {}) do
 		forEachChild(header, function(child)
 			if child then GF:UpdateRoleIcon(child) end
+		end)
+	end
+end
+
+function GF:RefreshGroupIcons()
+	if not isFeatureEnabled() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateGroupIcons(child) end
 		end)
 	end
 end
@@ -1884,6 +2759,7 @@ end
 function GF:EnableFeature()
 	addon.db = addon.db or {}
 	addon.db.ufEnableGroupFrames = true
+	registerFeatureEvents(GF._eventFrame)
 	GF:EnsureHeaders()
 	GF.Refresh()
 	GF:EnsureEditMode()
@@ -1897,6 +2773,7 @@ function GF:DisableFeature()
 		return
 	end
 	GF._pendingDisable = nil
+	unregisterFeatureEvents(GF._eventFrame)
 
 	-- Unregister Edit Mode frames
 	if EditMode and EditMode.UnregisterFrame then
@@ -1997,9 +2874,46 @@ local function defaultRoleSelection()
 	return sel
 end
 
+local function getClassInfoById(classId)
+	if GetClassInfo then return GetClassInfo(classId) end
+	if C_CreatureInfo and C_CreatureInfo.GetClassInfo then
+		local info = C_CreatureInfo.GetClassInfo(classId)
+		if info then return info.className, info.classFile, info.classID end
+	end
+	return nil
+end
+
+local function forEachSpec(callback)
+	local getSpecCount = (C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID) or GetNumSpecializationsForClassID
+	if not getSpecCount or not GetSpecializationInfoForClassID or not GetNumClasses then return false end
+	local sex = UnitSex and UnitSex("player") or nil
+	local numClasses = GetNumClasses() or 0
+	local found = false
+	for classIndex = 1, numClasses do
+		local className, classTag, classID = getClassInfoById(classIndex)
+		if classID then
+			local specCount = getSpecCount(classID) or 0
+			for specIndex = 1, specCount do
+				local specID, specName = GetSpecializationInfoForClassID(classID, specIndex, sex)
+				if specID then
+					found = true
+					callback(specID, specName, className, classTag, classID)
+				end
+			end
+		end
+	end
+	return found
+end
+
 local function buildSpecOptions()
 	local opts = {}
-	if GetNumSpecializations and GetSpecializationInfo then
+	local found = forEachSpec(function(specId, specName, className, classTag)
+		local label = specName or ("Spec " .. tostring(specId))
+		local classLabel = className or classTag
+		if classLabel and classLabel ~= "" then label = label .. " (" .. classLabel .. ")" end
+		opts[#opts + 1] = { value = specId, label = label }
+	end)
+	if not found and GetNumSpecializations and GetSpecializationInfo then
 		for i = 1, GetNumSpecializations() do
 			local specId, name = GetSpecializationInfo(i)
 			if specId and name then opts[#opts + 1] = { value = specId, label = name } end
@@ -2010,7 +2924,10 @@ end
 
 local function defaultSpecSelection()
 	local sel = {}
-	if GetNumSpecializations and GetSpecializationInfo then
+	local found = forEachSpec(function(specId)
+		if specId then sel[specId] = true end
+	end)
+	if not found and GetNumSpecializations and GetSpecializationInfo then
 		for i = 1, GetNumSpecializations() do
 			local specId = GetSpecializationInfo(i)
 			if specId then sel[specId] = true end
@@ -2020,16 +2937,69 @@ local function defaultSpecSelection()
 end
 
 local auraAnchorOptions = {
-	{ value = "TOPLEFT", label = "TOPLEFT" },
-	{ value = "TOP", label = "TOP" },
-	{ value = "TOPRIGHT", label = "TOPRIGHT" },
-	{ value = "LEFT", label = "LEFT" },
-	{ value = "CENTER", label = "CENTER" },
-	{ value = "RIGHT", label = "RIGHT" },
-	{ value = "BOTTOMLEFT", label = "BOTTOMLEFT" },
-	{ value = "BOTTOM", label = "BOTTOM" },
-	{ value = "BOTTOMRIGHT", label = "BOTTOMRIGHT" },
+	{ value = "TOPLEFT", label = "TOPLEFT", text = "TOPLEFT" },
+	{ value = "TOP", label = "TOP", text = "TOP" },
+	{ value = "TOPRIGHT", label = "TOPRIGHT", text = "TOPRIGHT" },
+	{ value = "LEFT", label = "LEFT", text = "LEFT" },
+	{ value = "CENTER", label = "CENTER", text = "CENTER" },
+	{ value = "RIGHT", label = "RIGHT", text = "RIGHT" },
+	{ value = "BOTTOMLEFT", label = "BOTTOMLEFT", text = "BOTTOMLEFT" },
+	{ value = "BOTTOM", label = "BOTTOM", text = "BOTTOM" },
+	{ value = "BOTTOMRIGHT", label = "BOTTOMRIGHT", text = "BOTTOMRIGHT" },
 }
+
+local textAnchorOptions = {
+	{ value = "LEFT", label = "LEFT", text = "LEFT" },
+	{ value = "CENTER", label = "CENTER", text = "CENTER" },
+	{ value = "RIGHT", label = "RIGHT", text = "RIGHT" },
+}
+
+local textModeOptions = {
+	{ value = "PERCENT", label = "Percent", text = "Percent" },
+	{ value = "CURMAX", label = "Current/Max", text = "Current/Max" },
+	{ value = "CURRENT", label = "Current", text = "Current" },
+	{ value = "MAX", label = "Max", text = "Max" },
+	{ value = "CURPERCENT", label = "Current / Percent", text = "Current / Percent" },
+	{ value = "CURMAXPERCENT", label = "Current/Max Percent", text = "Current/Max Percent" },
+	{ value = "MAXPERCENT", label = "Max / Percent", text = "Max / Percent" },
+	{ value = "PERCENTMAX", label = "Percent / Max", text = "Percent / Max" },
+	{ value = "PERCENTCUR", label = "Percent / Current", text = "Percent / Current" },
+	{ value = "PERCENTCURMAX", label = "Percent / Current / Max", text = "Percent / Current / Max" },
+	{ value = "LEVELPERCENT", label = "Level / Percent", text = "Level / Percent" },
+	{ value = "LEVELPERCENTMAX", label = "Level / Percent / Max", text = "Level / Percent / Max" },
+	{ value = "LEVELPERCENTCUR", label = "Level / Percent / Current", text = "Level / Percent / Current" },
+	{ value = "LEVELPERCENTCURMAX", label = "Level / Percent / Current / Max", text = "Level / Percent / Current / Max" },
+	{ value = "NONE", label = "None", text = "None" },
+}
+
+local delimiterOptions = {
+	{ value = " ", label = "Space", text = "Space" },
+	{ value = "  ", label = "Double space", text = "Double space" },
+	{ value = "/", label = "/", text = "/" },
+	{ value = ":", label = ":", text = ":" },
+	{ value = "-", label = "-", text = "-" },
+	{ value = "|", label = "|", text = "|" },
+}
+
+local function textureOptions()
+	local list = {}
+	local seen = {}
+	local function add(value, label)
+		local lv = tostring(value or ""):lower()
+		if lv == "" or seen[lv] then return end
+		seen[lv] = true
+		list[#list + 1] = { value = value, label = label }
+	end
+	add("DEFAULT", "Default (Blizzard)")
+	add("SOLID", "Solid")
+	if not LSM then return list end
+	local hash = LSM:HashTable("statusbar") or {}
+	for name, path in pairs(hash) do
+		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
+	end
+	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	return list
+end
 
 local function ensureAuraConfig(cfg)
 	cfg.auras = cfg.auras or {}
@@ -2225,6 +3195,8 @@ local function buildEditModeSettings(kind, editModeId)
 			parentId = "text",
 			get = function()
 				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				if sc.nameColorMode then return sc.nameColorMode == "CLASS" end
 				local tc = cfg and cfg.text or {}
 				return tc.useClassColor ~= false
 			end,
@@ -2232,8 +3204,71 @@ local function buildEditModeSettings(kind, editModeId)
 				local cfg = getCfg(kind)
 				if not cfg then return end
 				cfg.text = cfg.text or {}
+				cfg.status = cfg.status or {}
 				cfg.text.useClassColor = value and true or false
+				cfg.status.nameColorMode = value and "CLASS" or "CUSTOM"
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "nameClassColor", cfg.text.useClassColor, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Name color",
+			kind = SettingType.Color,
+			field = "nameColor",
+			parentId = "text",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.nameColor) or { 1, 1, 1, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.nameColor) or { 1, 1, 1, 1 }
+				local r, g, b, a = unpackColor(sc.nameColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.status = cfg.status or {}
+				cfg.text = cfg.text or {}
+				cfg.status.nameColor = { value.r or 1, value.g or 1, value.b or 1, value.a or 1 }
+				cfg.status.nameColorMode = "CUSTOM"
+				cfg.text.useClassColor = false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "nameColor", cfg.status.nameColor, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "nameClassColor", false, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local mode = sc.nameColorMode
+				if not mode then
+					local tc = cfg and cfg.text or {}
+					mode = (tc.useClassColor ~= false) and "CLASS" or "CUSTOM"
+				end
+				return mode == "CUSTOM"
+			end,
+		},
+		{
+			name = "Name max width",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "nameMaxChars",
+			parentId = "text",
+			minValue = 0,
+			maxValue = 40,
+			valueStep = 1,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].text and DEFAULTS[kind].text.nameMaxChars) or 0,
+			get = function()
+				local cfg = getCfg(kind)
+				local tc = cfg and cfg.text or {}
+				return tc.nameMaxChars or (DEFAULTS[kind] and DEFAULTS[kind].text and DEFAULTS[kind].text.nameMaxChars) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.text = cfg.text or {}
+				cfg.text.nameMaxChars = clampNumber(value, 0, 40, cfg.text.nameMaxChars or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "nameMaxChars", cfg.text.nameMaxChars, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
 		},
@@ -2252,8 +3287,1358 @@ local function buildEditModeSettings(kind, editModeId)
 				if not cfg then return end
 				cfg.health = cfg.health or {}
 				cfg.health.useClassColor = value and true or false
+				if value then cfg.health.useCustomColor = false end
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthClassColor", cfg.health.useClassColor, nil, true) end
+				if EditMode and EditMode.SetValue and value then EditMode:SetValue(editModeId, "healthUseCustomColor", false, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Health",
+			kind = SettingType.Collapsible,
+			id = "health",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Show absorb bar",
+			kind = SettingType.Checkbox,
+			field = "absorbEnabled",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbEnabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.absorbEnabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbEnabled", cfg.health.absorbEnabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Absorb texture",
+			kind = SettingType.Dropdown,
+			field = "absorbTexture",
+			parentId = "health",
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbTexture or "SOLID"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.absorbTexture = value or "SOLID"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbTexture", cfg.health.absorbTexture, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textureOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.absorbTexture or "SOLID") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.absorbTexture = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbTexture", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Absorb reverse fill",
+			kind = SettingType.Checkbox,
+			field = "absorbReverse",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbReverseFill == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.absorbReverseFill = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbReverse", cfg.health.absorbReverseFill, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Custom absorb color",
+			kind = SettingType.Checkbox,
+			field = "absorbUseCustomColor",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbUseCustomColor == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.absorbUseCustomColor = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbUseCustomColor", cfg.health.absorbUseCustomColor, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Absorb color",
+			kind = SettingType.Color,
+			field = "absorbColor",
+			parentId = "health",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.absorbColor) or { 0.85, 0.95, 1, 0.7 },
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.absorbColor) or { 0.85, 0.95, 1, 0.7 }
+				local r, g, b, a = unpackColor(hc.absorbColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.health = cfg.health or {}
+				cfg.health.absorbColor = { value.r or 0.85, value.g or 0.95, value.b or 1, value.a or 0.7 }
+				cfg.health.absorbUseCustomColor = true
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbColor", cfg.health.absorbColor, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbUseCustomColor", true, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.absorbEnabled ~= false and hc.absorbUseCustomColor == true
+			end,
+		},
+		{
+			name = "Show heal absorb bar",
+			kind = SettingType.Checkbox,
+			field = "healAbsorbEnabled",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbEnabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.healAbsorbEnabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbEnabled", cfg.health.healAbsorbEnabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Heal absorb texture",
+			kind = SettingType.Dropdown,
+			field = "healAbsorbTexture",
+			parentId = "health",
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbTexture or "SOLID"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.healAbsorbTexture = value or "SOLID"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbTexture", cfg.health.healAbsorbTexture, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textureOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.healAbsorbTexture or "SOLID") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.healAbsorbTexture = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbTexture", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Heal absorb reverse fill",
+			kind = SettingType.Checkbox,
+			field = "healAbsorbReverse",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbReverseFill == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.healAbsorbReverseFill = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbReverse", cfg.health.healAbsorbReverseFill, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Custom heal absorb color",
+			kind = SettingType.Checkbox,
+			field = "healAbsorbUseCustomColor",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbUseCustomColor == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.healAbsorbUseCustomColor = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbUseCustomColor", cfg.health.healAbsorbUseCustomColor, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbEnabled ~= false
+			end,
+		},
+		{
+			name = "Heal absorb color",
+			kind = SettingType.Color,
+			field = "healAbsorbColor",
+			parentId = "health",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.healAbsorbColor) or { 1, 0.3, 0.3, 0.7 },
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.healAbsorbColor) or { 1, 0.3, 0.3, 0.7 }
+				local r, g, b, a = unpackColor(hc.healAbsorbColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.health = cfg.health or {}
+				cfg.health.healAbsorbColor = { value.r or 1, value.g or 0.3, value.b or 0.3, value.a or 0.7 }
+				cfg.health.healAbsorbUseCustomColor = true
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbColor", cfg.health.healAbsorbColor, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healAbsorbUseCustomColor", true, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.healAbsorbEnabled ~= false and hc.healAbsorbUseCustomColor == true
+			end,
+		},
+		{
+			name = "Absorb glow",
+			kind = SettingType.Checkbox,
+			field = "absorbGlow",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.useAbsorbGlow ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.useAbsorbGlow = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "absorbGlow", cfg.health.useAbsorbGlow, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Use custom health color",
+			kind = SettingType.Checkbox,
+			field = "healthUseCustomColor",
+			parentId = "health",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.useCustomColor == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.useCustomColor = value and true or false
+				if value then cfg.health.useClassColor = false end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthUseCustomColor", cfg.health.useCustomColor, nil, true) end
+				if EditMode and EditMode.SetValue and value then EditMode:SetValue(editModeId, "healthClassColor", false, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Health color",
+			kind = SettingType.Color,
+			field = "healthColor",
+			parentId = "health",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.color) or { 0, 0.8, 0, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.color) or { 0, 0.8, 0, 1 }
+				local r, g, b, a = unpackColor(hc.color, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.health = cfg.health or {}
+				cfg.health.color = { value.r or 0, value.g or 0.8, value.b or 0, value.a or 1 }
+				cfg.health.useCustomColor = true
+				cfg.health.useClassColor = false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthColor", cfg.health.color, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthUseCustomColor", true, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthClassColor", false, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.useCustomColor == true
+			end,
+		},
+		{
+			name = "Health text",
+			kind = SettingType.Collapsible,
+			id = "healthtext",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Health text left",
+			kind = SettingType.Dropdown,
+			field = "healthTextLeft",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.textLeft or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textLeft) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textLeft = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextLeft", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.textLeft or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textLeft) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textLeft = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextLeft", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Health text center",
+			kind = SettingType.Dropdown,
+			field = "healthTextCenter",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.textCenter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textCenter) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textCenter = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextCenter", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.textCenter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textCenter) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textCenter = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextCenter", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Health text right",
+			kind = SettingType.Dropdown,
+			field = "healthTextRight",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.textRight or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textRight) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textRight = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextRight", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.textRight or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textRight) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textRight = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthTextRight", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Health delimiter",
+			kind = SettingType.Dropdown,
+			field = "healthDelimiter",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textDelimiter = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiter", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						return (hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " ") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textDelimiter = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiter", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Health secondary delimiter",
+			kind = SettingType.Dropdown,
+			field = "healthDelimiterSecondary",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				local primary = hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "
+				return hc.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterSecondary) or primary
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textDelimiterSecondary = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiterSecondary", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						local primary = hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "
+						return (hc.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterSecondary) or primary) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textDelimiterSecondary = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiterSecondary", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Health tertiary delimiter",
+			kind = SettingType.Dropdown,
+			field = "healthDelimiterTertiary",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				local primary = hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "
+				local secondary = hc.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterSecondary) or primary
+				return hc.textDelimiterTertiary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterTertiary) or secondary
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.textDelimiterTertiary = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiterTertiary", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local hc = cfg and cfg.health or {}
+						local primary = hc.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "
+						local secondary = hc.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterSecondary) or primary
+						return (hc.textDelimiterTertiary or (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterTertiary) or secondary) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.health = cfg.health or {}
+						cfg.health.textDelimiterTertiary = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthDelimiterTertiary", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Short numbers",
+			kind = SettingType.Checkbox,
+			field = "healthShortNumbers",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				if hc.useShortNumbers == nil then
+					return (DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.useShortNumbers) ~= false
+				end
+				return hc.useShortNumbers ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.useShortNumbers = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthShortNumbers", cfg.health.useShortNumbers, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Hide percent symbol",
+			kind = SettingType.Checkbox,
+			field = "healthHidePercent",
+			parentId = "healthtext",
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return hc.hidePercentSymbol == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.hidePercentSymbol = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthHidePercent", cfg.health.hidePercentSymbol, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Left text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthLeftX",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetLeft and hc.offsetLeft.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetLeft = cfg.health.offsetLeft or {}
+				cfg.health.offsetLeft.x = clampNumber(value, -200, 200, (cfg.health.offsetLeft and cfg.health.offsetLeft.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthLeftX", cfg.health.offsetLeft.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Left text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthLeftY",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetLeft and hc.offsetLeft.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetLeft = cfg.health.offsetLeft or {}
+				cfg.health.offsetLeft.y = clampNumber(value, -200, 200, (cfg.health.offsetLeft and cfg.health.offsetLeft.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthLeftY", cfg.health.offsetLeft.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Center text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthCenterX",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetCenter and hc.offsetCenter.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetCenter = cfg.health.offsetCenter or {}
+				cfg.health.offsetCenter.x = clampNumber(value, -200, 200, (cfg.health.offsetCenter and cfg.health.offsetCenter.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthCenterX", cfg.health.offsetCenter.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Center text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthCenterY",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetCenter and hc.offsetCenter.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetCenter = cfg.health.offsetCenter or {}
+				cfg.health.offsetCenter.y = clampNumber(value, -200, 200, (cfg.health.offsetCenter and cfg.health.offsetCenter.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthCenterY", cfg.health.offsetCenter.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Right text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthRightX",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetRight and hc.offsetRight.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetRight = cfg.health.offsetRight or {}
+				cfg.health.offsetRight.x = clampNumber(value, -200, 200, (cfg.health.offsetRight and cfg.health.offsetRight.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthRightX", cfg.health.offsetRight.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Right text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "healthRightY",
+			parentId = "healthtext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local hc = cfg and cfg.health or {}
+				return (hc.offsetRight and hc.offsetRight.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.health = cfg.health or {}
+				cfg.health.offsetRight = cfg.health.offsetRight or {}
+				cfg.health.offsetRight.y = clampNumber(value, -200, 200, (cfg.health.offsetRight and cfg.health.offsetRight.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "healthRightY", cfg.health.offsetRight.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Level",
+			kind = SettingType.Collapsible,
+			id = "level",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Show level",
+			kind = SettingType.Checkbox,
+			field = "levelEnabled",
+			parentId = "level",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelEnabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelEnabled", cfg.status.levelEnabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Hide level at max",
+			kind = SettingType.Checkbox,
+			field = "hideLevelAtMax",
+			parentId = "level",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.hideLevelAtMax == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.hideLevelAtMax = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hideLevelAtMax", cfg.status.hideLevelAtMax, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+		},
+		{
+			name = "Level class color",
+			kind = SettingType.Checkbox,
+			field = "levelClassColor",
+			parentId = "level",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return (sc.levelColorMode or "CUSTOM") == "CLASS"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelColorMode = value and "CLASS" or "CUSTOM"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelClassColor", value and true or false, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+		},
+		{
+			name = "Level color",
+			kind = SettingType.Color,
+			field = "levelColor",
+			parentId = "level",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.levelColor) or { 1, 0.85, 0, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.levelColor) or { 1, 0.85, 0, 1 }
+				local r, g, b, a = unpackColor(sc.levelColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelColor = { value.r or 1, value.g or 1, value.b or 1, value.a or 1 }
+				cfg.status.levelColorMode = "CUSTOM"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelColor", cfg.status.levelColor, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelClassColor", false, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false and (sc.levelColorMode or "CUSTOM") == "CUSTOM"
+			end,
+		},
+		{
+			name = "Level anchor",
+			kind = SettingType.Dropdown,
+			field = "levelAnchor",
+			parentId = "level",
+			values = textAnchorOptions,
+			height = 120,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelAnchor or "RIGHT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+		},
+		{
+			name = "Level offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "levelOffsetX",
+			parentId = "level",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return (sc.levelOffset and sc.levelOffset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelOffset = cfg.status.levelOffset or {}
+				cfg.status.levelOffset.x = clampNumber(value, -200, 200, (cfg.status.levelOffset and cfg.status.levelOffset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelOffsetX", cfg.status.levelOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+		},
+		{
+			name = "Level offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "levelOffsetY",
+			parentId = "level",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return (sc.levelOffset and sc.levelOffset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.levelOffset = cfg.status.levelOffset or {}
+				cfg.status.levelOffset.y = clampNumber(value, -200, 200, (cfg.status.levelOffset and cfg.status.levelOffset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "levelOffsetY", cfg.status.levelOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				return sc.levelEnabled ~= false
+			end,
+		},
+		{
+			name = "Group icons",
+			kind = SettingType.Collapsible,
+			id = "groupicons",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Show leader icon",
+			kind = SettingType.Checkbox,
+			field = "leaderIconEnabled",
+			parentId = "groupicons",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.enabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+				cfg.status.leaderIcon.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "leaderIconEnabled", cfg.status.leaderIcon.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Leader icon size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "leaderIconSize",
+			parentId = "groupicons",
+			minValue = 8,
+			maxValue = 40,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.size or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+				cfg.status.leaderIcon.size = clampNumber(value, 8, 40, cfg.status.leaderIcon.size or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "leaderIconSize", cfg.status.leaderIcon.size, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.enabled ~= false
+			end,
+		},
+		{
+			name = "Leader icon anchor",
+			kind = SettingType.Dropdown,
+			field = "leaderIconPoint",
+			parentId = "groupicons",
+			values = auraAnchorOptions,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.point or "TOPLEFT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+				cfg.status.leaderIcon.point = value
+				cfg.status.leaderIcon.relativePoint = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "leaderIconPoint", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.enabled ~= false
+			end,
+		},
+		{
+			name = "Leader icon offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "leaderIconOffsetX",
+			parentId = "groupicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.x or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+				cfg.status.leaderIcon.x = clampNumber(value, -200, 200, cfg.status.leaderIcon.x or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "leaderIconOffsetX", cfg.status.leaderIcon.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.enabled ~= false
+			end,
+		},
+		{
+			name = "Leader icon offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "leaderIconOffsetY",
+			parentId = "groupicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.y or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+				cfg.status.leaderIcon.y = clampNumber(value, -200, 200, cfg.status.leaderIcon.y or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "leaderIconOffsetY", cfg.status.leaderIcon.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local lc = sc.leaderIcon or {}
+				return lc.enabled ~= false
+			end,
+		},
+		{
+			name = "Show assist icon",
+			kind = SettingType.Checkbox,
+			field = "assistIconEnabled",
+			parentId = "groupicons",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.enabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.assistIcon = cfg.status.assistIcon or {}
+				cfg.status.assistIcon.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "assistIconEnabled", cfg.status.assistIcon.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Assist icon size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "assistIconSize",
+			parentId = "groupicons",
+			minValue = 8,
+			maxValue = 40,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.size or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.assistIcon = cfg.status.assistIcon or {}
+				cfg.status.assistIcon.size = clampNumber(value, 8, 40, cfg.status.assistIcon.size or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "assistIconSize", cfg.status.assistIcon.size, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.enabled ~= false
+			end,
+		},
+		{
+			name = "Assist icon anchor",
+			kind = SettingType.Dropdown,
+			field = "assistIconPoint",
+			parentId = "groupicons",
+			values = auraAnchorOptions,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.point or "TOPLEFT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.assistIcon = cfg.status.assistIcon or {}
+				cfg.status.assistIcon.point = value
+				cfg.status.assistIcon.relativePoint = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "assistIconPoint", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.enabled ~= false
+			end,
+		},
+		{
+			name = "Assist icon offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "assistIconOffsetX",
+			parentId = "groupicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.x or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.assistIcon = cfg.status.assistIcon or {}
+				cfg.status.assistIcon.x = clampNumber(value, -200, 200, cfg.status.assistIcon.x or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "assistIconOffsetX", cfg.status.assistIcon.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.enabled ~= false
+			end,
+		},
+		{
+			name = "Assist icon offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "assistIconOffsetY",
+			parentId = "groupicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.y or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.assistIcon = cfg.status.assistIcon or {}
+				cfg.status.assistIcon.y = clampNumber(value, -200, 200, cfg.status.assistIcon.y or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "assistIconOffsetY", cfg.status.assistIcon.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local acfg = sc.assistIcon or {}
+				return acfg.enabled ~= false
+			end,
+		},
+		{
+			name = "Role icons",
+			kind = SettingType.Collapsible,
+			id = "roleicons",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Enable role icons",
+			kind = SettingType.Checkbox,
+			field = "roleIconEnabled",
+			parentId = "roleicons",
+			get = function()
+				local cfg = getCfg(kind)
+				local rc = cfg and cfg.roleIcon or {}
+				return rc.enabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.roleIcon = cfg.roleIcon or {}
+				cfg.roleIcon.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "roleIconEnabled", cfg.roleIcon.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Role icon style",
+			kind = SettingType.Dropdown,
+			field = "roleIconStyle",
+			parentId = "roleicons",
+			get = function()
+				local cfg = getCfg(kind)
+				local rc = cfg and cfg.roleIcon or {}
+				return rc.style or "TINY"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.roleIcon = cfg.roleIcon or {}
+				cfg.roleIcon.style = value or "TINY"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "roleIconStyle", cfg.roleIcon.style, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				local options = {
+					{ value = "TINY", label = "Icon" },
+					{ value = "CIRCLE", label = "Icon + Circle" },
+				}
+				for _, option in ipairs(options) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local rc = cfg and cfg.roleIcon or {}
+						return (rc.style or "TINY") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.roleIcon = cfg.roleIcon or {}
+						cfg.roleIcon.style = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "roleIconStyle", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local rc = cfg and cfg.roleIcon or {}
+				return rc.enabled ~= false
+			end,
+		},
+		{
+			name = "Show role icons for roles",
+			kind = SettingType.MultiDropdown,
+			field = "roleIconRoles",
+			height = 120,
+			values = roleOptions,
+			parentId = "roleicons",
+			isSelected = function(_, value)
+				local cfg = getCfg(kind)
+				local rc = cfg and cfg.roleIcon or {}
+				local selection = rc.showRoles
+				if type(selection) ~= "table" then return true end
+				return selectionContains(selection, value)
+			end,
+			setSelected = function(_, value, state)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.roleIcon = cfg.roleIcon or {}
+				local selection = cfg.roleIcon.showRoles
+				if type(selection) ~= "table" then
+					selection = defaultRoleSelection()
+					cfg.roleIcon.showRoles = selection
+				end
+				if state then
+					selection[value] = true
+				else
+					selection[value] = nil
+				end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "roleIconRoles", copySelectionMap(selection), nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local rc = cfg and cfg.roleIcon or {}
+				return rc.enabled ~= false
 			end,
 		},
 		{
@@ -2274,7 +4659,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local pcfg = cfg and cfg.power or {}
 				local selection = pcfg.showRoles
 				if type(selection) ~= "table" then return true end
-				return selection[value] == true
+				return selectionContains(selection, value)
 			end,
 			setSelected = function(_, value, state)
 				local cfg = getCfg(kind)
@@ -2298,7 +4683,7 @@ local function buildEditModeSettings(kind, editModeId)
 			name = "Show power for specs",
 			kind = SettingType.MultiDropdown,
 			field = "powerSpecs",
-			height = 160,
+			height = 240,
 			values = specOptions,
 			parentId = "power",
 			isSelected = function(_, value)
@@ -2306,7 +4691,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local pcfg = cfg and cfg.power or {}
 				local selection = pcfg.showSpecs
 				if type(selection) ~= "table" then return true end
-				return selection[value] == true
+				return selectionContains(selection, value)
 			end,
 			setSelected = function(_, value, state)
 				local cfg = getCfg(kind)
@@ -2324,6 +4709,413 @@ local function buildEditModeSettings(kind, editModeId)
 				end
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerSpecs", copySelectionMap(selection), nil, true) end
 				GF:RefreshPowerVisibility()
+			end,
+		},
+		{
+			name = "Power text",
+			kind = SettingType.Collapsible,
+			id = "powertext",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Power text left",
+			kind = SettingType.Dropdown,
+			field = "powerTextLeft",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return pcfg.textLeft or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textLeft) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textLeft = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextLeft", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						return (pcfg.textLeft or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textLeft) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textLeft = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextLeft", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Power text center",
+			kind = SettingType.Dropdown,
+			field = "powerTextCenter",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return pcfg.textCenter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textCenter) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textCenter = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextCenter", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						return (pcfg.textCenter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textCenter) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textCenter = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextCenter", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Power text right",
+			kind = SettingType.Dropdown,
+			field = "powerTextRight",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return pcfg.textRight or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textRight) or "NONE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textRight = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextRight", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(textModeOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						return (pcfg.textRight or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textRight) or "NONE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textRight = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerTextRight", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Power delimiter",
+			kind = SettingType.Dropdown,
+			field = "powerDelimiter",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textDelimiter = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiter", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						return (pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " ") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textDelimiter = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiter", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Power secondary delimiter",
+			kind = SettingType.Dropdown,
+			field = "powerDelimiterSecondary",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				local primary = pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "
+				return pcfg.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterSecondary) or primary
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textDelimiterSecondary = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiterSecondary", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						local primary = pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "
+						return (pcfg.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterSecondary) or primary) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textDelimiterSecondary = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiterSecondary", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Power tertiary delimiter",
+			kind = SettingType.Dropdown,
+			field = "powerDelimiterTertiary",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				local primary = pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "
+				local secondary = pcfg.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterSecondary) or primary
+				return pcfg.textDelimiterTertiary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterTertiary) or secondary
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.textDelimiterTertiary = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiterTertiary", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(delimiterOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local pcfg = cfg and cfg.power or {}
+						local primary = pcfg.textDelimiter or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "
+						local secondary = pcfg.textDelimiterSecondary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterSecondary) or primary
+						return (pcfg.textDelimiterTertiary or (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterTertiary) or secondary) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.power = cfg.power or {}
+						cfg.power.textDelimiterTertiary = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerDelimiterTertiary", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Short numbers",
+			kind = SettingType.Checkbox,
+			field = "powerShortNumbers",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				if pcfg.useShortNumbers == nil then
+					return (DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.useShortNumbers) ~= false
+				end
+				return pcfg.useShortNumbers ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.useShortNumbers = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerShortNumbers", cfg.power.useShortNumbers, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Hide percent symbol",
+			kind = SettingType.Checkbox,
+			field = "powerHidePercent",
+			parentId = "powertext",
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return pcfg.hidePercentSymbol == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.hidePercentSymbol = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerHidePercent", cfg.power.hidePercentSymbol, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Left text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerLeftX",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetLeft and pcfg.offsetLeft.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetLeft = cfg.power.offsetLeft or {}
+				cfg.power.offsetLeft.x = clampNumber(value, -200, 200, (cfg.power.offsetLeft and cfg.power.offsetLeft.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerLeftX", cfg.power.offsetLeft.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Left text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerLeftY",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetLeft and pcfg.offsetLeft.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetLeft = cfg.power.offsetLeft or {}
+				cfg.power.offsetLeft.y = clampNumber(value, -200, 200, (cfg.power.offsetLeft and cfg.power.offsetLeft.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerLeftY", cfg.power.offsetLeft.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Center text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerCenterX",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetCenter and pcfg.offsetCenter.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetCenter = cfg.power.offsetCenter or {}
+				cfg.power.offsetCenter.x = clampNumber(value, -200, 200, (cfg.power.offsetCenter and cfg.power.offsetCenter.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerCenterX", cfg.power.offsetCenter.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Center text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerCenterY",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetCenter and pcfg.offsetCenter.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetCenter = cfg.power.offsetCenter or {}
+				cfg.power.offsetCenter.y = clampNumber(value, -200, 200, (cfg.power.offsetCenter and cfg.power.offsetCenter.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerCenterY", cfg.power.offsetCenter.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Right text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerRightX",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetRight and pcfg.offsetRight.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetRight = cfg.power.offsetRight or {}
+				cfg.power.offsetRight.x = clampNumber(value, -200, 200, (cfg.power.offsetRight and cfg.power.offsetRight.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerRightX", cfg.power.offsetRight.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Right text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "powerRightY",
+			parentId = "powertext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local pcfg = cfg and cfg.power or {}
+				return (pcfg.offsetRight and pcfg.offsetRight.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.power = cfg.power or {}
+				cfg.power.offsetRight = cfg.power.offsetRight or {}
+				cfg.power.offsetRight.y = clampNumber(value, -200, 200, (cfg.power.offsetRight and cfg.power.offsetRight.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerRightY", cfg.power.offsetRight.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
 			end,
 		},
 		{
@@ -2357,6 +5149,7 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "buffAnchor",
 			parentId = "buffs",
 			values = auraAnchorOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
@@ -2533,6 +5326,7 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "debuffAnchor",
 			parentId = "debuffs",
 			values = auraAnchorOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
@@ -2709,6 +5503,7 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "externalAnchor",
 			parentId = "externals",
 			values = auraAnchorOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
@@ -3004,10 +5799,190 @@ local function applyEditModeData(kind, data)
 	if data.nameClassColor ~= nil then
 		cfg.text = cfg.text or {}
 		cfg.text.useClassColor = data.nameClassColor and true or false
+		cfg.status = cfg.status or {}
+		cfg.status.nameColorMode = data.nameClassColor and "CLASS" or "CUSTOM"
+	end
+	if data.nameMaxChars ~= nil then
+		cfg.text = cfg.text or {}
+		cfg.text.nameMaxChars = clampNumber(data.nameMaxChars, 0, 40, cfg.text.nameMaxChars or 0)
 	end
 	if data.healthClassColor ~= nil then
 		cfg.health = cfg.health or {}
 		cfg.health.useClassColor = data.healthClassColor and true or false
+		if data.healthClassColor then cfg.health.useCustomColor = false end
+	end
+	if data.healthUseCustomColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.useCustomColor = data.healthUseCustomColor and true or false
+		if data.healthUseCustomColor then cfg.health.useClassColor = false end
+	end
+	if data.healthColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.color = data.healthColor
+		cfg.health.useCustomColor = true
+		cfg.health.useClassColor = false
+	end
+	if data.healthTextLeft ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textLeft = data.healthTextLeft
+	end
+	if data.healthTextCenter ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textCenter = data.healthTextCenter
+	end
+	if data.healthTextRight ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textRight = data.healthTextRight
+	end
+	if data.healthDelimiter ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textDelimiter = data.healthDelimiter
+	end
+	if data.healthDelimiterSecondary ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textDelimiterSecondary = data.healthDelimiterSecondary
+	end
+	if data.healthDelimiterTertiary ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.textDelimiterTertiary = data.healthDelimiterTertiary
+	end
+	if data.healthShortNumbers ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.useShortNumbers = data.healthShortNumbers and true or false
+	end
+	if data.healthHidePercent ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.hidePercentSymbol = data.healthHidePercent and true or false
+	end
+	if data.healthLeftX ~= nil or data.healthLeftY ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.offsetLeft = cfg.health.offsetLeft or {}
+		if data.healthLeftX ~= nil then cfg.health.offsetLeft.x = data.healthLeftX end
+		if data.healthLeftY ~= nil then cfg.health.offsetLeft.y = data.healthLeftY end
+	end
+	if data.healthCenterX ~= nil or data.healthCenterY ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.offsetCenter = cfg.health.offsetCenter or {}
+		if data.healthCenterX ~= nil then cfg.health.offsetCenter.x = data.healthCenterX end
+		if data.healthCenterY ~= nil then cfg.health.offsetCenter.y = data.healthCenterY end
+	end
+	if data.healthRightX ~= nil or data.healthRightY ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.offsetRight = cfg.health.offsetRight or {}
+		if data.healthRightX ~= nil then cfg.health.offsetRight.x = data.healthRightX end
+		if data.healthRightY ~= nil then cfg.health.offsetRight.y = data.healthRightY end
+	end
+	if data.absorbEnabled ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.absorbEnabled = data.absorbEnabled and true or false
+	end
+	if data.absorbTexture ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.absorbTexture = data.absorbTexture
+	end
+	if data.absorbReverse ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.absorbReverseFill = data.absorbReverse and true or false
+	end
+	if data.absorbUseCustomColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.absorbUseCustomColor = data.absorbUseCustomColor and true or false
+	end
+	if data.absorbColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.absorbColor = data.absorbColor
+	end
+	if data.healAbsorbEnabled ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.healAbsorbEnabled = data.healAbsorbEnabled and true or false
+	end
+	if data.healAbsorbTexture ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.healAbsorbTexture = data.healAbsorbTexture
+	end
+	if data.healAbsorbReverse ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.healAbsorbReverseFill = data.healAbsorbReverse and true or false
+	end
+	if data.healAbsorbUseCustomColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.healAbsorbUseCustomColor = data.healAbsorbUseCustomColor and true or false
+	end
+	if data.healAbsorbColor ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.healAbsorbColor = data.healAbsorbColor
+	end
+	if data.absorbGlow ~= nil then
+		cfg.health = cfg.health or {}
+		cfg.health.useAbsorbGlow = data.absorbGlow and true or false
+	end
+	if data.nameColorMode ~= nil or data.nameColor ~= nil or data.levelEnabled ~= nil or data.levelColorMode ~= nil or data.levelColor ~= nil or data.hideLevelAtMax ~= nil or data.levelClassColor ~= nil then
+		cfg.status = cfg.status or {}
+	end
+	if data.nameColorMode ~= nil then
+		cfg.status.nameColorMode = data.nameColorMode
+		cfg.text = cfg.text or {}
+		cfg.text.useClassColor = data.nameColorMode == "CLASS"
+	end
+	if data.nameColor ~= nil then
+		cfg.status.nameColor = data.nameColor
+	end
+	if data.levelEnabled ~= nil then
+		cfg.status.levelEnabled = data.levelEnabled and true or false
+	end
+	if data.hideLevelAtMax ~= nil then
+		cfg.status.hideLevelAtMax = data.hideLevelAtMax and true or false
+	end
+	if data.levelClassColor ~= nil then
+		cfg.status.levelColorMode = data.levelClassColor and "CLASS" or "CUSTOM"
+	end
+	if data.levelColorMode ~= nil then
+		cfg.status.levelColorMode = data.levelColorMode
+	end
+	if data.levelColor ~= nil then
+		cfg.status.levelColor = data.levelColor
+	end
+	if data.levelAnchor ~= nil then
+		cfg.status.levelAnchor = data.levelAnchor
+	end
+	if data.levelOffsetX ~= nil or data.levelOffsetY ~= nil then
+		cfg.status.levelOffset = cfg.status.levelOffset or {}
+		if data.levelOffsetX ~= nil then cfg.status.levelOffset.x = data.levelOffsetX end
+		if data.levelOffsetY ~= nil then cfg.status.levelOffset.y = data.levelOffsetY end
+	end
+	if data.leaderIconEnabled ~= nil or data.leaderIconSize ~= nil or data.leaderIconPoint ~= nil or data.leaderIconOffsetX ~= nil or data.leaderIconOffsetY ~= nil then
+		cfg.status.leaderIcon = cfg.status.leaderIcon or {}
+		if data.leaderIconEnabled ~= nil then cfg.status.leaderIcon.enabled = data.leaderIconEnabled and true or false end
+		if data.leaderIconSize ~= nil then cfg.status.leaderIcon.size = data.leaderIconSize end
+		if data.leaderIconPoint ~= nil then
+			cfg.status.leaderIcon.point = data.leaderIconPoint
+			cfg.status.leaderIcon.relativePoint = data.leaderIconPoint
+		end
+		if data.leaderIconOffsetX ~= nil then cfg.status.leaderIcon.x = data.leaderIconOffsetX end
+		if data.leaderIconOffsetY ~= nil then cfg.status.leaderIcon.y = data.leaderIconOffsetY end
+	end
+	if data.assistIconEnabled ~= nil or data.assistIconSize ~= nil or data.assistIconPoint ~= nil or data.assistIconOffsetX ~= nil or data.assistIconOffsetY ~= nil then
+		cfg.status.assistIcon = cfg.status.assistIcon or {}
+		if data.assistIconEnabled ~= nil then cfg.status.assistIcon.enabled = data.assistIconEnabled and true or false end
+		if data.assistIconSize ~= nil then cfg.status.assistIcon.size = data.assistIconSize end
+		if data.assistIconPoint ~= nil then
+			cfg.status.assistIcon.point = data.assistIconPoint
+			cfg.status.assistIcon.relativePoint = data.assistIconPoint
+		end
+		if data.assistIconOffsetX ~= nil then cfg.status.assistIcon.x = data.assistIconOffsetX end
+		if data.assistIconOffsetY ~= nil then cfg.status.assistIcon.y = data.assistIconOffsetY end
+	end
+	if data.roleIconEnabled ~= nil then
+		cfg.roleIcon = cfg.roleIcon or {}
+		cfg.roleIcon.enabled = data.roleIconEnabled and true or false
+	end
+	if data.roleIconStyle ~= nil then
+		cfg.roleIcon = cfg.roleIcon or {}
+		cfg.roleIcon.style = data.roleIconStyle
+	end
+	if data.roleIconRoles ~= nil then
+		cfg.roleIcon = cfg.roleIcon or {}
+		cfg.roleIcon.showRoles = copySelectionMap(data.roleIconRoles)
 	end
 	if data.powerRoles ~= nil then
 		cfg.power = cfg.power or {}
@@ -3016,6 +5991,56 @@ local function applyEditModeData(kind, data)
 	if data.powerSpecs ~= nil then
 		cfg.power = cfg.power or {}
 		cfg.power.showSpecs = copySelectionMap(data.powerSpecs)
+	end
+	if data.powerTextLeft ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textLeft = data.powerTextLeft
+	end
+	if data.powerTextCenter ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textCenter = data.powerTextCenter
+	end
+	if data.powerTextRight ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textRight = data.powerTextRight
+	end
+	if data.powerDelimiter ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textDelimiter = data.powerDelimiter
+	end
+	if data.powerDelimiterSecondary ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textDelimiterSecondary = data.powerDelimiterSecondary
+	end
+	if data.powerDelimiterTertiary ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.textDelimiterTertiary = data.powerDelimiterTertiary
+	end
+	if data.powerShortNumbers ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.useShortNumbers = data.powerShortNumbers and true or false
+	end
+	if data.powerHidePercent ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.hidePercentSymbol = data.powerHidePercent and true or false
+	end
+	if data.powerLeftX ~= nil or data.powerLeftY ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.offsetLeft = cfg.power.offsetLeft or {}
+		if data.powerLeftX ~= nil then cfg.power.offsetLeft.x = data.powerLeftX end
+		if data.powerLeftY ~= nil then cfg.power.offsetLeft.y = data.powerLeftY end
+	end
+	if data.powerCenterX ~= nil or data.powerCenterY ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.offsetCenter = cfg.power.offsetCenter or {}
+		if data.powerCenterX ~= nil then cfg.power.offsetCenter.x = data.powerCenterX end
+		if data.powerCenterY ~= nil then cfg.power.offsetCenter.y = data.powerCenterY end
+	end
+	if data.powerRightX ~= nil or data.powerRightY ~= nil then
+		cfg.power = cfg.power or {}
+		cfg.power.offsetRight = cfg.power.offsetRight or {}
+		if data.powerRightX ~= nil then cfg.power.offsetRight.x = data.powerRightX end
+		if data.powerRightY ~= nil then cfg.power.offsetRight.y = data.powerRightY end
 	end
 
 	local ac = ensureAuraConfig(cfg)
@@ -3079,6 +6104,10 @@ function GF:EnsureEditMode()
 			local cfg = getCfg(kind)
 			local ac = ensureAuraConfig(cfg)
 			local pcfg = cfg.power or {}
+			local rc = cfg.roleIcon or {}
+			local sc = cfg.status or {}
+			local lc = sc.leaderIcon or {}
+			local acfg = sc.assistIcon or {}
 			local defaults = {
 				point = cfg.point or "CENTER",
 				relativePoint = cfg.relativePoint or cfg.point or "CENTER",
@@ -3096,9 +6125,78 @@ function GF:EnsureEditMode()
 				maxColumns = cfg.maxColumns or (DEFAULTS.raid and DEFAULTS.raid.maxColumns) or 8,
 				columnSpacing = cfg.columnSpacing or (DEFAULTS.raid and DEFAULTS.raid.columnSpacing) or 0,
 				nameClassColor = (cfg.text and cfg.text.useClassColor) ~= false,
+				nameMaxChars = (cfg.text and cfg.text.nameMaxChars) or (DEFAULTS[kind] and DEFAULTS[kind].text and DEFAULTS[kind].text.nameMaxChars) or 0,
 				healthClassColor = (cfg.health and cfg.health.useClassColor) == true,
+				healthUseCustomColor = (cfg.health and cfg.health.useCustomColor) == true,
+				healthColor = (cfg.health and cfg.health.color) or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.color) or { 0, 0.8, 0, 1 }),
+				healthTextLeft = (cfg.health and cfg.health.textLeft) or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textLeft) or "NONE"),
+				healthTextCenter = (cfg.health and cfg.health.textCenter) or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textCenter) or "NONE"),
+				healthTextRight = (cfg.health and cfg.health.textRight) or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textRight) or "NONE"),
+				healthDelimiter = (cfg.health and cfg.health.textDelimiter) or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiter) or " "),
+				healthDelimiterSecondary = (cfg.health and cfg.health.textDelimiterSecondary)
+					or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterSecondary) or ((cfg.health and cfg.health.textDelimiter) or " ")),
+				healthDelimiterTertiary = (cfg.health and cfg.health.textDelimiterTertiary)
+					or ((DEFAULTS[kind] and DEFAULTS[kind].health and DEFAULTS[kind].health.textDelimiterTertiary) or ((cfg.health and cfg.health.textDelimiterSecondary) or (cfg.health and cfg.health.textDelimiter) or " ")),
+				healthShortNumbers = (cfg.health and cfg.health.useShortNumbers) ~= false,
+				healthHidePercent = (cfg.health and cfg.health.hidePercentSymbol) == true,
+				healthLeftX = (cfg.health and cfg.health.offsetLeft and cfg.health.offsetLeft.x) or 0,
+				healthLeftY = (cfg.health and cfg.health.offsetLeft and cfg.health.offsetLeft.y) or 0,
+				healthCenterX = (cfg.health and cfg.health.offsetCenter and cfg.health.offsetCenter.x) or 0,
+				healthCenterY = (cfg.health and cfg.health.offsetCenter and cfg.health.offsetCenter.y) or 0,
+				healthRightX = (cfg.health and cfg.health.offsetRight and cfg.health.offsetRight.x) or 0,
+				healthRightY = (cfg.health and cfg.health.offsetRight and cfg.health.offsetRight.y) or 0,
+				absorbEnabled = (cfg.health and cfg.health.absorbEnabled) ~= false,
+				absorbTexture = (cfg.health and cfg.health.absorbTexture) or "SOLID",
+				absorbReverse = (cfg.health and cfg.health.absorbReverseFill) == true,
+				absorbUseCustomColor = (cfg.health and cfg.health.absorbUseCustomColor) == true,
+				absorbColor = (cfg.health and cfg.health.absorbColor) or { 0.85, 0.95, 1, 0.7 },
+				healAbsorbEnabled = (cfg.health and cfg.health.healAbsorbEnabled) ~= false,
+				healAbsorbTexture = (cfg.health and cfg.health.healAbsorbTexture) or "SOLID",
+				healAbsorbReverse = (cfg.health and cfg.health.healAbsorbReverseFill) == true,
+				healAbsorbUseCustomColor = (cfg.health and cfg.health.healAbsorbUseCustomColor) == true,
+				healAbsorbColor = (cfg.health and cfg.health.healAbsorbColor) or { 1, 0.3, 0.3, 0.7 },
+				absorbGlow = (cfg.health and cfg.health.useAbsorbGlow) ~= false,
+				nameColorMode = sc.nameColorMode or "CLASS",
+				nameColor = sc.nameColor or { 1, 1, 1, 1 },
+				levelEnabled = sc.levelEnabled ~= false,
+				hideLevelAtMax = sc.hideLevelAtMax == true,
+				levelClassColor = (sc.levelColorMode or "CUSTOM") == "CLASS",
+				levelColorMode = sc.levelColorMode or "CUSTOM",
+				levelColor = sc.levelColor or { 1, 0.85, 0, 1 },
+				levelAnchor = sc.levelAnchor or "RIGHT",
+				levelOffsetX = (sc.levelOffset and sc.levelOffset.x) or 0,
+				levelOffsetY = (sc.levelOffset and sc.levelOffset.y) or 0,
+				leaderIconEnabled = lc.enabled ~= false,
+				leaderIconSize = lc.size or 12,
+				leaderIconPoint = lc.point or "TOPLEFT",
+				leaderIconOffsetX = lc.x or 0,
+				leaderIconOffsetY = lc.y or 0,
+				assistIconEnabled = acfg.enabled ~= false,
+				assistIconSize = acfg.size or 12,
+				assistIconPoint = acfg.point or "TOPLEFT",
+				assistIconOffsetX = acfg.x or 0,
+				assistIconOffsetY = acfg.y or 0,
+				roleIconEnabled = rc.enabled ~= false,
+				roleIconStyle = rc.style or "TINY",
+				roleIconRoles = (type(rc.showRoles) == "table") and copySelectionMap(rc.showRoles) or defaultRoleSelection(),
 				powerRoles = (type(pcfg.showRoles) == "table") and copySelectionMap(pcfg.showRoles) or defaultRoleSelection(),
 				powerSpecs = (type(pcfg.showSpecs) == "table") and copySelectionMap(pcfg.showSpecs) or defaultSpecSelection(),
+				powerTextLeft = (pcfg.textLeft) or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textLeft) or "NONE"),
+				powerTextCenter = (pcfg.textCenter) or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textCenter) or "NONE"),
+				powerTextRight = (pcfg.textRight) or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textRight) or "NONE"),
+				powerDelimiter = (pcfg.textDelimiter) or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiter) or " "),
+				powerDelimiterSecondary = (pcfg.textDelimiterSecondary)
+					or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterSecondary) or (pcfg.textDelimiter or " ")),
+				powerDelimiterTertiary = (pcfg.textDelimiterTertiary)
+					or ((DEFAULTS[kind] and DEFAULTS[kind].power and DEFAULTS[kind].power.textDelimiterTertiary) or (pcfg.textDelimiterSecondary or pcfg.textDelimiter or " ")),
+				powerShortNumbers = pcfg.useShortNumbers ~= false,
+				powerHidePercent = pcfg.hidePercentSymbol == true,
+				powerLeftX = (pcfg.offsetLeft and pcfg.offsetLeft.x) or 0,
+				powerLeftY = (pcfg.offsetLeft and pcfg.offsetLeft.y) or 0,
+				powerCenterX = (pcfg.offsetCenter and pcfg.offsetCenter.x) or 0,
+				powerCenterY = (pcfg.offsetCenter and pcfg.offsetCenter.y) or 0,
+				powerRightX = (pcfg.offsetRight and pcfg.offsetRight.x) or 0,
+				powerRightY = (pcfg.offsetRight and pcfg.offsetRight.y) or 0,
 				buffsEnabled = ac.buff.enabled == true,
 				buffAnchor = ac.buff.anchorPoint or "TOPLEFT",
 				buffOffsetX = ac.buff.x or 0,
@@ -3140,6 +6238,7 @@ function GF:EnsureEditMode()
 				showReset = false,
 				showSettingsReset = false,
 				enableOverlayToggle = true,
+				settingsMaxHeight = 900,
 			})
 
 			if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then addon.EditModeLib:SetFrameResetVisible(anchor, false) end
@@ -3172,16 +6271,36 @@ end
 -- Bootstrap
 -- -----------------------------------------------------------------------------
 
+registerFeatureEvents = function(frame)
+	if not frame then return end
+	if frame.RegisterEvent then
+		frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+		frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+		frame:RegisterEvent("PARTY_LEADER_CHANGED")
+		frame:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+		frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+	end
+end
+
+unregisterFeatureEvents = function(frame)
+	if not frame then return end
+	if frame.UnregisterEvent then
+		frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+		frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+		frame:UnregisterEvent("PARTY_LEADER_CHANGED")
+		frame:UnregisterEvent("PLAYER_ROLES_ASSIGNED")
+		frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+	end
+end
+
 do
 	local f = CreateFrame("Frame")
+	GF._eventFrame = f
 	f:RegisterEvent("PLAYER_LOGIN")
-	f:RegisterEvent("PLAYER_REGEN_ENABLED")
-	f:RegisterEvent("GROUP_ROSTER_UPDATE")
-	f:RegisterEvent("PLAYER_ROLES_ASSIGNED")
-	f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 	f:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_LOGIN" then
 			if isFeatureEnabled() then
+				registerFeatureEvents(f)
 				GF:EnsureHeaders()
 				GF.Refresh()
 				GF:EnsureEditMode()
@@ -3194,8 +6313,11 @@ do
 				GF._pendingRefresh = false
 				GF.Refresh()
 			end
-		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
+		elseif not isFeatureEnabled() then
+			return
+		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" or event == "PARTY_LEADER_CHANGED" then
 			GF:RefreshRoleIcons()
+			GF:RefreshGroupIcons()
 		elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
 			GF:RefreshPowerVisibility()
 		end

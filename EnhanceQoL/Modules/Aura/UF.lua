@@ -2107,10 +2107,6 @@ end
 local function applyVisibilityRules(unit)
 	if not ApplyFrameVisibilityConfig then return end
 	local cfg = ensureDB(unit)
-	if unit == UNIT.PLAYER and cfg and type(cfg.visibility) == "table" and cfg.visibility.PLAYER_HEALTH_NOT_FULL then
-		cfg.visibility.PLAYER_HEALTH_NOT_FULL = nil
-		if not next(cfg.visibility) then cfg.visibility = nil end
-	end
 	local inEdit = addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode()
 	local useConfig = (not inEdit and cfg and cfg.enabled) and normalizeVisibilityConfig(cfg.visibility) or nil
 	local fadeAlpha = nil

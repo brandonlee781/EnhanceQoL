@@ -39,7 +39,6 @@ local COOLDOWN_VIEWER_VISIBILITY_MODES = constants.COOLDOWN_VIEWER_VISIBILITY_MO
 		PLAYER_HAS_TARGET = "PLAYER_HAS_TARGET",
 		PLAYER_CASTING = "PLAYER_CASTING",
 		PLAYER_IN_GROUP = "PLAYER_IN_GROUP",
-		PLAYER_HEALTH_NOT_FULL = "PLAYER_HEALTH_NOT_FULL",
 		NONE = "NONE",
 		HIDE_WHILE_MOUNTED = "HIDE_WHILE_MOUNTED",
 	}
@@ -875,10 +874,6 @@ local function createCooldownViewerDropdowns(category, expandable)
 		},
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING, text = L["cooldownManagerShowCasting"] or "Player is casting" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_IN_GROUP, text = L["cooldownManagerShowGrouped"] or "In party/raid" },
-		{
-			value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HEALTH_NOT_FULL,
-			text = L["cooldownManagerShowHealthMissing"] or (L["visibilityRule_playerHealth"] or "Player health below 100%"),
-		},
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER, text = L["cooldownManagerShowMouseover"] or "On mouseover" },
 		{
 			value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET,
@@ -893,7 +888,7 @@ local function createCooldownViewerDropdowns(category, expandable)
 	}
 
 	local function dropdownEnabled() return IsCooldownViewerEnabled() end
-	local desc = L["cooldownManagerShowDesc"] or "Requires the Cooldown Viewer to be enabled (cooldownViewerEnabled = 1). Visible while any selected condition is true."
+	local desc = L["cooldownManagerShowDesc"] or "Requires the Blizzard Cooldown Viewer to be enabled in the in-game options. Visible while any selected condition is true."
 
 	for _, frameName in ipairs(COOLDOWN_VIEWER_FRAMES) do
 		local exp = expandable
@@ -1327,15 +1322,6 @@ local function createCastbarCategory()
 		end,
 		isEnabled = shouldShowCastbarDropdown,
 		parentSection = expandWith(shouldShowCastbarDropdown),
-	})
-
-	addon.functions.SettingsCreateCheckbox(category, {
-		var = "cooldownViewerEnabled",
-		text = L["cooldownViewerEnabled"],
-		get = function() return getCVarOptionState("cooldownViewerEnabled") end,
-		func = function(value) setCVarOptionState("cooldownViewerEnabled", value) end,
-		default = false,
-		parentSection = expandable,
 	})
 
 	createCooldownViewerDropdowns(category, expandable)
