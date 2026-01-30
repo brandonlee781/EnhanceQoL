@@ -1109,6 +1109,9 @@ local function registerTooltipHooks()
 
 	hooksecurefunc("GameTooltip_SetDefaultAnchor", function(s, p)
 		if not addon.db then return end
+		if not s or not s.SetOwner then return end
+		if s.IsForbidden and s:IsForbidden() then return end
+		if p and p.IsForbidden and p:IsForbidden() then return end
 		if addon.db["TooltipAnchorType"] == 1 then return end
 		local anchor
 		if addon.db["TooltipAnchorType"] == 2 then anchor = "ANCHOR_CURSOR" end
