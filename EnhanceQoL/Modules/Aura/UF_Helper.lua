@@ -65,14 +65,28 @@ function H.trim(str)
 end
 
 function H.getFont(path)
-	if path and path ~= "" then return path end
+	if type(path) == "string" and path ~= "" then
+		local lower = path:lower()
+		if path:find("\\") or path:find("/") or lower:find(".ttf", 1, true) or lower:find(".otf", 1, true) or lower:find(".ttc", 1, true) then
+			return path
+		end
+		if LSM and LSM.Fetch then
+			local fetched = LSM:Fetch("font", path, true)
+			if type(fetched) == "string" and fetched ~= "" then return fetched end
+		end
+		return path
+	end
 	return addon.variables and addon.variables.defaultFont or (LSM and LSM:Fetch("font", LSM.DefaultMedia.font)) or STANDARD_TEXT_FONT
 end
 
 function H.applyFont(fs, fontPath, size, outline)
 	if not fs then return end
 	local flags = normalizeFontOutline(outline)
-	fs:SetFont(H.getFont(fontPath), size or 14, flags)
+	local fontFile = H.getFont(fontPath)
+	local ok = fs.SetFont and fs:SetFont(fontFile, size or 14, flags)
+	if not ok and fontPath and fontPath ~= "" then
+		fs:SetFont(H.getFont(nil), size or 14, flags)
+	end
 	if wantsDropShadow(outline) then
 		fs:SetShadowColor(0, 0, 0, 0.5)
 		fs:SetShadowOffset(0.5, -0.5)
@@ -1180,7 +1194,11 @@ function H.getNameLimitWidth(fontPath, fontSize, fontOutline, maxChars)
 	end
 	local measure = nameWidthCache._measure
 	if not measure then return nil end
-	measure:SetFont(font, size, outline)
+	local ok = measure.SetFont and measure:SetFont(font, size, outline)
+	if not ok then
+		local fallback = H.getFont(nil)
+		measure:SetFont(fallback, size, outline)
+	end
 	measure:SetText(string.rep("i", maxChars))
 	local width = measure:GetStringWidth() or 0
 	nameWidthCache[key] = width

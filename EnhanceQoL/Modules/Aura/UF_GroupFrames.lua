@@ -104,6 +104,16 @@ local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
 
+local function resolveBorderTexture(key)
+	if UFHelper and UFHelper.resolveBorderTexture then return UFHelper.resolveBorderTexture(key) end
+	if not key or key == "" or key == "DEFAULT" then return "Interface\\Buttons\\WHITE8x8" end
+	if LSM then
+		local tex = LSM:Fetch("border", key)
+		if tex and tex ~= "" then return tex end
+	end
+	return key
+end
+
 local function ensureBorderFrame(frame)
 	if not frame then return nil end
 	local border = frame._ufBorder
@@ -149,6 +159,75 @@ local function setBackdrop(frame, borderCfg)
 			borderFrame:Hide()
 		end
 	end
+end
+
+local function ensureHighlightFrame(st, key)
+	if not (st and st.barGroup) then return nil end
+	st._highlightFrames = st._highlightFrames or {}
+	local frame = st._highlightFrames[key]
+	if not frame then
+		frame = CreateFrame("Frame", nil, st.barGroup, "BackdropTemplate")
+		frame:EnableMouse(false)
+		st._highlightFrames[key] = frame
+	end
+	frame:SetFrameStrata(st.barGroup:GetFrameStrata())
+	local baseLevel = st.barGroup:GetFrameLevel() or 0
+	frame:SetFrameLevel(baseLevel + 4)
+	return frame
+end
+
+local function buildHighlightConfig(cfg, def, key)
+	local hcfg = (cfg and cfg[key]) or {}
+	local hdef = (def and def[key]) or {}
+	local enabled = hcfg.enabled
+	if enabled == nil then enabled = hdef.enabled end
+	if enabled ~= true then return nil end
+	local texture = hcfg.texture or hdef.texture or "DEFAULT"
+	local size = tonumber(hcfg.size or hdef.size) or 1
+	if size < 1 then size = 1 end
+	local color = hcfg.color
+	if type(color) ~= "table" then color = hdef.color end
+	if type(color) ~= "table" then color = { 1, 1, 1, 1 } end
+	local offset = hcfg.offset
+	if offset == nil then offset = hdef.offset end
+	offset = tonumber(offset) or 0
+	return {
+		enabled = true,
+		texture = texture,
+		size = size,
+		color = color,
+		offset = offset,
+	}
+end
+
+local function applyHighlightStyle(st, cfg, key)
+	if not st then return end
+	local frame = st._highlightFrames and st._highlightFrames[key]
+	if not cfg or cfg.enabled ~= true then
+		if frame then
+			if frame.SetBackdrop then frame:SetBackdrop(nil) end
+			frame:Hide()
+		end
+		return
+	end
+	frame = ensureHighlightFrame(st, key)
+	if not frame then return end
+	local size = cfg.size or 1
+	if size < 1 then size = 1 end
+	local offset = cfg.offset or 0
+	frame:SetBackdrop({
+		bgFile = "Interface\\Buttons\\WHITE8x8",
+		edgeFile = resolveBorderTexture(cfg.texture),
+		edgeSize = size,
+		insets = { left = size, right = size, top = size, bottom = size },
+	})
+	frame:SetBackdropColor(0, 0, 0, 0)
+	local color = cfg.color or { 1, 1, 1, 1 }
+	frame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", st.barGroup, "TOPLEFT", -offset, offset)
+	frame:SetPoint("BOTTOMRIGHT", st.barGroup, "BOTTOMRIGHT", offset, -offset)
+	frame:Hide()
 end
 
 local function applyBarBackdrop(bar, cfg)
@@ -448,6 +527,20 @@ local DEFAULTS = {
 			size = 2,
 			color = { 1, 0, 0, 1 },
 		},
+		highlightHover = {
+			enabled = false,
+			texture = "DEFAULT",
+			size = 2,
+			offset = 0,
+			color = { 1, 1, 1, 0.9 },
+		},
+		highlightTarget = {
+			enabled = false,
+			texture = "DEFAULT",
+			size = 2,
+			offset = 0,
+			color = { 1, 1, 0, 1 },
+		},
 		health = {
 			texture = "DEFAULT",
 			font = nil,
@@ -641,6 +734,20 @@ local DEFAULTS = {
 			texture = "DEFAULT",
 			size = 2,
 			color = { 1, 0, 0, 1 },
+		},
+		highlightHover = {
+			enabled = false,
+			texture = "DEFAULT",
+			size = 2,
+			offset = 0,
+			color = { 1, 1, 1, 0.9 },
+		},
+		highlightTarget = {
+			enabled = false,
+			texture = "DEFAULT",
+			size = 2,
+			offset = 0,
+			color = { 1, 1, 0, 1 },
 		},
 		health = {
 			texture = "DEFAULT",
@@ -986,7 +1093,6 @@ function GF:BuildButton(self)
 	local cfg = getCfg(kind)
 	self._eqolCfg = cfg
 	updateButtonConfig(self, cfg)
-	GF:LayoutAuras(self)
 	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
 	local tc = cfg.text or {}
@@ -1109,10 +1215,6 @@ function GF:BuildButton(self)
 		UFHelper.applyFont(st.nameText, tc.font or hc.font, tc.fontSize or hc.fontSize or 12, tc.fontOutline or hc.fontOutline)
 	end
 
-	-- Highlight style (same system as your UF.lua)
-	st._highlightCfg = (UFHelper and UFHelper.buildHighlightConfig) and UFHelper.buildHighlightConfig(cfg, DEFAULTS[kind]) or nil
-	if UFHelper and UFHelper.applyHighlightStyle then UFHelper.applyHighlightStyle(st, st._highlightCfg) end
-
 	-- Layout updates on resize
 	if not st._sizeHooked then
 		st._sizeHooked = true
@@ -1128,6 +1230,7 @@ function GF:BuildButton(self)
 		self.menu = function(btn) GF:OpenUnitMenu(btn) end
 	end
 
+	GF:LayoutAuras(self)
 	hookTextFrameLevels(st)
 	GF:LayoutButton(self)
 end
@@ -1139,8 +1242,9 @@ function GF:LayoutButton(self)
 
 	local kind = self._eqolGroupKind -- set by header helper
 	local cfg = self._eqolCfg or getCfg(kind or "party")
+	local def = DEFAULTS[kind] or {}
 	local hc = cfg.health or {}
-	local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+	local defH = def.health or {}
 	local powerH = tonumber(cfg.powerHeight) or 5
 	if st._powerHidden then powerH = 0 end
 	local w, h = self:GetSize()
@@ -1161,6 +1265,12 @@ function GF:LayoutButton(self)
 
 	st.barGroup:SetAllPoints(self)
 	setBackdrop(st.barGroup, cfg.border)
+
+	-- Highlight borders (hover / target)
+	st._highlightHoverCfg = buildHighlightConfig(cfg, def, "highlightHover")
+	st._highlightTargetCfg = buildHighlightConfig(cfg, def, "highlightTarget")
+	applyHighlightStyle(st, st._highlightHoverCfg, "hover")
+	applyHighlightStyle(st, st._highlightTargetCfg, "target")
 
 	st.power:ClearAllPoints()
 	st.power:SetPoint("BOTTOMLEFT", st.barGroup, "BOTTOMLEFT", borderOffset, borderOffset)
@@ -1398,6 +1508,8 @@ function GF:LayoutButton(self)
 	st._lastHealthBarW = nil
 	st._lastPowerPx = nil
 	st._lastPowerBarW = nil
+
+	GF:UpdateHighlightState(self)
 end
 
 -- -----------------------------------------------------------------------------
@@ -1584,6 +1696,66 @@ function GF:UpdateGroupIcons(self)
 		else
 			st.assistIcon:Hide()
 		end
+	end
+end
+
+function GF:UpdateHighlightState(self)
+	if not self then return end
+	local st = getState(self)
+	if not st then return end
+	local frames = st._highlightFrames
+	local hoverFrame = frames and frames.hover
+	local targetFrame = frames and frames.target
+	local unit = getUnit(self)
+	if not unit then
+		if hoverFrame then hoverFrame:Hide() end
+		if targetFrame then targetFrame:Hide() end
+		return
+	end
+
+	local targetCfg = st._highlightTargetCfg
+	local hoverCfg = st._highlightHoverCfg
+	local inEditMode = isEditModeActive()
+	local previewIndex = st._previewIndex or self._eqolPreviewIndex or 0
+	local isTarget = UnitIsUnit and UnitIsUnit(unit, "target")
+	local showTarget = false
+	if targetCfg and targetCfg.enabled then
+		if inEditMode and self._eqolPreview and previewIndex > 0 then
+			if hoverCfg and hoverCfg.enabled then
+				showTarget = previewIndex == 2
+			else
+				showTarget = previewIndex == 1
+			end
+		else
+			showTarget = isTarget
+		end
+	end
+	if showTarget then
+		if targetFrame then
+			local color = targetCfg.color or { 1, 1, 1, 1 }
+			targetFrame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+			targetFrame:Show()
+		end
+	else
+		if targetFrame then targetFrame:Hide() end
+	end
+
+	local showHover = false
+	if hoverCfg and hoverCfg.enabled then
+		if inEditMode and self._eqolPreview and previewIndex > 0 then
+			showHover = previewIndex == 1
+		else
+			showHover = st._hovered
+		end
+	end
+	if showHover then
+		if hoverFrame then
+			local color = hoverCfg.color or { 1, 1, 1, 1 }
+			hoverFrame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+			hoverFrame:Show()
+		end
+	else
+		if hoverFrame then hoverFrame:Hide() end
 	end
 end
 
@@ -2525,6 +2697,7 @@ function GF:UpdateAll(self)
 	GF:UpdateRaidIcon(self)
 	GF:UpdateGroupIcons(self)
 	GF:UpdateAuras(self)
+	GF:UpdateHighlightState(self)
 end
 
 -- -----------------------------------------------------------------------------
@@ -2734,7 +2907,7 @@ function GF.UnitButton_OnEnter(self)
 	local st = getState(self)
 	if st then
 		st._hovered = true
-		if UFHelper and UFHelper.updateHighlight then UFHelper.updateHighlight(st, unit, "player") end
+		GF:UpdateHighlightState(self)
 	end
 	if not GameTooltip or GameTooltip:IsForbidden() then return end
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -2747,7 +2920,7 @@ function GF.UnitButton_OnLeave(self)
 	local st = getState(self)
 	if st then
 		st._hovered = false
-		if UFHelper and UFHelper.updateHighlight and unit then UFHelper.updateHighlight(st, unit, "player") end
+		GF:UpdateHighlightState(self)
 	end
 	if GameTooltip and not GameTooltip:IsForbidden() then GameTooltip:Hide() end
 end
@@ -2890,10 +3063,12 @@ function GF:EnsurePreviewFrames(kind)
 		local btn = CreateFrame("Button", nil, anchor, "EQOLUFGroupUnitButtonTemplate")
 		btn._eqolGroupKind = kind
 		btn._eqolPreview = true
+		btn._eqolPreviewIndex = i
 		btn:SetFrameStrata(anchor:GetFrameStrata())
 		btn:SetFrameLevel((anchor:GetFrameLevel() or 1) + 1)
 		local st = getState(btn)
 		st._previewRole = previewRoles[i] or "DAMAGER"
+		st._previewIndex = i
 		frames[i] = btn
 		GF:UnitButton_SetUnit(btn, "player")
 	end
@@ -2975,6 +3150,22 @@ function GF:RefreshGroupIcons()
 		forEachChild(header, function(child)
 			if child then GF:UpdateGroupIcons(child) end
 		end)
+	end
+end
+
+function GF:RefreshTargetHighlights()
+	if not isFeatureEnabled() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateHighlightState(child) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateHighlightState(btn) end
+			end
+		end
 	end
 end
 
@@ -3348,6 +3539,18 @@ local function buildEditModeSettings(kind, editModeId)
 	local function anyHealthTextEnabled() return isHealthTextEnabled("textLeft") or isHealthTextEnabled("textCenter") or isHealthTextEnabled("textRight") end
 	local function healthDelimiterCount() return maxDelimiterCount(getHealthTextMode("textLeft"), getHealthTextMode("textCenter"), getHealthTextMode("textRight")) end
 	local function powerDelimiterCount() return maxDelimiterCount(getPowerTextMode("textLeft"), getPowerTextMode("textCenter"), getPowerTextMode("textRight")) end
+	local function getHighlightCfg(key)
+		local cfg = getCfg(kind)
+		local hcfg = cfg and cfg[key] or {}
+		local def = (DEFAULTS[kind] and DEFAULTS[kind][key]) or {}
+		return hcfg, def
+	end
+	local function isHighlightEnabled(key)
+		local hcfg, def = getHighlightCfg(key)
+		local enabled = hcfg.enabled
+		if enabled == nil then enabled = def.enabled end
+		return enabled == true
+	end
 	local settings = {
 		{
 			name = "Frame",
@@ -3707,6 +3910,262 @@ local function buildEditModeSettings(kind, editModeId)
 				local bc = cfg and cfg.border or {}
 				return bc.enabled ~= false
 			end,
+		},
+		{
+			name = "Hover highlight",
+			kind = SettingType.Collapsible,
+			id = "hoverHighlight",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Enable hover highlight",
+			kind = SettingType.Checkbox,
+			field = "hoverHighlightEnabled",
+			parentId = "hoverHighlight",
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightHover")
+				if hcfg.enabled == nil then return def.enabled == true end
+				return hcfg.enabled == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightHover = cfg.highlightHover or {}
+				cfg.highlightHover.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightEnabled", cfg.highlightHover.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Color",
+			kind = SettingType.Color,
+			field = "hoverHighlightColor",
+			parentId = "hoverHighlight",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightHover and DEFAULTS[kind].highlightHover.color) or { 1, 1, 1, 0.9 },
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightHover")
+				local r, g, b, a = unpackColor(hcfg.color, def.color or { 1, 1, 1, 0.9 })
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.highlightHover = cfg.highlightHover or {}
+				cfg.highlightHover.color = { value.r or 1, value.g or 1, value.b or 1, value.a or 0.9 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightColor", cfg.highlightHover.color, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightHover") end,
+		},
+		{
+			name = "Texture",
+			kind = SettingType.Dropdown,
+			field = "hoverHighlightTexture",
+			parentId = "hoverHighlight",
+			height = 180,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightHover")
+				return hcfg.texture or def.texture or "DEFAULT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightHover = cfg.highlightHover or {}
+				cfg.highlightHover.texture = value or "DEFAULT"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightTexture", cfg.highlightHover.texture, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(borderOptions()) do
+					root:CreateRadio(option.label, function()
+						local hcfg, def = getHighlightCfg("highlightHover")
+						return (hcfg.texture or def.texture or "DEFAULT") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.highlightHover = cfg.highlightHover or {}
+						cfg.highlightHover.texture = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightTexture", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightHover") end,
+		},
+		{
+			name = "Size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "hoverHighlightSize",
+			parentId = "hoverHighlight",
+			minValue = 1,
+			maxValue = 64,
+			valueStep = 1,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightHover")
+				return hcfg.size or def.size or 2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightHover = cfg.highlightHover or {}
+				cfg.highlightHover.size = clampNumber(value, 1, 64, cfg.highlightHover.size or 2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightSize", cfg.highlightHover.size, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightHover") end,
+		},
+		{
+			name = "Offset",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "hoverHighlightOffset",
+			parentId = "hoverHighlight",
+			minValue = -64,
+			maxValue = 64,
+			valueStep = 1,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightHover")
+				return hcfg.offset or def.offset or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightHover = cfg.highlightHover or {}
+				cfg.highlightHover.offset = clampNumber(value, -64, 64, cfg.highlightHover.offset or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hoverHighlightOffset", cfg.highlightHover.offset, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightHover") end,
+		},
+		{
+			name = "Target highlight",
+			kind = SettingType.Collapsible,
+			id = "targetHighlight",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Enable target highlight",
+			kind = SettingType.Checkbox,
+			field = "targetHighlightEnabled",
+			parentId = "targetHighlight",
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightTarget")
+				if hcfg.enabled == nil then return def.enabled == true end
+				return hcfg.enabled == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightTarget = cfg.highlightTarget or {}
+				cfg.highlightTarget.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightEnabled", cfg.highlightTarget.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Color",
+			kind = SettingType.Color,
+			field = "targetHighlightColor",
+			parentId = "targetHighlight",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightTarget and DEFAULTS[kind].highlightTarget.color) or { 1, 1, 0, 1 },
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightTarget")
+				local r, g, b, a = unpackColor(hcfg.color, def.color or { 1, 1, 0, 1 })
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.highlightTarget = cfg.highlightTarget or {}
+				cfg.highlightTarget.color = { value.r or 1, value.g or 1, value.b or 0, value.a or 1 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightColor", cfg.highlightTarget.color, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightTarget") end,
+		},
+		{
+			name = "Texture",
+			kind = SettingType.Dropdown,
+			field = "targetHighlightTexture",
+			parentId = "targetHighlight",
+			height = 180,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightTarget")
+				return hcfg.texture or def.texture or "DEFAULT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightTarget = cfg.highlightTarget or {}
+				cfg.highlightTarget.texture = value or "DEFAULT"
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightTexture", cfg.highlightTarget.texture, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(borderOptions()) do
+					root:CreateRadio(option.label, function()
+						local hcfg, def = getHighlightCfg("highlightTarget")
+						return (hcfg.texture or def.texture or "DEFAULT") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.highlightTarget = cfg.highlightTarget or {}
+						cfg.highlightTarget.texture = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightTexture", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightTarget") end,
+		},
+		{
+			name = "Size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "targetHighlightSize",
+			parentId = "targetHighlight",
+			minValue = 1,
+			maxValue = 64,
+			valueStep = 1,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightTarget")
+				return hcfg.size or def.size or 2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightTarget = cfg.highlightTarget or {}
+				cfg.highlightTarget.size = clampNumber(value, 1, 64, cfg.highlightTarget.size or 2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightSize", cfg.highlightTarget.size, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightTarget") end,
+		},
+		{
+			name = "Offset",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "targetHighlightOffset",
+			parentId = "targetHighlight",
+			minValue = -64,
+			maxValue = 64,
+			valueStep = 1,
+			get = function()
+				local hcfg, def = getHighlightCfg("highlightTarget")
+				return hcfg.offset or def.offset or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.highlightTarget = cfg.highlightTarget or {}
+				cfg.highlightTarget.offset = clampNumber(value, -64, 64, cfg.highlightTarget.offset or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "targetHighlightOffset", cfg.highlightTarget.offset, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function() return isHighlightEnabled("highlightTarget") end,
 		},
 		{
 			name = "Name",
@@ -4662,6 +5121,10 @@ local function buildEditModeSettings(kind, editModeId)
 						GF:ApplyHeaderAttributes(kind)
 					end)
 				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				return not (cfg and cfg.barTexture)
 			end,
 		},
 		{
@@ -6657,6 +7120,10 @@ local function buildEditModeSettings(kind, editModeId)
 					end)
 				end
 			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				return not (cfg and cfg.barTexture)
+			end,
 		},
 		{
 			name = "Show bar backdrop",
@@ -7526,6 +7993,42 @@ local function applyEditModeData(kind, data)
 	if data.borderTexture ~= nil then cfg.border.texture = data.borderTexture end
 	if data.borderSize ~= nil then cfg.border.edgeSize = data.borderSize end
 	if data.borderOffset ~= nil then cfg.border.offset = data.borderOffset end
+	if
+		data.hoverHighlightEnabled ~= nil
+		or data.hoverHighlightColor ~= nil
+		or data.hoverHighlightTexture ~= nil
+		or data.hoverHighlightSize ~= nil
+		or data.hoverHighlightOffset ~= nil
+	then
+		cfg.highlightHover = cfg.highlightHover or {}
+	end
+	if data.hoverHighlightEnabled ~= nil then cfg.highlightHover.enabled = data.hoverHighlightEnabled and true or false end
+	if data.hoverHighlightColor ~= nil then cfg.highlightHover.color = data.hoverHighlightColor end
+	if data.hoverHighlightTexture ~= nil then cfg.highlightHover.texture = data.hoverHighlightTexture end
+	if data.hoverHighlightSize ~= nil then
+		cfg.highlightHover.size = clampNumber(data.hoverHighlightSize, 1, 64, cfg.highlightHover.size or 2)
+	end
+	if data.hoverHighlightOffset ~= nil then
+		cfg.highlightHover.offset = clampNumber(data.hoverHighlightOffset, -64, 64, cfg.highlightHover.offset or 0)
+	end
+	if
+		data.targetHighlightEnabled ~= nil
+		or data.targetHighlightColor ~= nil
+		or data.targetHighlightTexture ~= nil
+		or data.targetHighlightSize ~= nil
+		or data.targetHighlightOffset ~= nil
+	then
+		cfg.highlightTarget = cfg.highlightTarget or {}
+	end
+	if data.targetHighlightEnabled ~= nil then cfg.highlightTarget.enabled = data.targetHighlightEnabled and true or false end
+	if data.targetHighlightColor ~= nil then cfg.highlightTarget.color = data.targetHighlightColor end
+	if data.targetHighlightTexture ~= nil then cfg.highlightTarget.texture = data.targetHighlightTexture end
+	if data.targetHighlightSize ~= nil then
+		cfg.highlightTarget.size = clampNumber(data.targetHighlightSize, 1, 64, cfg.highlightTarget.size or 2)
+	end
+	if data.targetHighlightOffset ~= nil then
+		cfg.highlightTarget.offset = clampNumber(data.targetHighlightOffset, -64, 64, cfg.highlightTarget.offset or 0)
+	end
 	if data.enabled ~= nil then cfg.enabled = data.enabled and true or false end
 	if data.showName ~= nil then
 		cfg.text = cfg.text or {}
@@ -7578,8 +8081,6 @@ local function applyEditModeData(kind, data)
 	if data.healthColor ~= nil then
 		cfg.health = cfg.health or {}
 		cfg.health.color = data.healthColor
-		cfg.health.useCustomColor = true
-		cfg.health.useClassColor = false
 	end
 	if data.healthTextLeft ~= nil then
 		cfg.health = cfg.health or {}
@@ -7989,6 +8490,32 @@ function GF:EnsureEditMode()
 					or (cfg.border and cfg.border.edgeSize)
 					or (DEFAULTS[kind] and DEFAULTS[kind].border and DEFAULTS[kind].border.edgeSize)
 					or 1,
+				hoverHighlightEnabled = (cfg.highlightHover and cfg.highlightHover.enabled) == true,
+				hoverHighlightColor = (cfg.highlightHover and cfg.highlightHover.color)
+					or (def.highlightHover and def.highlightHover.color)
+					or { 1, 1, 1, 0.9 },
+				hoverHighlightTexture = (cfg.highlightHover and cfg.highlightHover.texture)
+					or (def.highlightHover and def.highlightHover.texture)
+					or "DEFAULT",
+				hoverHighlightSize = (cfg.highlightHover and cfg.highlightHover.size)
+					or (def.highlightHover and def.highlightHover.size)
+					or 2,
+				hoverHighlightOffset = (cfg.highlightHover and cfg.highlightHover.offset)
+					or (def.highlightHover and def.highlightHover.offset)
+					or 0,
+				targetHighlightEnabled = (cfg.highlightTarget and cfg.highlightTarget.enabled) == true,
+				targetHighlightColor = (cfg.highlightTarget and cfg.highlightTarget.color)
+					or (def.highlightTarget and def.highlightTarget.color)
+					or { 1, 1, 0, 1 },
+				targetHighlightTexture = (cfg.highlightTarget and cfg.highlightTarget.texture)
+					or (def.highlightTarget and def.highlightTarget.texture)
+					or "DEFAULT",
+				targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size)
+					or (def.highlightTarget and def.highlightTarget.size)
+					or 2,
+				targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset)
+					or (def.highlightTarget and def.highlightTarget.offset)
+					or 0,
 				enabled = cfg.enabled == true,
 				showPlayer = cfg.showPlayer == true,
 				showSolo = cfg.showSolo == true,
@@ -8210,6 +8737,7 @@ registerFeatureEvents = function(frame)
 		frame:RegisterEvent("PLAYER_ROLES_ASSIGNED")
 		frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 		frame:RegisterEvent("RAID_TARGET_UPDATE")
+		frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 	end
 end
 
@@ -8222,6 +8750,7 @@ unregisterFeatureEvents = function(frame)
 		frame:UnregisterEvent("PLAYER_ROLES_ASSIGNED")
 		frame:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 		frame:UnregisterEvent("RAID_TARGET_UPDATE")
+		frame:UnregisterEvent("PLAYER_TARGET_CHANGED")
 	end
 end
 
@@ -8249,6 +8778,8 @@ do
 			return
 		elseif event == "RAID_TARGET_UPDATE" then
 			GF:RefreshRaidIcons()
+		elseif event == "PLAYER_TARGET_CHANGED" then
+			GF:RefreshTargetHighlights()
 		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" or event == "PARTY_LEADER_CHANGED" then
 			GF:RefreshRoleIcons()
 			GF:RefreshGroupIcons()
