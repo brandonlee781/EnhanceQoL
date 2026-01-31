@@ -26,9 +26,7 @@ local ICON_INACTIVE = "Interface\\AddOns\\EnhanceQoL\\Modules\\MythicPlus\\Art\\
 _G["BINDING_NAME_EQOL_TOGGLE_WORLDMAP_TELEPORT"] = L["teleportsWorldMapBinding"] or "Toggle World Map Teleport panel"
 
 local function GetPlayerMapID()
-	if C_Map and C_Map.GetBestMapForUnit then
-		return C_Map.GetBestMapForUnit("player")
-	end
+	if C_Map and C_Map.GetBestMapForUnit then return C_Map.GetBestMapForUnit("player") end
 	return nil
 end
 
@@ -757,16 +755,15 @@ local function EnsureTab(parent, anchorTo)
 	if tabButton then
 		if anchorTo then
 			tabButton:ClearAllPoints()
-			tabButton:SetPoint("TOP", anchorTo, "BOTTOM", 0, -15)
+			tabButton:SetPoint("TOP", anchorTo, "BOTTOM", 0, -3)
 		end
 		return tabButton
 	end
 
 	-- Use Blizzard QuestLog tab template for a perfect visual match
 	tabButton = CreateFrame("Button", "EQOLWorldMapDungeonPortalsTab", parent, "QuestLogTabButtonTemplate")
-	tabButton:SetSize(32, 32)
 	if anchorTo then
-		tabButton:SetPoint("TOP", anchorTo, "BOTTOM", 0, -15)
+		tabButton:SetPoint("TOP", anchorTo, "BOTTOM", 0, -3)
 	else
 		tabButton:SetPoint("TOPRIGHT", -6, -100)
 	end
@@ -1197,9 +1194,7 @@ function addon.MythicPlus.functions.OpenWorldMapTeleportPanel(force)
 		if not WorldMapFrame then return false end
 		if not WorldMapFrame:IsShown() then return true end
 		if WorldMapFrame.IsMinimized and WorldMapFrame:IsMinimized() then
-			if WorldMapFrame.IsSidePanelShown and not WorldMapFrame:IsSidePanelShown() then
-				return true
-			end
+			if WorldMapFrame.IsSidePanelShown and not WorldMapFrame:IsSidePanelShown() then return true end
 		end
 		return false
 	end
