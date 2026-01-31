@@ -89,6 +89,15 @@ end
 
 local function combatLabel() return _G.COMBAT or "Combat" end
 
+local function getCombatText(inCombat)
+	local key = inCombat and "combatTextEnter" or "combatTextLeave"
+	local text = L[key]
+	if type(text) == "string" and text ~= "" and text ~= key then
+		return text
+	end
+	return (inCombat and "+" or "-") .. combatLabel()
+end
+
 function CombatText:GetDuration() return clamp(getValue(DB_DURATION, defaults.duration), 0.5, 10) end
 
 function CombatText:GetFontSize() return clamp(getValue(DB_FONT_SIZE, defaults.fontSize), 8, 96) end
@@ -183,8 +192,7 @@ end
 
 function CombatText:ShowCombatText(inCombat)
 	if self.previewing then return end
-	local text = (inCombat and "+" or "-") .. combatLabel()
-	self:ShowText(text)
+	self:ShowText(getCombatText(inCombat))
 end
 
 function CombatText:ShowEditModeHint(show)
@@ -194,7 +202,7 @@ function CombatText:ShowEditModeHint(show)
 		self:CancelHideTimer()
 		if self.frame.bg then self.frame.bg:Show() end
 		self:ApplyStyle()
-		self:SetText("+" .. combatLabel())
+		self:SetText(getCombatText(true))
 		self.frame:Show()
 	else
 		self.previewing = nil

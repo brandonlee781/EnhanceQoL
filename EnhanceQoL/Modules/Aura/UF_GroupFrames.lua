@@ -73,6 +73,7 @@ local anchorOptions9 = GFH.anchorOptions9 or GFH.auraAnchorOptions
 local textModeOptions = GFH.textModeOptions
 local delimiterOptions = GFH.delimiterOptions
 local outlineOptions = GFH.outlineOptions
+local auraGrowthOptions = GFH.auraGrowthOptions or GFH.auraGrowthXOptions
 local auraGrowthXOptions = GFH.auraGrowthXOptions
 local auraGrowthYOptions = GFH.auraGrowthYOptions
 local ensureAuraConfig = GFH.EnsureAuraConfig
@@ -103,9 +104,10 @@ local floor = math.floor
 local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
-local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
-local AURA_FILTER_HARMFUL = "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY"
-local AURA_FILTER_HARMFUL_ALL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY"
+local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID_IN_COMBAT"
+local AURA_FILTER_HARMFUL = "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE"
+local AURA_FILTER_HARMFUL_ALL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE"
+local AURA_FILTER_BIG_DEFENSIVE = "HELPFUL|BIG_DEFENSIVE"
 local function dprint(...)
 	if not (GF and GF._debugAuras) then return end
 	print("|cff00ff98EQOL GF|r:", ...)
@@ -723,17 +725,25 @@ local DEFAULTS = {
 			},
 			externals = {
 				enabled = false,
-				size = 16,
+				size = 34,
 				perRow = 6,
-				max = 4,
-				spacing = 2,
-				anchorPoint = "TOPRIGHT",
-				growthX = "LEFT",
+				max = 2,
+				spacing = 0,
+				anchorPoint = "CENTER",
+				growth = "RIGHTDOWN",
+				growthX = "RIGHT",
 				growthY = "DOWN",
 				x = 0,
-				y = 4,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showDR = false,
+				drAnchor = "TOPLEFT",
+				drOffset = { x = 2, y = -2 },
+				drFont = nil,
+				drFontSize = 10,
+				drFontOutline = "OUTLINE",
+				drColor = { 1, 1, 1, 1 },
 			},
 		},
 	},
@@ -932,17 +942,25 @@ local DEFAULTS = {
 			},
 			externals = {
 				enabled = false,
-				size = 14,
+				size = 34,
 				perRow = 6,
-				max = 4,
-				spacing = 2,
-				anchorPoint = "TOPRIGHT",
-				growthX = "LEFT",
+				max = 2,
+				spacing = 0,
+				anchorPoint = "CENTER",
+				growth = "RIGHTDOWN",
+				growthX = "RIGHT",
 				growthY = "DOWN",
 				x = 0,
-				y = 3,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showDR = false,
+				drAnchor = "TOPLEFT",
+				drOffset = { x = 2, y = -2 },
+				drFont = nil,
+				drFontSize = 10,
+				drFontOutline = "OUTLINE",
+				drColor = { 1, 1, 1, 1 },
 			},
 		},
 	},
@@ -1569,23 +1587,84 @@ end
 -- Updates
 -- -----------------------------------------------------------------------------
 
-local function resolveAuraGrowth(anchorPoint, growthX, growthY)
+local GROW_DIRS = { "UP", "DOWN", "LEFT", "RIGHT" }
+
+local function parseAuraGrowth(growth)
+	if not growth or growth == "" then return end
+	local raw = tostring(growth):upper()
+	local first, second = raw:match("^(%a+)[_%s]+(%a+)$")
+	if not first then
+		for i = 1, #GROW_DIRS do
+			local dir = GROW_DIRS[i]
+			if raw:sub(1, #dir) == dir then
+				local rest = raw:sub(#dir + 1)
+				if rest == "UP" or rest == "DOWN" or rest == "LEFT" or rest == "RIGHT" then
+					first, second = dir, rest
+					break
+				end
+			end
+		end
+	end
+	if not first or not second then return end
+	local firstVertical = first == "UP" or first == "DOWN"
+	local secondVertical = second == "UP" or second == "DOWN"
+	if firstVertical == secondVertical then return end
+	return first, second
+end
+
+local function resolveAuraGrowth(anchorPoint, growth, growthX, growthY)
 	local anchor = (anchorPoint or "TOPLEFT"):upper()
-	if not growthX then
-		if anchor:find("RIGHT", 1, true) then
-			growthX = "LEFT"
-		else
-			growthX = "RIGHT"
+	local primary, secondary = parseAuraGrowth(growth)
+	if not primary and growthX and growthY then
+		local gx = tostring(growthX):upper()
+		local gy = tostring(growthY):upper()
+		local gxVert = gx == "UP" or gx == "DOWN"
+		local gyVert = gy == "UP" or gy == "DOWN"
+		if gxVert ~= gyVert then
+			primary, secondary = gx, gy
 		end
 	end
-	if not growthY then
-		if anchor:find("BOTTOM", 1, true) then
-			growthY = "UP"
+	if not primary then
+		local fallback
+		if anchor:find("TOP", 1, true) then
+			fallback = "RIGHTUP"
+		elseif anchor:find("LEFT", 1, true) then
+			fallback = "LEFTDOWN"
 		else
-			growthY = "DOWN"
+			fallback = "RIGHTDOWN"
 		end
+		primary, secondary = parseAuraGrowth(fallback)
 	end
-	return anchor, growthX, growthY
+	return anchor, primary, secondary
+end
+
+local function growthPairToString(primary, secondary)
+	if not primary or not secondary then return nil end
+	return tostring(primary):upper() .. tostring(secondary):upper()
+end
+
+local function getAuraGrowthValue(typeCfg, anchorPoint)
+	if typeCfg and typeCfg.growth and typeCfg.growth ~= "" then
+		return tostring(typeCfg.growth):upper()
+	end
+	local _, primary, secondary = resolveAuraGrowth(anchorPoint, nil, typeCfg and typeCfg.growthX, typeCfg and typeCfg.growthY)
+	return growthPairToString(primary, secondary) or "RIGHTDOWN"
+end
+
+local function applyAuraGrowth(typeCfg, value)
+	if not typeCfg then return end
+	if value == nil or value == "" then
+		typeCfg.growth = nil
+		return
+	end
+	local primary, secondary = parseAuraGrowth(value)
+	if not primary then return end
+	typeCfg.growth = tostring(value):upper()
+	local primaryHorizontal = primary == "LEFT" or primary == "RIGHT"
+	local horizontalDir = primaryHorizontal and primary or secondary
+	local verticalDir = primaryHorizontal and secondary or primary
+	typeCfg.growthX = horizontalDir
+	typeCfg.growthY = verticalDir
 end
 
 local function ensureAuraContainer(st, key)
@@ -1593,6 +1672,11 @@ local function ensureAuraContainer(st, key)
 	if not st[key] then
 		st[key] = CreateFrame("Frame", nil, st.barGroup or st.frame)
 		st[key]:EnableMouse(false)
+	end
+	local base = st.healthTextLayer or st.barGroup or st.frame or st[key]:GetParent()
+	if base then
+		if st[key].SetFrameStrata and base.GetFrameStrata then st[key]:SetFrameStrata(base:GetFrameStrata()) end
+		if st[key].SetFrameLevel and base.GetFrameLevel then st[key]:SetFrameLevel((base:GetFrameLevel() or 0) + 5) end
 	end
 	return st[key]
 end
@@ -1605,18 +1689,26 @@ local function hideAuraButtons(buttons, startIndex)
 	end
 end
 
-local function positionAuraButton(btn, container, anchorPoint, index, perRow, size, spacing, growthX, growthY)
+local function positionAuraButton(btn, container, primary, secondary, index, perRow, size, spacing)
 	if not (btn and container) then return end
 	perRow = perRow or 1
 	if perRow < 1 then perRow = 1 end
-	local col = (index - 1) % perRow
-	local row = math.floor((index - 1) / perRow)
-	local xSign = (growthX == "LEFT") and -1 or 1
-	local ySign = (growthY == "UP") and 1 or -1
-	local stepX = (size + spacing) * xSign
-	local stepY = (size + spacing) * ySign
+	local primaryHorizontal = primary == "LEFT" or primary == "RIGHT"
+	local row, col
+	if primaryHorizontal then
+		row = math.floor((index - 1) / perRow)
+		col = (index - 1) % perRow
+	else
+		row = (index - 1) % perRow
+		col = math.floor((index - 1) / perRow)
+	end
+	local horizontalDir = primaryHorizontal and primary or secondary
+	local verticalDir = primaryHorizontal and secondary or primary
+	local xSign = (horizontalDir == "RIGHT") and 1 or -1
+	local ySign = (verticalDir == "UP") and 1 or -1
+	local basePoint = (ySign == 1 and "BOTTOM" or "TOP") .. (xSign == 1 and "LEFT" or "RIGHT")
 	btn:ClearAllPoints()
-	btn:SetPoint(anchorPoint, container, anchorPoint, col * stepX, row * stepY)
+	btn:SetPoint(basePoint, container, basePoint, col * (size + spacing) * xSign, row * (size + spacing) * ySign)
 end
 
 local function resolveRoleAtlas(roleKey, style)
@@ -1814,6 +1906,8 @@ end
 
 local function externalAuraPredicate(aura, unit)
 	if not (aura and aura.sourceUnit) then return false end
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura.auraInstanceID) then return false end
+	if C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, AURA_FILTER_BIG_DEFENSIVE) then return false end
 	if issecretvalue and (issecretvalue(aura.sourceUnit) or issecretvalue(unit)) then return false end
 	if type(aura.sourceUnit) ~= "string" or type(unit) ~= "string" then return false end
 	return aura.sourceUnit ~= unit
@@ -1952,6 +2046,10 @@ local function getSampleAuraData(kindKey, index, now)
 	local canActivePlayerDispel = dispelName == "Magic"
 	local base = (kindKey == "buff" and -100000) or (kindKey == "debuff" and -200000) or -300000
 	local auraId = base - index
+	local points
+	if kindKey == "externals" then
+		points = { 20 + ((index - 1) % 3) * 10 }
+	end
 	return {
 		auraInstanceID = auraId,
 		icon = icon,
@@ -1962,6 +2060,7 @@ local function getSampleAuraData(kindKey, index, now)
 		expirationTime = expiration,
 		dispelName = dispelName,
 		canActivePlayerDispel = canActivePlayerDispel,
+		points = points,
 		isSample = true,
 	}
 end
@@ -1969,13 +2068,19 @@ end
 local function getSampleStyle(st, kindKey, style)
 	st._auraSampleStyle = st._auraSampleStyle or {}
 	local sample = st._auraSampleStyle[kindKey]
-	if sample and sample._src == style then return sample end
-	sample = {}
+	if not sample or sample._src ~= style then
+		sample = {}
+		sample._src = style
+		st._auraSampleStyle[kindKey] = sample
+	else
+		for key in pairs(sample) do
+			if key ~= "_src" and key ~= "showTooltip" then sample[key] = nil end
+		end
+	end
 	for key, value in pairs(style or {}) do
 		sample[key] = value
 	end
 	sample.showTooltip = false
-	sample._src = style
 	st._auraSampleStyle[kindKey] = sample
 	return sample
 end
@@ -1987,7 +2092,8 @@ function GF:LayoutAuras(self)
 	local ac = cfg and cfg.auras
 	if not ac then return end
 	syncAurasEnabled(cfg)
-	if ac.enabled == false then return end
+	local wantsAuras = (ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)
+	if not wantsAuras then return end
 
 	dprint(
 		"LayoutAuras",
@@ -2015,7 +2121,7 @@ function GF:LayoutAuras(self)
 			st._auraLayout[kindKey] = nil
 			st._auraLayoutKey[kindKey] = nil
 		else
-			local anchorPoint, growthX, growthY = resolveAuraGrowth(typeCfg.anchorPoint, typeCfg.growthX, typeCfg.growthY)
+			local anchorPoint, primary, secondary = resolveAuraGrowth(typeCfg.anchorPoint, typeCfg.growth, typeCfg.growthX, typeCfg.growthY)
 			local size = tonumber(typeCfg.size) or 16
 			local spacing = tonumber(typeCfg.spacing) or 2
 			local perRow = tonumber(typeCfg.perRow) or tonumber(typeCfg.max) or 6
@@ -2025,11 +2131,11 @@ function GF:LayoutAuras(self)
 			local x = tonumber(typeCfg.x) or 0
 			local y = tonumber(typeCfg.y) or 0
 
-			local key = anchorPoint .. "|" .. growthX .. "|" .. growthY .. "|" .. size .. "|" .. spacing .. "|" .. perRow .. "|" .. maxCount .. "|" .. x .. "|" .. y
+			local key = anchorPoint .. "|" .. tostring(primary) .. "|" .. tostring(secondary) .. "|" .. size .. "|" .. spacing .. "|" .. perRow .. "|" .. maxCount .. "|" .. x .. "|" .. y
 			local layout = st._auraLayout[kindKey] or {}
 			layout.anchorPoint = anchorPoint
-			layout.growthX = growthX
-			layout.growthY = growthY
+			layout.primary = primary
+			layout.secondary = secondary
 			layout.size = size
 			layout.spacing = spacing
 			layout.perRow = perRow
@@ -2045,11 +2151,27 @@ function GF:LayoutAuras(self)
 				if container then
 					container:ClearAllPoints()
 					container:SetPoint(anchorPoint, parent, anchorPoint, x, y)
+					local primaryVertical = primary == "UP" or primary == "DOWN"
+					local rows, cols
+					if primaryVertical then
+						rows = math.min(maxCount, perRow)
+						cols = (perRow > 0) and math.ceil(maxCount / perRow) or 1
+					else
+						rows = (perRow > 0) and math.ceil(maxCount / perRow) or 1
+						cols = math.min(maxCount, perRow)
+					end
+					if rows < 1 then rows = 1 end
+					if cols < 1 then cols = 1 end
+					local w = cols * size + spacing * max(0, cols - 1)
+					local h = rows * size + spacing * max(0, rows - 1)
+					container:SetSize(w > 0 and w or 0.001, h > 0 and h or 0.001)
+					if container.SetClipsChildren then container:SetClipsChildren(false) end
 				end
 				local buttons = st[meta.buttonsKey]
 				if buttons and container then
 					for i, btn in ipairs(buttons) do
-						positionAuraButton(btn, container, anchorPoint, i, perRow, size, spacing, growthX, growthY)
+						if btn.SetSize then btn:SetSize(size, size) end
+						positionAuraButton(btn, container, primary, secondary, i, perRow, size, spacing)
 						btn._auraLayoutKey = key
 					end
 				end
@@ -2064,6 +2186,13 @@ function GF:LayoutAuras(self)
 			style.countFontSize = typeCfg.countFontSize
 			style.countFontOutline = typeCfg.countFontOutline
 			style.cooldownFontSize = typeCfg.cooldownFontSize
+			style.showDR = typeCfg.showDR == true
+			style.drAnchor = typeCfg.drAnchor
+			style.drOffset = typeCfg.drOffset
+			style.drFont = typeCfg.drFont
+			style.drFontSize = typeCfg.drFontSize
+			style.drFontOutline = typeCfg.drFontOutline
+			style.drColor = typeCfg.drColor
 			st._auraStyle[kindKey] = style
 		end
 	end
@@ -2126,7 +2255,7 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter,
 				local btn = AuraUtil.ensureAuraButton(container, buttons, shown, style)
 				AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
 				if btn._auraLayoutKey ~= layout.key then
-					positionAuraButton(btn, container, layout.anchorPoint, shown, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
+					positionAuraButton(btn, container, layout.primary, layout.secondary, shown, layout.perRow, layout.size, layout.spacing)
 					btn._auraLayoutKey = layout.key
 				end
 				btn:Show()
@@ -2137,19 +2266,19 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter,
 end
 
 local function classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter)
-	if not updateInfo or updateInfo.isFullUpdate then return true, true end
-	local helpful, harmful = false, false
+	if not updateInfo or updateInfo.isFullUpdate then return true, true, true end
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID) then return true, true, true end
+	local helpful, harmful, defensive = false, false, false
 	local function checkInstance(id)
-		if not id then return end
-		if not helpfulFilter or not harmfulFilter then
-			helpful, harmful = true, true
-			return
-		end
-		if C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit then
+		if not id or not unit then return end
+		if not helpful and helpfulFilter then
 			if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, id, helpfulFilter) then helpful = true end
+		end
+		if not harmful and harmfulFilter then
 			if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, id, harmfulFilter) then harmful = true end
-		else
-			helpful, harmful = true, true
+		end
+		if not defensive and AURA_FILTER_BIG_DEFENSIVE then
+			if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, id, AURA_FILTER_BIG_DEFENSIVE) then defensive = true end
 		end
 	end
 	local function scanAuras(list)
@@ -2157,7 +2286,7 @@ local function classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter
 		for _, aura in ipairs(list) do
 			if aura and aura.auraInstanceID then
 				checkInstance(aura.auraInstanceID)
-				if helpful and harmful then return end
+				if helpful and harmful and defensive then return end
 			end
 		end
 	end
@@ -2167,17 +2296,17 @@ local function classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter
 	if type(updatedIds) == "table" then
 		for _, inst in ipairs(updatedIds) do
 			checkInstance(inst)
-			if helpful and harmful then break end
+			if helpful and harmful and defensive then break end
 		end
 	end
 	local removed = updateInfo.removedAuraInstanceIDs
 	if type(removed) == "table" and #removed > 0 then
-		helpful, harmful = true, true
+		helpful, harmful, defensive = true, true, true
 	end
-	if not helpful and not harmful then
-		helpful, harmful = true, true
+	if not helpful and not harmful and not defensive then
+		helpful, harmful, defensive = true, true, true
 	end
-	return helpful, harmful
+	return helpful, harmful, defensive
 end
 
 local function fullScanGroupAuras(unit, st, helpfulFilter, harmfulFilter)
@@ -2304,7 +2433,7 @@ function GF:UpdateAuras(self, updateInfo)
 	local wantsAuras = st._wantsAuras
 	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
 	dprint("UpdateAuras", unit, "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
-	if wantsAuras == false or ac.enabled == false then
+	if wantsAuras == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
 		if st.externalContainer then st.externalContainer:Hide() end
@@ -2344,9 +2473,9 @@ function GF:UpdateAuras(self, updateInfo)
 	end
 
 	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
-	local needsHelpful, needsHarmful = classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter)
-	dprint("UpdateAuras", unit, "partial", true, "helpful", tostring(needsHelpful), "harmful", tostring(needsHarmful))
-	if needsHelpful then
+	local needsHelpful, needsHarmful, needsDefensive = classifyAuraUpdate(updateInfo, unit, helpfulFilter, harmfulFilter)
+	dprint("UpdateAuras", unit, "partial", true, "helpful", tostring(needsHelpful), "harmful", tostring(needsHarmful), "defensive", tostring(needsDefensive))
+	if needsHelpful or needsDefensive then
 		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter)
 		updateAuraType(self, unit, st, ac, "externals", cache, helpfulFilter, harmfulFilter)
 	end
@@ -2364,7 +2493,7 @@ function GF:UpdateSampleAuras(self)
 	if ac.enabled == true then wantsAuras = true end
 	st._wantsAuras = wantsAuras
 	dprint("SampleAuras", unit or "nil", "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
-	if wantsAuras == false or ac.enabled == false then
+	if wantsAuras == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
 		if st.externalContainer then st.externalContainer:Hide() end
@@ -2405,6 +2534,10 @@ function GF:UpdateSampleAuras(self)
 		local container = ensureAuraContainer(st, meta.containerKey)
 		if not container then return end
 		container:Show()
+		if GF and GF._debugAuras then
+			local p1, rel, rp, ox, oy = container:GetPoint(1)
+			dprint("SampleAuras:container", kindKey, "shown", tostring(container:IsShown()), "alpha", tostring(container:GetAlpha()), "size", tostring(container:GetWidth()), tostring(container:GetHeight()), "point", tostring(p1), rel and rel.GetName and rel:GetName() or tostring(rel), tostring(rp), tostring(ox), tostring(oy))
+		end
 
 		local buttons = st[meta.buttonsKey]
 		if not buttons then
@@ -2428,10 +2561,15 @@ function GF:UpdateSampleAuras(self)
 			local btn = AuraUtil.ensureAuraButton(container, buttons, i, sampleStyle)
 			AuraUtil.applyAuraToButton(btn, aura, sampleStyle, meta.isDebuff, unitToken)
 			if btn._auraLayoutKey ~= layout.key then
-				positionAuraButton(btn, container, layout.anchorPoint, i, layout.perRow, layout.size, layout.spacing, layout.growthX, layout.growthY)
+				positionAuraButton(btn, container, layout.primary, layout.secondary, i, layout.perRow, layout.size, layout.spacing)
 				btn._auraLayoutKey = layout.key
 			end
 			btn:Show()
+			if GF and GF._debugAuras and i == 1 then
+				local bpt, brel, brp, bx, by = btn:GetPoint(1)
+				local tex = btn.icon and btn.icon.GetTexture and btn.icon:GetTexture()
+				dprint("SampleAuras:btn", kindKey, "size", tostring(btn:GetWidth()), tostring(btn:GetHeight()), "shown", tostring(btn:IsShown()), "alpha", tostring(btn:GetAlpha()), "icon", tostring(tex), "point", tostring(bpt), brel and brel.GetName and brel:GetName() or tostring(brel), tostring(brp), tostring(bx), tostring(by))
+			end
 		end
 		hideAuraButtons(buttons, shown + 1)
 	end
@@ -3869,6 +4007,11 @@ local function buildEditModeSettings(kind, editModeId)
 		local enabled = hcfg.enabled
 		if enabled == nil then enabled = def.enabled end
 		return enabled == true
+	end
+	local function isExternalDRShown()
+		local cfg = getCfg(kind)
+		local ac = ensureAuraConfig(cfg)
+		return ac.externals and ac.externals.showDR == true
 	end
 	local settings = {
 		{
@@ -7542,44 +7685,22 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
-			name = "Buff growth X",
+			name = "Buff growth direction",
 			kind = SettingType.Dropdown,
-			field = "buffGrowthX",
+			field = "buffGrowth",
 			parentId = "buffs",
-			values = auraGrowthXOptions,
-			height = 100,
+			values = auraGrowthOptions or auraGrowthXOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				local _, growthX = resolveAuraGrowth(ac.buff.anchorPoint, ac.buff.growthX, ac.buff.growthY)
-				return growthX
+				return getAuraGrowthValue(ac.buff, ac.buff.anchorPoint)
 			end,
 			set = function(_, value)
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				ac.buff.growthX = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffGrowthX", value, nil, true) end
-				GF:ApplyHeaderAttributes(kind)
-			end,
-		},
-		{
-			name = "Buff growth Y",
-			kind = SettingType.Dropdown,
-			field = "buffGrowthY",
-			parentId = "buffs",
-			values = auraGrowthYOptions,
-			height = 100,
-			get = function()
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				local _, _, growthY = resolveAuraGrowth(ac.buff.anchorPoint, ac.buff.growthX, ac.buff.growthY)
-				return growthY
-			end,
-			set = function(_, value)
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				ac.buff.growthY = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffGrowthY", value, nil, true) end
+				applyAuraGrowth(ac.buff, value)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffGrowth", value, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
 		},
@@ -7761,44 +7882,22 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
-			name = "Debuff growth X",
+			name = "Debuff growth direction",
 			kind = SettingType.Dropdown,
-			field = "debuffGrowthX",
+			field = "debuffGrowth",
 			parentId = "debuffs",
-			values = auraGrowthXOptions,
-			height = 100,
+			values = auraGrowthOptions or auraGrowthXOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				local _, growthX = resolveAuraGrowth(ac.debuff.anchorPoint, ac.debuff.growthX, ac.debuff.growthY)
-				return growthX
+				return getAuraGrowthValue(ac.debuff, ac.debuff.anchorPoint)
 			end,
 			set = function(_, value)
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				ac.debuff.growthX = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffGrowthX", value, nil, true) end
-				GF:ApplyHeaderAttributes(kind)
-			end,
-		},
-		{
-			name = "Debuff growth Y",
-			kind = SettingType.Dropdown,
-			field = "debuffGrowthY",
-			parentId = "debuffs",
-			values = auraGrowthYOptions,
-			height = 100,
-			get = function()
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				local _, _, growthY = resolveAuraGrowth(ac.debuff.anchorPoint, ac.debuff.growthX, ac.debuff.growthY)
-				return growthY
-			end,
-			set = function(_, value)
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				ac.debuff.growthY = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffGrowthY", value, nil, true) end
+				applyAuraGrowth(ac.debuff, value)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffGrowth", value, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
 		},
@@ -7980,44 +8079,22 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
-			name = "External growth X",
+			name = "External growth direction",
 			kind = SettingType.Dropdown,
-			field = "externalGrowthX",
+			field = "externalGrowth",
 			parentId = "externals",
-			values = auraGrowthXOptions,
-			height = 100,
+			values = auraGrowthOptions or auraGrowthXOptions,
+			height = 180,
 			get = function()
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				local _, growthX = resolveAuraGrowth(ac.externals.anchorPoint, ac.externals.growthX, ac.externals.growthY)
-				return growthX
+				return getAuraGrowthValue(ac.externals, ac.externals.anchorPoint)
 			end,
 			set = function(_, value)
 				local cfg = getCfg(kind)
 				local ac = ensureAuraConfig(cfg)
-				ac.externals.growthX = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalGrowthX", value, nil, true) end
-				GF:ApplyHeaderAttributes(kind)
-			end,
-		},
-		{
-			name = "External growth Y",
-			kind = SettingType.Dropdown,
-			field = "externalGrowthY",
-			parentId = "externals",
-			values = auraGrowthYOptions,
-			height = 100,
-			get = function()
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				local _, _, growthY = resolveAuraGrowth(ac.externals.anchorPoint, ac.externals.growthX, ac.externals.growthY)
-				return growthY
-			end,
-			set = function(_, value)
-				local cfg = getCfg(kind)
-				local ac = ensureAuraConfig(cfg)
-				ac.externals.growthY = value
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalGrowthY", value, nil, true) end
+				applyAuraGrowth(ac.externals, value)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalGrowth", value, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
 		},
@@ -8152,6 +8229,206 @@ local function buildEditModeSettings(kind, editModeId)
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalSpacing", ac.externals.spacing, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
+		},
+		{
+			name = "Show DR %",
+			kind = SettingType.Checkbox,
+			field = "externalDrEnabled",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.showDR == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.showDR = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrEnabled", ac.externals.showDR, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "DR anchor",
+			kind = SettingType.Dropdown,
+			field = "externalDrAnchor",
+			parentId = "externals",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.drAnchor or "TOPLEFT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalDrOffsetX",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.drOffset and ac.externals.drOffset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drOffset = ac.externals.drOffset or {}
+				ac.externals.drOffset.x = clampNumber(value, -50, 50, (ac.externals.drOffset and ac.externals.drOffset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrOffsetX", ac.externals.drOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalDrOffsetY",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.drOffset and ac.externals.drOffset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drOffset = ac.externals.drOffset or {}
+				ac.externals.drOffset.y = clampNumber(value, -50, 50, (ac.externals.drOffset and ac.externals.drOffset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrOffsetY", ac.externals.drOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR color",
+			kind = SettingType.Color,
+			field = "externalDrColor",
+			parentId = "externals",
+			hasOpacity = true,
+			default = { 1, 1, 1, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local col = ac.externals.drColor or { 1, 1, 1, 1 }
+				return { r = col[1] or 1, g = col[2] or 1, b = col[3] or 1, a = col[4] or 1 }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drColor = { value.r or 1, value.g or 1, value.b or 1, value.a or 1 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrColor", ac.externals.drColor, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR font size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalDrFontSize",
+			parentId = "externals",
+			minValue = 6,
+			maxValue = 24,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.drFontSize or 10
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drFontSize = clampNumber(value, 6, 24, ac.externals.drFontSize or 10)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrFontSize", ac.externals.drFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR font",
+			kind = SettingType.Dropdown,
+			field = "externalDrFont",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.drFont
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.drFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.drFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = isExternalDRShown,
+		},
+		{
+			name = "DR font outline",
+			kind = SettingType.Dropdown,
+			field = "externalDrFontOutline",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.drFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.drFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrFontOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.drFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.drFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalDrFontOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = isExternalDRShown,
 		},
 	}
 
@@ -8687,8 +8964,12 @@ local function applyEditModeData(kind, data)
 	local ac = ensureAuraConfig(cfg)
 	if data.buffsEnabled ~= nil then ac.buff.enabled = data.buffsEnabled and true or false end
 	if data.buffAnchor ~= nil then ac.buff.anchorPoint = data.buffAnchor end
-	if data.buffGrowthX ~= nil then ac.buff.growthX = data.buffGrowthX end
-	if data.buffGrowthY ~= nil then ac.buff.growthY = data.buffGrowthY end
+	if data.buffGrowth ~= nil then
+		applyAuraGrowth(ac.buff, data.buffGrowth)
+	elseif data.buffGrowthX ~= nil or data.buffGrowthY ~= nil then
+		if data.buffGrowthX ~= nil then ac.buff.growthX = data.buffGrowthX end
+		if data.buffGrowthY ~= nil then ac.buff.growthY = data.buffGrowthY end
+	end
 	if data.buffOffsetX ~= nil then ac.buff.x = data.buffOffsetX end
 	if data.buffOffsetY ~= nil then ac.buff.y = data.buffOffsetY end
 	if data.buffSize ~= nil then ac.buff.size = data.buffSize end
@@ -8698,8 +8979,12 @@ local function applyEditModeData(kind, data)
 
 	if data.debuffsEnabled ~= nil then ac.debuff.enabled = data.debuffsEnabled and true or false end
 	if data.debuffAnchor ~= nil then ac.debuff.anchorPoint = data.debuffAnchor end
-	if data.debuffGrowthX ~= nil then ac.debuff.growthX = data.debuffGrowthX end
-	if data.debuffGrowthY ~= nil then ac.debuff.growthY = data.debuffGrowthY end
+	if data.debuffGrowth ~= nil then
+		applyAuraGrowth(ac.debuff, data.debuffGrowth)
+	elseif data.debuffGrowthX ~= nil or data.debuffGrowthY ~= nil then
+		if data.debuffGrowthX ~= nil then ac.debuff.growthX = data.debuffGrowthX end
+		if data.debuffGrowthY ~= nil then ac.debuff.growthY = data.debuffGrowthY end
+	end
 	if data.debuffOffsetX ~= nil then ac.debuff.x = data.debuffOffsetX end
 	if data.debuffOffsetY ~= nil then ac.debuff.y = data.debuffOffsetY end
 	if data.debuffSize ~= nil then ac.debuff.size = data.debuffSize end
@@ -8709,14 +8994,29 @@ local function applyEditModeData(kind, data)
 
 	if data.externalsEnabled ~= nil then ac.externals.enabled = data.externalsEnabled and true or false end
 	if data.externalAnchor ~= nil then ac.externals.anchorPoint = data.externalAnchor end
-	if data.externalGrowthX ~= nil then ac.externals.growthX = data.externalGrowthX end
-	if data.externalGrowthY ~= nil then ac.externals.growthY = data.externalGrowthY end
+	if data.externalGrowth ~= nil then
+		applyAuraGrowth(ac.externals, data.externalGrowth)
+	elseif data.externalGrowthX ~= nil or data.externalGrowthY ~= nil then
+		if data.externalGrowthX ~= nil then ac.externals.growthX = data.externalGrowthX end
+		if data.externalGrowthY ~= nil then ac.externals.growthY = data.externalGrowthY end
+	end
 	if data.externalOffsetX ~= nil then ac.externals.x = data.externalOffsetX end
 	if data.externalOffsetY ~= nil then ac.externals.y = data.externalOffsetY end
 	if data.externalSize ~= nil then ac.externals.size = data.externalSize end
 	if data.externalPerRow ~= nil then ac.externals.perRow = data.externalPerRow end
 	if data.externalMax ~= nil then ac.externals.max = data.externalMax end
 	if data.externalSpacing ~= nil then ac.externals.spacing = data.externalSpacing end
+	if data.externalDrEnabled ~= nil then ac.externals.showDR = data.externalDrEnabled and true or false end
+	if data.externalDrAnchor ~= nil then ac.externals.drAnchor = data.externalDrAnchor end
+	if data.externalDrOffsetX ~= nil or data.externalDrOffsetY ~= nil then
+		ac.externals.drOffset = ac.externals.drOffset or {}
+		if data.externalDrOffsetX ~= nil then ac.externals.drOffset.x = data.externalDrOffsetX end
+		if data.externalDrOffsetY ~= nil then ac.externals.drOffset.y = data.externalDrOffsetY end
+	end
+	if data.externalDrColor ~= nil then ac.externals.drColor = data.externalDrColor end
+	if data.externalDrFontSize ~= nil then ac.externals.drFontSize = data.externalDrFontSize end
+	if data.externalDrFont ~= nil then ac.externals.drFont = data.externalDrFont end
+	if data.externalDrFontOutline ~= nil then ac.externals.drFontOutline = data.externalDrFontOutline end
 	syncAurasEnabled(cfg)
 
 	if kind == "party" then
@@ -8759,16 +9059,21 @@ function GF:EnsureEditMode()
 			local def = DEFAULTS[kind] or {}
 			local defH = def.health or {}
 			local defP = def.power or {}
+			local defAuras = def.auras or {}
+			local defExt = defAuras.externals or {}
 			local hcBackdrop = hc.backdrop or {}
 			local defHBackdrop = defH.backdrop or {}
 			local pcfgBackdrop = pcfg.backdrop or {}
 			local defPBackdrop = defP.backdrop or {}
 			local buffAnchor = ac.buff.anchorPoint or "TOPLEFT"
-			local _, buffGrowthX, buffGrowthY = resolveAuraGrowth(buffAnchor, ac.buff.growthX, ac.buff.growthY)
+			local _, buffPrimary, buffSecondary = resolveAuraGrowth(buffAnchor, ac.buff.growth, ac.buff.growthX, ac.buff.growthY)
+			local buffGrowth = growthPairToString(buffPrimary, buffSecondary)
 			local debuffAnchor = ac.debuff.anchorPoint or "BOTTOMLEFT"
-			local _, debuffGrowthX, debuffGrowthY = resolveAuraGrowth(debuffAnchor, ac.debuff.growthX, ac.debuff.growthY)
+			local _, debuffPrimary, debuffSecondary = resolveAuraGrowth(debuffAnchor, ac.debuff.growth, ac.debuff.growthX, ac.debuff.growthY)
+			local debuffGrowth = growthPairToString(debuffPrimary, debuffSecondary)
 			local externalAnchor = ac.externals.anchorPoint or "TOPRIGHT"
-			local _, externalGrowthX, externalGrowthY = resolveAuraGrowth(externalAnchor, ac.externals.growthX, ac.externals.growthY)
+			local _, externalPrimary, externalSecondary = resolveAuraGrowth(externalAnchor, ac.externals.growth, ac.externals.growthX, ac.externals.growthY)
+			local externalGrowth = growthPairToString(externalPrimary, externalSecondary)
 			local defaults = {
 				point = cfg.point or "CENTER",
 				relativePoint = cfg.relativePoint or cfg.point or "CENTER",
@@ -8915,8 +9220,7 @@ function GF:EnsureEditMode()
 				powerRightY = (pcfg.offsetRight and pcfg.offsetRight.y) or 0,
 				buffsEnabled = ac.buff.enabled == true,
 				buffAnchor = buffAnchor,
-				buffGrowthX = buffGrowthX,
-				buffGrowthY = buffGrowthY,
+				buffGrowth = buffGrowth,
 				buffOffsetX = ac.buff.x or 0,
 				buffOffsetY = ac.buff.y or 0,
 				buffSize = ac.buff.size or 16,
@@ -8925,8 +9229,7 @@ function GF:EnsureEditMode()
 				buffSpacing = ac.buff.spacing or 2,
 				debuffsEnabled = ac.debuff.enabled == true,
 				debuffAnchor = debuffAnchor,
-				debuffGrowthX = debuffGrowthX,
-				debuffGrowthY = debuffGrowthY,
+				debuffGrowth = debuffGrowth,
 				debuffOffsetX = ac.debuff.x or 0,
 				debuffOffsetY = ac.debuff.y or 0,
 				debuffSize = ac.debuff.size or 16,
@@ -8935,14 +9238,25 @@ function GF:EnsureEditMode()
 				debuffSpacing = ac.debuff.spacing or 2,
 				externalsEnabled = ac.externals.enabled == true,
 				externalAnchor = externalAnchor,
-				externalGrowthX = externalGrowthX,
-				externalGrowthY = externalGrowthY,
+				externalGrowth = externalGrowth,
 				externalOffsetX = ac.externals.x or 0,
 				externalOffsetY = ac.externals.y or 0,
 				externalSize = ac.externals.size or 16,
 				externalPerRow = ac.externals.perRow or 6,
 				externalMax = ac.externals.max or 4,
 				externalSpacing = ac.externals.spacing or 2,
+				externalDrEnabled = ac.externals.showDR == true,
+				externalDrAnchor = ac.externals.drAnchor or defExt.drAnchor or "TOPLEFT",
+				externalDrOffsetX = (ac.externals.drOffset and ac.externals.drOffset.x)
+					or (defExt.drOffset and defExt.drOffset.x)
+					or 0,
+				externalDrOffsetY = (ac.externals.drOffset and ac.externals.drOffset.y)
+					or (defExt.drOffset and defExt.drOffset.y)
+					or 0,
+				externalDrColor = ac.externals.drColor or defExt.drColor or { 1, 1, 1, 1 },
+				externalDrFontSize = ac.externals.drFontSize or defExt.drFontSize or 10,
+				externalDrFont = ac.externals.drFont or defExt.drFont or nil,
+				externalDrFontOutline = ac.externals.drFontOutline or defExt.drFontOutline or "OUTLINE",
 			}
 
 			EditMode:RegisterFrame(EDITMODE_IDS[kind], {
