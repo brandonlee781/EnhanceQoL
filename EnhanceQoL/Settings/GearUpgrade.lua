@@ -100,6 +100,19 @@ local charDisplayDropdown = addon.functions.SettingsCreateMultiDropdown(cGearUpg
 	parentSection = expandable,
 })
 
+addon.functions.SettingsCreateCheckbox(cGearUpgrade, {
+	var = "showMissingEnchantOverlayOnCharframe",
+	text = L["gearDisplayOptionMissingEnchantOverlay"] or "Show missing enchant overlay",
+	func = function(value)
+		addon.db["showMissingEnchantOverlayOnCharframe"] = value and true or false
+		if addon.functions and addon.functions.setCharFrame then addon.functions.setCharFrame() end
+	end,
+	default = true,
+	parent = charDisplayDropdown,
+	parentCheck = function() return isCharDisplaySelected("enchants") end,
+	parentSection = expandable,
+})
+
 addon.functions.SettingsCreateDropdown(cGearUpgrade, {
 	list = {
 		TOPLEFT = L["topLeft"],
