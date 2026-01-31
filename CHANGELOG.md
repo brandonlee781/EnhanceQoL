@@ -24,6 +24,7 @@
 - Tooltips: Optional target-of-target line on unit tooltips.
 - Tooltips: Optional mount display on player tooltips.
 - Character Frame: Optional missing-enchant overlay toggle (defaults on).
+- Mover: Covenant frames are now movable (Sanctum, Mission, Renown, Preview).
 
 ### 🔁 Changed
 
