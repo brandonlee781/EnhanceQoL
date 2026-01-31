@@ -413,9 +413,14 @@ local function onInspect(arg1)
 								element.enchant:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
 							end
 							if element.borderGradient then
+								element.borderGradient:Hide()
+								local showMissingOverlay = addon.db["showMissingEnchantOverlayOnCharframe"] ~= false
 								local enchantText = getTooltipInfoFromLink(itemLink)
 								local foundEnchant = enchantText ~= nil
-								if foundEnchant then element.enchant:SetFormattedText(enchantText) end
+								if foundEnchant then
+									element.enchant:SetFormattedText(enchantText)
+									if element.borderGradient then element.borderGradient:Hide() end
+								end
 
 								if not foundEnchant and UnitLevel(inspectUnit) == addon.variables.maxLevel then
 									element.enchant:SetText("")
@@ -426,11 +431,19 @@ local function onInspect(arg1)
 										if key == 17 then
 											local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(itemLink)
 											if addon.variables.allowedEnchantTypesForOffhand[itemEquipLoc] then
-												element.borderGradient:Show()
+												if showMissingOverlay then
+													element.borderGradient:Show()
+												else
+													element.borderGradient:Hide()
+												end
 												element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
 											end
 										else
-											element.borderGradient:Show()
+											if showMissingOverlay then
+												element.borderGradient:Show()
+											else
+												element.borderGradient:Hide()
+											end
 											element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
 										end
 									end
@@ -570,6 +583,8 @@ local function setIlvlText(element, slot)
 				end
 
 				if CharOpt("enchants") and element.borderGradient then
+					element.borderGradient:Hide()
+					local showMissingOverlay = addon.db["showMissingEnchantOverlayOnCharframe"] ~= false
 					local foundEnchant = enchantText ~= nil
 					if foundEnchant then element.enchant:SetFormattedText(enchantText) end
 
@@ -582,11 +597,11 @@ local function setIlvlText(element, slot)
 							if slot == 17 then
 								local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(link)
 								if addon.variables.allowedEnchantTypesForOffhand[itemEquipLoc] then
-									element.borderGradient:Show()
+									if showMissingOverlay then element.borderGradient:Show() end
 									element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
 								end
 							else
-								element.borderGradient:Show()
+								if showMissingOverlay then element.borderGradient:Show() end
 								element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
 							end
 						end
@@ -1454,6 +1469,7 @@ function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("showGemsOnCharframe", false)
 	addon.functions.InitDBValue("showGemsTooltipOnCharframe", false)
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
+	addon.functions.InitDBValue("showMissingEnchantOverlayOnCharframe", true)
 	addon.functions.InitDBValue("showCatalystChargesOnCharframe", false)
 	addon.functions.InitDBValue("movementSpeedStatEnabled", false)
 	addon.functions.InitDBValue("characterStatsFormattingEnabled", false)

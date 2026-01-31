@@ -13,6 +13,7 @@
 - Cooldown Panels: New `/cpe` slash command alias (opens the Cooldown Panel editor).
 - Tooltips: Optional target-of-target line on unit tooltips.
 - Tooltips: Optional mount display on player tooltips.
+- Character Frame: Optional missing-enchant overlay toggle (defaults on).
 
 ### 🔁 Changed
 
