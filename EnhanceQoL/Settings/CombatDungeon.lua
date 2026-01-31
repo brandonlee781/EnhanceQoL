@@ -152,13 +152,7 @@ local function cancelCombatLogStopTimer()
 end
 
 local function getCombatLogEnabledState()
-	if _G.IsLoggingCombat then
-		local enabled = _G.IsLoggingCombat()
-		return enabled and true or false
-	end
-	local logger = _G.LoggingCombat
-	if not logger then return false end
-	local enabled = logger()
+	local enabled = C_ChatInfo.IsLoggingCombat()
 	return enabled and true or false
 end
 

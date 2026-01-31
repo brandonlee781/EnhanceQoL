@@ -30,6 +30,8 @@
 - Cooldown Panels: Spell usable checks are now evaluated correctly.
 - Cooldown Panels: Overlay glow now resolves override spell IDs (talent replacements) correctly.
 - UF Plus: Cast bar icons now fade with the interrupt animation for target/focus enemies.
+- World Map: Teleport panel tab no longer overlaps other map tabs when WorldQuestTab is enabled.
+- Combat Logging: Switched to advance api because of an issue
 
 ---
 
