@@ -713,6 +713,22 @@ local frames = {
 		addon = "Blizzard_GarrisonUI",
 		defaultEnabled = true,
 	},
+	{
+		id = "CovenantRenownFrame",
+		label = L["Covenant Renown Frame"] or "Covenant Renown Frame",
+		group = "activities",
+		names = { "CovenantRenownFrame" },
+		addon = "Blizzard_CovenantRenown",
+		defaultEnabled = true,
+	},
+  {
+		id = "CovenantPreviewFrame",
+		label = L["Covenant Preview Frame"] or "Covenant Preview Frame",
+		group = "activities",
+		names = { "CovenantPreviewFrame" },
+		addon = "Blizzard_CovenantPreviewUI",
+		defaultEnabled = true,
+	},
 }
 
 local settings = {
