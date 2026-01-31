@@ -697,6 +697,22 @@ local frames = {
 		addon = "Blizzard_TimeManager",
 		defaultEnabled = true,
 	},
+	{
+		id = "CovenantSanctumFrame",
+		label = L["Covenant Sanctum Frame"] or "Covenant Sanctum Frame",
+		group = "activities",
+		names = { "CovenantSanctumFrame" },
+		addon = "Blizzard_CovenantSanctum",
+		defaultEnabled = true,
+	},
+  {
+		id = "CovenantMissionFrame",
+		label = L["Covenant Mission Frame"] or "Covenant Mission Frame",
+		group = "activities",
+		names = { "CovenantMissionFrame" },
+		addon = "Blizzard_GarrisonUI",
+		defaultEnabled = true,
+	},
 }
 
 local settings = {
