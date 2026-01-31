@@ -2665,6 +2665,7 @@ local function buildUnitSettings(unit)
 
 		local castDurationFormatOptions = {
 			{ value = "REMAINING", label = L["UFCastDurationRemaining"] or "Remaining" },
+			{ value = "REMAINING_TOTAL", label = L["UFCastDurationRemainingTotal"] or "Remaining/Total" },
 			{ value = "ELAPSED_TOTAL", label = L["UFCastDurationElapsedTotal"] or "Elapsed/Total" },
 		}
 
