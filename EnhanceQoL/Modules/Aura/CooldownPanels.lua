@@ -3803,8 +3803,10 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					local effectiveId = entrySpellId and getEffectiveSpellId(entrySpellId) or entrySpellId
 					local CCD = effectiveId and C_Spell.GetSpellChargeDuration(effectiveId)
 					if CCD and icon.cooldown.SetCooldownFromDurationObject then
+						icon.cooldown:Clear()
 						icon.cooldown:SetCooldownFromDurationObject(CCD)
 					elseif isSafeNumber(cooldownStart) and isSafeNumber(cooldownDuration) then
+						icon.cooldown:Clear()
 						icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 					else
 						icon.cooldown:Clear()

@@ -1306,6 +1306,10 @@ function AuraUtil.ensureAuraButton(container, icons, index, ac)
 		btn.count = btn.overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		btn.count:SetPoint("BOTTOMRIGHT", btn.overlay, "BOTTOMRIGHT", -2, 2)
 		btn.count:SetDrawLayer("OVERLAY", 2)
+		btn.drText = btn.overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		btn.drText:SetPoint("TOPLEFT", btn.overlay, "TOPLEFT", 2, -2)
+		btn.drText:SetDrawLayer("OVERLAY", 2)
+		btn.drText:Hide()
 		btn.border = btn.overlay:CreateTexture(nil, "OVERLAY")
 		btn.border:SetAllPoints(btn)
 		btn.border:SetDrawLayer("OVERLAY", 1)
@@ -1359,6 +1363,13 @@ function AuraUtil.ensureAuraButton(container, icons, index, ac)
 		if btn.overlay and btn.border and btn.border:GetParent() ~= btn.overlay then
 			btn.border:SetParent(btn.overlay)
 			btn.border:SetDrawLayer("OVERLAY", 1)
+		end
+		if not btn.drText then
+			local parent = btn.overlay or btn
+			btn.drText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			btn.drText:SetPoint("TOPLEFT", parent, "TOPLEFT", 2, -2)
+			btn.drText:SetDrawLayer("OVERLAY", 2)
+			btn.drText:Hide()
 		end
 		if btn.overlay and btn.dispelIcon and btn.dispelIcon:GetParent() ~= btn.overlay then
 			btn.dispelIcon:SetParent(btn.overlay)
@@ -1425,6 +1436,30 @@ function AuraUtil.styleAuraCooldownText(btn, ac, cooldownFontSizeOverride)
 	local size = cooldownFontSizeOverride
 	if size == nil then size = ac.cooldownFontSize end
 	UFHelper.applyCooldownTextStyle(btn.cd, size)
+end
+
+function AuraUtil.styleAuraDRText(btn, ac, drFontSizeOverride)
+	if not btn or not btn.drText then return end
+	ac = ac or {}
+	local anchor = ac.drAnchor or "TOPLEFT"
+	local off = ac.drOffset
+	local ox = (off and off.x) or 2
+	local oy = (off and off.y) or -2
+	local size = drFontSizeOverride
+	if size == nil then size = ac.drFontSize end
+	local flags = ac.drFontOutline
+	local fontKey = ac.drFont or (addon.variables and addon.variables.defaultFont) or (LSM and LSM.DefaultMedia and LSM.DefaultMedia.font) or STANDARD_TEXT_FONT
+	local key = anchor .. "|" .. ox .. "|" .. oy .. "|" .. tostring(fontKey) .. "|" .. tostring(size) .. "|" .. tostring(flags)
+	if btn._drStyleKey == key then return end
+	btn._drStyleKey = key
+	btn.drText:ClearAllPoints()
+	btn.drText:SetPoint(anchor, btn.overlay or btn, anchor, ox, oy)
+	if size == nil or flags == nil then
+		local _, curSize, curFlags = btn.drText:GetFont()
+		if size == nil then size = curSize or 12 end
+		if flags == nil then flags = curFlags end
+	end
+	btn.drText:SetFont(UFHelper.getFont(ac.drFont), size, flags)
 end
 
 function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
@@ -1528,6 +1563,42 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 			btn.dispelIcon:Show()
 		else
 			btn.dispelIcon:Hide()
+		end
+	end
+	if btn.drText then
+		local showDR = ac and ac.showDR == true
+		if showDR then
+			local points = aura.points
+			if issecretvalue and issecretvalue(points) then points = nil end
+			local drValue
+			if type(points) == "table" then
+				local v = points[1]
+				if issecretvalue and issecretvalue(v) then v = nil end
+				if type(v) == "number" then drValue = v end
+			end
+			if drValue ~= nil then
+				local text = tostring(math.floor(drValue + 0.5)) .. "%"
+				if btn._lastDRText ~= text then
+					btn._lastDRText = text
+					btn.drText:SetText(text)
+				end
+				AuraUtil.styleAuraDRText(btn, ac)
+				local col = ac.drColor or { 1, 1, 1, 1 }
+				btn.drText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
+				btn.drText:Show()
+			else
+				if btn._lastDRText ~= "" then
+					btn._lastDRText = ""
+					btn.drText:SetText("")
+				end
+				btn.drText:Hide()
+			end
+		else
+			if btn._lastDRText ~= "" then
+				btn._lastDRText = ""
+				btn.drText:SetText("")
+			end
+			btn.drText:Hide()
 		end
 	end
 	btn:Show()
@@ -2656,6 +2727,16 @@ local function updateCastBar(unit)
 					st.castInfo.durationTenths = tenths
 					st.castDuration:SetText(("%.1f / %.1f"):format(elapsed, total))
 				end
+			elseif durationFormat == "REMAINING_TOTAL" then
+				local total = duration / 1000
+				local remaining = (endMs - nowMs) / 1000
+				if remaining < 0 then remaining = 0 end
+				if remaining > total then remaining = total end
+				local tenths = math.floor(remaining * 10 + 0.5)
+				if st.castInfo.durationTenths ~= tenths then
+					st.castInfo.durationTenths = tenths
+					st.castDuration:SetText(("%.1f / %.1f"):format(remaining, total))
+				end
 			else
 				local remaining = (endMs - nowMs) / 1000
 				if remaining < 0 then remaining = 0 end
@@ -2981,6 +3062,9 @@ local function setCastInfoFromUnit(unit)
 					local durationFormat = ccfg.durationFormat or defc.durationFormat or "REMAINING"
 					if durationFormat == "ELAPSED_TOTAL" then
 						st.castDuration:SetText(("%.1f / %.1f"):format(timerObj:GetElapsedDuration(), timerObj:GetTotalDuration()))
+						return
+					elseif durationFormat == "REMAINING_TOTAL" then
+						st.castDuration:SetText(("%.1f / %.1f"):format(timerObj:GetRemainingDuration(), timerObj:GetTotalDuration()))
 						return
 					else
 						st.castDuration:SetText(("%.1f"):format(timerObj:GetRemainingDuration()))
