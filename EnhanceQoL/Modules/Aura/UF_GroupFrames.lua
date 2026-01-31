@@ -2242,13 +2242,17 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter,
 		if aura then
 			local isHelpful = isAuraHelpful(unit, aura, helpfulFilter)
 			local isHarmful = isAuraHarmful(unit, aura, harmfulFilter)
+			local isExternal = false
+			if isHelpful and ac and ac.externals and ac.externals.enabled ~= false then
+				isExternal = (not AURA_TYPE_META.externals.predicate or AURA_TYPE_META.externals.predicate(aura, unit))
+			end
 			local match = false
 			if kindKey == "debuff" then
 				match = isHarmful
 			elseif kindKey == "buff" then
-				match = isHelpful
+				match = isHelpful and not isExternal
 			elseif kindKey == "externals" then
-				match = isHelpful and (not meta.predicate or meta.predicate(aura, unit))
+				match = isExternal
 			end
 			if match then
 				shown = shown + 1

@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.8.1] - 2026-01-31
+
+### 🐛 Fixed
+
+- Missing locale fixed
+
+---
+
 ## [7.8.0] - 2026-01-31
 
 ### ✨ Added
@@ -7,6 +15,7 @@
 - Resource Bars: Evoker Essence bars now show filling animation
 - Resource Bars: Gradiant color works horizontal now too
 - Cooldown Panels: Option to enable charge duration show
+- UF Plus: Cast duration format option for Remaining/Total.
 - Cooldown Panels: Added anchor points for ElvUI, Unhalted Unit Frames, and more MSUF frames (ToT/Focus/Pet/Boss).
 - Cooldown Panels: Edit Mode panel filters (only show panels of your class) and Copy Settings dropdown to clone layout/anchor settings (keeps entries + enabled state untouched).
 - UF Plus: Focus frame aura icons are now supported and configurable.
