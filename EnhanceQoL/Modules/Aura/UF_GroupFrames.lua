@@ -2327,17 +2327,6 @@ function GF:LayoutAuras(self)
 	local wantsAuras = (ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)
 	if not wantsAuras then return end
 
-	dprint(
-		"LayoutAuras",
-		getUnit(self) or "nil",
-		"buff",
-		tostring(ac.buff and ac.buff.enabled),
-		"debuff",
-		tostring(ac.debuff and ac.debuff.enabled),
-		"externals",
-		tostring(ac.externals and ac.externals.enabled)
-	)
-
 	st._auraLayout = st._auraLayout or {}
 	st._auraLayoutKey = st._auraLayoutKey or {}
 	st._auraStyle = st._auraStyle or {}
@@ -2592,18 +2581,6 @@ local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, har
 	local wantsHarmful = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
 	local wantsExternals = ac and (ac.externals and ac.externals.enabled ~= false) or false
 	local wantsDispel = st._wantsDispelTint == true
-	dprint(
-		"AuraCache:update",
-		unit,
-		"added",
-		type(updateInfo.addedAuras) == "table" and #updateInfo.addedAuras or 0,
-		"updated",
-		type(updateInfo.updatedAuras) == "table" and #updateInfo.updatedAuras or 0,
-		"updatedIds",
-		type(updateInfo.updatedAuraInstanceIDs) == "table" and #updateInfo.updatedAuraInstanceIDs or 0,
-		"removed",
-		type(updateInfo.removedAuraInstanceIDs) == "table" and #updateInfo.removedAuraInstanceIDs or 0
-	)
 	if wantsHelpful and helpfulCache then
 		AuraUtil.updateAuraCacheFromEvent(helpfulCache, unit, updateInfo, {
 			showHelpful = true,
@@ -2655,7 +2632,6 @@ function GF:UpdateAuras(self, updateInfo)
 			GF:UpdateDispelTint(self, nil, nil)
 			return
 		end
-		dprint("UpdateAuras", unit or "nil", "editmode", tostring(inEditMode), "preview", tostring(self._eqolPreview))
 		GF:UpdateSampleAuras(self)
 		return
 	elseif self._eqolPreview then
@@ -2679,7 +2655,6 @@ function GF:UpdateAuras(self, updateInfo)
 	local wantsAuras = st._wantsAuras
 	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
 	local wantsDispelTint = st._wantsDispelTint == true
-	dprint("UpdateAuras", unit, "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
 	if wantsAuras == false and not wantsDispelTint then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
@@ -2722,7 +2697,6 @@ function GF:UpdateAuras(self, updateInfo)
 	local externalCache = getAuraCache(st, "externals")
 	local dispelCache = getAuraCache(st, "dispel")
 	if not updateInfo or updateInfo.isFullUpdate then
-		dprint("UpdateAuras", unit, "fullScan", true, "filters", helpfulFilter or "nil", harmfulFilter or "nil")
 		if wantsAuras then
 			if wantBuff then
 				fullScanGroupAuras(unit, helpfulCache, helpfulFilter, nil)
@@ -2749,7 +2723,6 @@ function GF:UpdateAuras(self, updateInfo)
 			resetAuraCache(dispelCache)
 		end
 		rebuildAuraKindFlags(st, helpfulCache, harmfulCache, externalCache, dispelCache)
-		dprint("AuraCache:full", unit, "helpful", helpfulCache and helpfulCache.order and #helpfulCache.order or 0, "harmful", harmfulCache and harmfulCache.order and #harmfulCache.order or 0)
 		if wantsAuras then
 			if wantBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter) end
 			if wantDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter) end
@@ -2764,7 +2737,6 @@ function GF:UpdateAuras(self, updateInfo)
 	end
 
 	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
-	dprint("UpdateAuras", unit, "partial", true)
 	if wantsAuras then
 		if wantBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter) end
 		if wantDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter) end
@@ -2790,7 +2762,6 @@ function GF:UpdateSampleAuras(self)
 	local wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false
 	if ac.enabled == true then wantsAuras = true end
 	st._wantsAuras = wantsAuras
-	dprint("SampleAuras", unit or "nil", "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
 	if wantsAuras == false then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
@@ -2837,26 +2808,6 @@ function GF:UpdateSampleAuras(self)
 		local container = ensureAuraContainer(st, meta.containerKey)
 		if not container then return end
 		container:Show()
-		if GF and GF._debugAuras then
-			local p1, rel, rp, ox, oy = container:GetPoint(1)
-			dprint(
-				"SampleAuras:container",
-				kindKey,
-				"shown",
-				tostring(container:IsShown()),
-				"alpha",
-				tostring(container:GetAlpha()),
-				"size",
-				tostring(container:GetWidth()),
-				tostring(container:GetHeight()),
-				"point",
-				tostring(p1),
-				rel and rel.GetName and rel:GetName() or tostring(rel),
-				tostring(rp),
-				tostring(ox),
-				tostring(oy)
-			)
-		end
 
 		local buttons = st[meta.buttonsKey]
 		if not buttons then
@@ -2884,29 +2835,6 @@ function GF:UpdateSampleAuras(self)
 				btn._auraLayoutKey = layout.key
 			end
 			btn:Show()
-			if GF and GF._debugAuras and i == 1 then
-				local bpt, brel, brp, bx, by = btn:GetPoint(1)
-				local tex = btn.icon and btn.icon.GetTexture and btn.icon:GetTexture()
-				dprint(
-					"SampleAuras:btn",
-					kindKey,
-					"size",
-					tostring(btn:GetWidth()),
-					tostring(btn:GetHeight()),
-					"shown",
-					tostring(btn:IsShown()),
-					"alpha",
-					tostring(btn:GetAlpha()),
-					"icon",
-					tostring(tex),
-					"point",
-					tostring(bpt),
-					brel and brel.GetName and brel:GetName() or tostring(brel),
-					tostring(brp),
-					tostring(bx),
-					tostring(by)
-				)
-			end
 		end
 		if kindKey == "externals" and layout.anchorPoint == "CENTER" and container then
 			local w, h = calcAuraGridSize(shown, layout.perRow, layout.size, layout.spacing, layout.primary)
@@ -3152,10 +3080,8 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 		end
 		if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(alpha) end
 		st.dispelTint:Show()
-		dprintDispel("DispelTint", unit, "found", tostring(found), "type", tostring(dispelType))
 	else
 		st.dispelTint:Hide()
-		dprintDispel("DispelTint", unit, "found", tostring(found))
 	end
 end
 
@@ -3911,18 +3837,7 @@ function GF.UnitButton_OnEvent(self, event, unit, ...)
 	if not u or (unit and unit ~= u) then return end
 
 	local fn = UNIT_DISPATCH[event]
-	if fn then
-		if GF and GF._debugAuras and event == "UNIT_AURA" then
-			local info = ...
-			local isFull = info and info.isFullUpdate
-			local add = type(info and info.addedAuras) == "table" and #info.addedAuras or 0
-			local upd = type(info and info.updatedAuras) == "table" and #info.updatedAuras or 0
-			local updIds = type(info and info.updatedAuraInstanceIDs) == "table" and #info.updatedAuraInstanceIDs or 0
-			local rem = type(info and info.removedAuraInstanceIDs) == "table" and #info.removedAuraInstanceIDs or 0
-			dprint("UNIT_AURA", u, "full", tostring(isFull), "added", add, "updated", upd, "updatedIds", updIds, "removed", rem)
-		end
-		fn(self, ...)
-	end
+	if fn then fn(self, ...) end
 end
 
 function GF.UnitButton_OnEnter(self)
