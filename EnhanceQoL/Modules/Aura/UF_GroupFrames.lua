@@ -28,6 +28,7 @@ local UnitIsConnected = UnitIsConnected
 local UnitIsPlayer = UnitIsPlayer
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
+local UnitHealthMissing = UnitHealthMissing
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
 local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
 local UnitPower = UnitPower
@@ -71,6 +72,7 @@ local auraAnchorOptions = GFH.auraAnchorOptions
 local textAnchorOptions = GFH.textAnchorOptions
 local anchorOptions9 = GFH.anchorOptions9 or GFH.auraAnchorOptions
 local textModeOptions = GFH.textModeOptions
+local healthTextModeOptions = GFH.healthTextModeOptions or GFH.textModeOptions
 local delimiterOptions = GFH.delimiterOptions
 local outlineOptions = GFH.outlineOptions
 local auraGrowthOptions = GFH.auraGrowthOptions or GFH.auraGrowthXOptions
@@ -372,9 +374,28 @@ local function selectionMode(selection)
 end
 
 local function textModeUsesPercent(mode) return type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil end
+local function textModeUsesDeficit(mode) return mode == "DEFICIT" end
+local function unsecretBool(value)
+	if issecretvalue and issecretvalue(value) then return nil end
+	return value
+end
 
-local function setTextSlot(st, fs, cacheKey, mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+local function setTextSlot(st, fs, cacheKey, mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 	if not (st and fs) then return end
+	if fs.SetAlpha then
+		if mode == "DEFICIT" then
+			local alpha = missingValue
+			if issecretvalue and issecretvalue(alpha) then
+				fs:SetAlpha(alpha)
+			else
+				if alpha == nil then alpha = 0 end
+				if type(alpha) ~= "number" then alpha = tonumber(alpha) or 0 end
+				fs:SetAlpha(alpha)
+			end
+		else
+			fs:SetAlpha(1)
+		end
+	end
 	local last = st[cacheKey]
 	if issecretvalue and issecretvalue(last) then last = nil end
 	if mode == "NONE" then
@@ -386,7 +407,7 @@ local function setTextSlot(st, fs, cacheKey, mode, cur, maxv, useShort, percentV
 	end
 	local text
 	if UFHelper and UFHelper.formatText then
-		text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+		text = UFHelper.formatText(mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 	else
 		text = tostring(cur or 0)
 	end
@@ -716,31 +737,61 @@ local DEFAULTS = {
 			enabled = false,
 			buff = {
 				enabled = false,
-				size = 16,
-				perRow = 6,
+				size = 26,
+				perRow = 3,
 				max = 6,
-				spacing = 2,
+				spacing = 0,
 				anchorPoint = "TOPLEFT",
+				growth = "DOWNRIGHT",
 				growthX = "RIGHT",
 				growthY = "DOWN",
 				x = 0,
-				y = 4,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = false,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 8,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = true,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 			},
 			debuff = {
 				enabled = false,
-				size = 16,
-				perRow = 6,
+				size = 26,
+				perRow = 3,
 				max = 6,
-				spacing = 2,
+				spacing = 0,
 				anchorPoint = "BOTTOMLEFT",
+				growth = "DOWNRIGHT",
 				growthX = "RIGHT",
-				growthY = "UP",
+				growthY = "DOWN",
 				x = 0,
-				y = -4,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = false,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 8,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = true,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 			},
 			externals = {
 				enabled = false,
@@ -756,6 +807,20 @@ local DEFAULTS = {
 				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = true,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 12,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = false,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 				showDR = false,
 				drAnchor = "TOPLEFT",
 				drOffset = { x = 2, y = -2 },
@@ -951,31 +1016,61 @@ local DEFAULTS = {
 			enabled = false,
 			buff = {
 				enabled = false,
-				size = 14,
-				perRow = 6,
+				size = 26,
+				perRow = 3,
 				max = 6,
-				spacing = 2,
+				spacing = 0,
 				anchorPoint = "TOPLEFT",
+				growth = "DOWNRIGHT",
 				growthX = "RIGHT",
 				growthY = "DOWN",
 				x = 0,
-				y = 3,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = false,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 8,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = true,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 			},
 			debuff = {
 				enabled = false,
-				size = 14,
-				perRow = 6,
+				size = 26,
+				perRow = 3,
 				max = 6,
-				spacing = 2,
+				spacing = 0,
 				anchorPoint = "BOTTOMLEFT",
+				growth = "DOWNRIGHT",
 				growthX = "RIGHT",
-				growthY = "UP",
+				growthY = "DOWN",
 				x = 0,
-				y = -3,
+				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = false,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 8,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = true,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 			},
 			externals = {
 				enabled = false,
@@ -991,6 +1086,20 @@ local DEFAULTS = {
 				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showCooldownText = true,
+				cooldownAnchor = "CENTER",
+				cooldownOffset = { x = 0, y = 0 },
+				textFont = "Friz Quadrata TT",
+				textOutline = "OUTLINE",
+				cooldownFont = nil,
+				cooldownFontSize = 12,
+				cooldownFontOutline = "OUTLINE",
+				showStacks = false,
+				countAnchor = "BOTTOMRIGHT",
+				countOffset = { x = 4, y = 2 },
+				countFont = nil,
+				countFontSize = 12,
+				countFontOutline = "OUTLINE",
 				showDR = false,
 				drAnchor = "TOPLEFT",
 				drOffset = { x = 2, y = -2 },
@@ -1956,37 +2065,6 @@ function GF:UpdateHighlightState(self)
 	end
 end
 
-local function externalAuraPredicate(aura, unit)
-	if not aura then return false end
-	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura.auraInstanceID) then return false end
-	if C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, AURA_FILTER_BIG_DEFENSIVE) then return false end
-	if issecretvalue and (issecretvalue(aura.sourceUnit) or issecretvalue(unit)) then return true end
-	if type(aura.sourceUnit) ~= "string" or type(unit) ~= "string" then return true end
-	return aura.sourceUnit ~= unit
-end
-
-local AURA_TYPE_META = {
-	buff = {
-		containerKey = "buffContainer",
-		buttonsKey = "buffButtons",
-		filter = "HELPFUL",
-		isDebuff = false,
-	},
-	debuff = {
-		containerKey = "debuffContainer",
-		buttonsKey = "debuffButtons",
-		filter = "HARMFUL",
-		isDebuff = true,
-	},
-	externals = {
-		containerKey = "externalContainer",
-		buttonsKey = "externalButtons",
-		filter = "HELPFUL",
-		isDebuff = false,
-		predicate = externalAuraPredicate,
-	},
-}
-
 local function getAuraCache(st, key)
 	if not st then return nil end
 	if key then
@@ -2029,6 +2107,32 @@ local function isAuraHarmful(unit, aura, harmfulFilter)
 	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and harmfulFilter) then return false end
 	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, harmfulFilter)
 end
+
+local function isAuraBigDefensive(unit, aura, externalFilter)
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and externalFilter) then return false end
+	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, externalFilter)
+end
+
+local AURA_TYPE_META = {
+	buff = {
+		containerKey = "buffContainer",
+		buttonsKey = "buffButtons",
+		filter = "HELPFUL",
+		isDebuff = false,
+	},
+	debuff = {
+		containerKey = "debuffContainer",
+		buttonsKey = "debuffButtons",
+		filter = "HARMFUL",
+		isDebuff = true,
+	},
+	externals = {
+		containerKey = "externalContainer",
+		buttonsKey = "externalButtons",
+		filter = "HELPFUL",
+		isDebuff = false,
+	},
+}
 
 local SAMPLE_BUFF_ICONS = { 136243, 135940, 136085, 136097, 136116, 136048, 135932, 136108 }
 local SAMPLE_DEBUFF_ICONS = { 136207, 136160, 136128, 135804, 136168, 132104, 136118, 136214 }
@@ -2196,10 +2300,18 @@ function GF:LayoutAuras(self)
 			style.padding = spacing
 			style.showTooltip = typeCfg.showTooltip ~= false
 			style.showCooldown = typeCfg.showCooldown ~= false
+			if typeCfg.showCooldownText ~= nil then style.showCooldownText = typeCfg.showCooldownText end
+			style.cooldownAnchor = typeCfg.cooldownAnchor
+			style.cooldownOffset = typeCfg.cooldownOffset
+			style.cooldownFont = typeCfg.cooldownFont
 			style.countFont = typeCfg.countFont
 			style.countFontSize = typeCfg.countFontSize
 			style.countFontOutline = typeCfg.countFontOutline
 			style.cooldownFontSize = typeCfg.cooldownFontSize
+			style.cooldownFontOutline = typeCfg.cooldownFontOutline
+			if typeCfg.showStacks ~= nil then style.showStacks = typeCfg.showStacks end
+			style.countAnchor = typeCfg.countAnchor
+			style.countOffset = typeCfg.countOffset
 			style.showDR = typeCfg.showDR == true
 			style.drAnchor = typeCfg.drAnchor
 			style.drOffset = typeCfg.drOffset
@@ -2212,7 +2324,7 @@ function GF:LayoutAuras(self)
 	end
 end
 
-local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter, harmfulFilter)
+local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter, harmfulFilter, externalFilter)
 	local meta = AURA_TYPE_META[kindKey]
 	if not meta then return end
 	local typeCfg = ac and ac[kindKey] or {}
@@ -2256,7 +2368,7 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, helpfulFilter,
 			local isHelpful = isAuraHelpful(unit, aura, helpfulFilter)
 			local isHarmful = isAuraHarmful(unit, aura, harmfulFilter)
 			local isExternal = false
-			if isHelpful and ac and ac.externals and ac.externals.enabled ~= false then isExternal = (not AURA_TYPE_META.externals.predicate or AURA_TYPE_META.externals.predicate(aura, unit)) end
+			if isHelpful and ac and ac.externals and ac.externals.enabled ~= false then isExternal = isAuraBigDefensive(unit, aura, externalFilter or AURA_FILTER_BIG_DEFENSIVE) end
 			local match = false
 			if kindKey == "debuff" then
 				match = isHarmful
@@ -2341,7 +2453,6 @@ end
 local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
 	if not (unit and st and updateInfo and AuraUtil and AuraUtil.updateAuraCacheFromEvent) then return end
 	local cache = getAuraCache(st)
-	local externalCache = getAuraCache(st, "externals")
 	local externalCache = getAuraCache(st, "externals")
 	if not cache then return end
 	local wantsHelpful = ac and (ac.buff and ac.buff.enabled ~= false) or false
@@ -2437,6 +2548,7 @@ function GF:UpdateAuras(self, updateInfo)
 	local harmfulFilter = (unit == "player") and AURA_FILTER_HARMFUL_ALL or AURA_FILTER_HARMFUL
 	local externalFilter = AURA_FILTER_BIG_DEFENSIVE
 	local cache = getAuraCache(st)
+	local externalCache = getAuraCache(st, "externals")
 	if not updateInfo or updateInfo.isFullUpdate then
 		dprint("UpdateAuras", unit, "fullScan", true, "filters", helpfulFilter or "nil", harmfulFilter or "nil")
 		fullScanGroupAuras(unit, cache, (wantBuff and helpfulFilter) or nil, (wantDebuff and harmfulFilter) or nil)
@@ -2446,17 +2558,17 @@ function GF:UpdateAuras(self, updateInfo)
 			resetAuraCache(externalCache)
 		end
 		dprint("AuraCache:full", unit, "count", cache and cache.order and #cache.order or 0)
-		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter)
-		updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter)
-		updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter)
+		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
+		updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
+		updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
 		return
 	end
 
 	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
 	dprint("UpdateAuras", unit, "partial", true)
-	updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter)
-	updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter)
-	updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter)
+	updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
+	updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
+	updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
 end
 
 function GF:UpdateSampleAuras(self)
@@ -2620,7 +2732,8 @@ function GF:UpdateName(self)
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local tc = cfg and cfg.text or {}
 	local sc = cfg and cfg.status or {}
-	if UnitIsConnected and not UnitIsConnected(unit) then name = (name and name ~= "") and (name .. " |cffff6666DC|r") or "|cffff6666DC|r" end
+	local connected = UnitIsConnected and unsecretBool(UnitIsConnected(unit))
+	if connected == false then name = (name and name ~= "") and (name .. " |cffff6666DC|r") or "|cffff6666DC|r" end
 	name = name or ""
 	if st._lastName ~= name then
 		fs:SetText(name)
@@ -2636,7 +2749,7 @@ function GF:UpdateName(self)
 	elseif nameMode == "CLASS" and st._classR then
 		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	end
-	if UnitIsConnected and not UnitIsConnected(unit) then
+	if connected == false then
 		r, g, b, a = 0.7, 0.7, 0.7, 1
 	end
 	if st._lastNameR ~= r or st._lastNameG ~= g or st._lastNameB ~= b or st._lastNameA ~= a then
@@ -2701,6 +2814,11 @@ function GF:UpdateStatusText(self)
 		return
 	end
 	local inEditMode = isEditModeActive()
+	if inEditMode and GF and GF._editModeSampleStatusText == false then
+		st.statusText:SetText("")
+		st.statusText:Hide()
+		return
+	end
 	local allowSample = inEditMode and self._eqolPreview
 	if UnitExists and unit and not UnitExists(unit) and not allowSample then
 		st.statusText:SetText("")
@@ -2712,18 +2830,15 @@ function GF:UpdateStatusText(self)
 	if showOffline == nil then showOffline = true end
 	local showAFK = us.showAFK == true
 	local showDND = us.showDND == true
-	if unit and UnitIsConnected and UnitIsConnected(unit) == false then
-		if showOffline then
-			statusTag = PLAYER_OFFLINE or "Offline"
-		end
-	elseif unit and UnitIsAFK and UnitIsAFK(unit) then
-		if showAFK then
-			statusTag = DEFAULT_AFK_MESSAGE or "AFK"
-		end
-	elseif unit and UnitIsDND and UnitIsDND(unit) then
-		if showDND then
-			statusTag = DEFAULT_DND_MESSAGE or "DND"
-		end
+	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
+	local isAFK = unit and UnitIsAFK and unsecretBool(UnitIsAFK(unit)) or nil
+	local isDND = unit and UnitIsDND and unsecretBool(UnitIsDND(unit)) or nil
+	if connected == false then
+		if showOffline then statusTag = PLAYER_OFFLINE or "Offline" end
+	elseif isAFK == true then
+		if showAFK then statusTag = DEFAULT_AFK_MESSAGE or "AFK" end
+	elseif isDND == true then
+		if showDND then statusTag = DEFAULT_DND_MESSAGE or "DND" end
 	end
 	if not statusTag and allowSample then
 		if showOffline then
@@ -2755,27 +2870,24 @@ function GF:UpdateRange(self, inRange)
 		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(1) end
 		return
 	end
+	if IsInGroup and IsInRaid then
+		local inGroup = IsInGroup()
+		local inRaid = IsInRaid()
+		if not inGroup and not inRaid then
+			if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(1) end
+			return
+		end
+	end
 	local unit = getUnit(self)
-	if unit and UnitIsConnected and UnitIsConnected(unit) == false then
+	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
+	if connected == false then
 		local offA = rcfg.offlineAlpha or rcfg.alpha or 0.55
 		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(offA) end
 		return
 	end
 	if inRange == nil and unit and UnitInRange then inRange = UnitInRange(unit) end
-	if issecretvalue and issecretvalue(inRange) then
+	if type(inRange) ~= "nil" then
 		if st.frame and st.frame.SetAlphaFromBoolean then st.frame:SetAlphaFromBoolean(inRange, 1, rcfg.alpha or 0.55) end
-		return
-	end
-	if inRange == nil then
-		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(1) end
-		return
-	end
-	if st.frame then
-		if st.frame.SetAlphaFromBoolean then
-			st.frame:SetAlphaFromBoolean(inRange, 1, rcfg.alpha or 0.55)
-		elseif st.frame.SetAlpha then
-			st.frame:SetAlpha(inRange and 1 or (rcfg.alpha or 0.55))
-		end
 	end
 end
 
@@ -2939,7 +3051,8 @@ function GF:UpdateHealthValue(self)
 	local scfg = cfg and cfg.status or {}
 	local us = scfg.unitStatus or {}
 	local hideTextOffline = us.hideHealthTextWhenOffline == true
-	if hideTextOffline and unit and UnitIsConnected and UnitIsConnected(unit) == false then
+	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
+	if hideTextOffline and connected == false then
 		if st.healthTextLeft then st.healthTextLeft:SetText("") end
 		if st.healthTextCenter then st.healthTextCenter:SetText("") end
 		if st.healthTextRight then st.healthTextRight:SetText("") end
@@ -2973,9 +3086,18 @@ function GF:UpdateHealthValue(self)
 			if UFHelper and UFHelper.textModeUsesLevel then
 				if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
 			end
-			setTextSlot(st, st.healthTextLeft, "_lastHealthTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
-			setTextSlot(st, st.healthTextCenter, "_lastHealthTextCenter", centerMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
-			setTextSlot(st, st.healthTextRight, "_lastHealthTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+			local missingValue
+			if textModeUsesDeficit(leftMode) or textModeUsesDeficit(centerMode) or textModeUsesDeficit(rightMode) then
+				if UnitHealthMissing then missingValue = UnitHealthMissing(unit) end
+				if not (issecretvalue and issecretvalue(missingValue)) then
+					if missingValue == nil and not secretHealth then
+						if type(cur) == "number" and type(maxv) == "number" then missingValue = maxv - cur end
+					end
+				end
+			end
+			setTextSlot(st, st.healthTextLeft, "_lastHealthTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
+			setTextSlot(st, st.healthTextCenter, "_lastHealthTextCenter", centerMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
+			setTextSlot(st, st.healthTextRight, "_lastHealthTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 		end
 	elseif st.healthTextLeft or st.healthTextCenter or st.healthTextRight then
 		if st.healthTextLeft then st.healthTextLeft:SetText("") end
@@ -3023,7 +3145,8 @@ function GF:UpdateHealthStyle(self)
 		r, g, b, a = unpackColor(hc.color, defH.color or { 0, 0.8, 0, 1 })
 	end
 
-	if UnitIsConnected and not UnitIsConnected(unit) then
+	local connected = UnitIsConnected and unsecretBool(UnitIsConnected(unit))
+	if connected == false then
 		r, g, b, a = 0.5, 0.5, 0.5, 1
 	end
 	if st._lastHealthR ~= r or st._lastHealthG ~= g or st._lastHealthB ~= b or st._lastHealthA ~= a then
@@ -3415,7 +3538,9 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	if wantsLevel then reg("UNIT_LEVEL") end
 
 	if self._eqolUFState and self._eqolUFState._wantsAuras then reg("UNIT_AURA") end
-	if self._eqolUFState and self._eqolUFState._wantsRangeFade then reg("UNIT_IN_RANGE_UPDATE") end
+	-- if self._eqolUFState and self._eqolUFState._wantsRangeFade then
+	reg("UNIT_IN_RANGE_UPDATE")
+	-- end
 end
 
 function GF.UnitButton_OnAttributeChanged(self, name, value)
@@ -3757,9 +3882,28 @@ function GF:SetEditModeSampleAuras(show)
 	end
 end
 
-function GF:ToggleEditModeSampleAuras()
-	GF:SetEditModeSampleAuras(GF._editModeSampleAuras == false)
+function GF:ToggleEditModeSampleAuras() GF:SetEditModeSampleAuras(GF._editModeSampleAuras == false) end
+
+function GF:SetEditModeStatusText(show)
+	local enabled = show ~= false
+	if GF._editModeSampleStatusText == enabled then return end
+	GF._editModeSampleStatusText = enabled
+	if not isEditModeActive() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateStatusText(child) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateStatusText(btn) end
+			end
+		end
+	end
 end
+
+function GF:ToggleEditModeStatusText() GF:SetEditModeStatusText(GF._editModeSampleStatusText == false) end
 
 function GF:RefreshRoleIcons()
 	if not isFeatureEnabled() then return end
@@ -5225,7 +5369,7 @@ local function buildEditModeSettings(kind, editModeId)
 				GF:ApplyHeaderAttributes(kind)
 			end,
 			generator = function(_, root)
-				for _, option in ipairs(textModeOptions) do
+				for _, option in ipairs(healthTextModeOptions) do
 					root:CreateRadio(option.label, function()
 						local cfg = getCfg(kind)
 						local hc = cfg and cfg.health or {}
@@ -5260,7 +5404,7 @@ local function buildEditModeSettings(kind, editModeId)
 				GF:ApplyHeaderAttributes(kind)
 			end,
 			generator = function(_, root)
-				for _, option in ipairs(textModeOptions) do
+				for _, option in ipairs(healthTextModeOptions) do
 					root:CreateRadio(option.label, function()
 						local cfg = getCfg(kind)
 						local hc = cfg and cfg.health or {}
@@ -5295,7 +5439,7 @@ local function buildEditModeSettings(kind, editModeId)
 				GF:ApplyHeaderAttributes(kind)
 			end,
 			generator = function(_, root)
-				for _, option in ipairs(textModeOptions) do
+				for _, option in ipairs(healthTextModeOptions) do
 					root:CreateRadio(option.label, function()
 						local cfg = getCfg(kind)
 						local hc = cfg and cfg.health or {}
@@ -6618,8 +6762,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local cfg = getCfg(kind)
 				local sc = cfg and cfg.status or {}
 				local us = sc.unitStatus or {}
-				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus and DEFAULTS[kind].status.unitStatus.color)
-					or { 1, 1, 1, 1 }
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus and DEFAULTS[kind].status.unitStatus.color) or { 1, 1, 1, 1 }
 				local r, g, b, a = unpackColor(us.color, def)
 				return { r = r, g = g, b = b, a = a }
 			end,
@@ -8418,6 +8561,382 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "buffs",
+		},
+		{
+			name = "Show cooldown text",
+			kind = SettingType.Checkbox,
+			field = "buffCooldownTextEnabled",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.buff) or {}
+				if ac.buff.showCooldownText == nil then return def.showCooldownText ~= false end
+				return ac.buff.showCooldownText ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.showCooldownText = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextEnabled", ac.buff.showCooldownText, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text anchor",
+			kind = SettingType.Dropdown,
+			field = "buffCooldownTextAnchor",
+			parentId = "buffs",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.cooldownAnchor or "CENTER"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffCooldownTextOffsetX",
+			parentId = "buffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.buff.cooldownOffset and ac.buff.cooldownOffset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownOffset = ac.buff.cooldownOffset or {}
+				ac.buff.cooldownOffset.x = clampNumber(value, -50, 50, (ac.buff.cooldownOffset and ac.buff.cooldownOffset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextOffsetX", ac.buff.cooldownOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffCooldownTextOffsetY",
+			parentId = "buffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.buff.cooldownOffset and ac.buff.cooldownOffset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownOffset = ac.buff.cooldownOffset or {}
+				ac.buff.cooldownOffset.y = clampNumber(value, -50, 50, (ac.buff.cooldownOffset and ac.buff.cooldownOffset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextOffsetY", ac.buff.cooldownOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffCooldownTextSize",
+			parentId = "buffs",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.cooldownFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownFontSize = clampNumber(value, 6, 30, ac.buff.cooldownFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextSize", ac.buff.cooldownFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text font",
+			kind = SettingType.Dropdown,
+			field = "buffCooldownTextFont",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.cooldownFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.buff.cooldownFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.buff.cooldownFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Cooldown text outline",
+			kind = SettingType.Dropdown,
+			field = "buffCooldownTextOutline",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.cooldownFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.cooldownFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.buff.cooldownFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.buff.cooldownFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffCooldownTextOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "buffs",
+		},
+		{
+			name = "Show stacks",
+			kind = SettingType.Checkbox,
+			field = "buffStackTextEnabled",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.buff) or {}
+				if ac.buff.showStacks == nil then return def.showStacks ~= false end
+				return ac.buff.showStacks ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.showStacks = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackTextEnabled", ac.buff.showStacks, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack anchor",
+			kind = SettingType.Dropdown,
+			field = "buffStackAnchor",
+			parentId = "buffs",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.countAnchor or "BOTTOMRIGHT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffStackOffsetX",
+			parentId = "buffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.buff.countOffset and ac.buff.countOffset.x) or -2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countOffset = ac.buff.countOffset or {}
+				ac.buff.countOffset.x = clampNumber(value, -50, 50, (ac.buff.countOffset and ac.buff.countOffset.x) or -2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackOffsetX", ac.buff.countOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffStackOffsetY",
+			parentId = "buffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.buff.countOffset and ac.buff.countOffset.y) or 2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countOffset = ac.buff.countOffset or {}
+				ac.buff.countOffset.y = clampNumber(value, -50, 50, (ac.buff.countOffset and ac.buff.countOffset.y) or 2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackOffsetY", ac.buff.countOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "buffStackSize",
+			parentId = "buffs",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.countFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countFontSize = clampNumber(value, 6, 30, ac.buff.countFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackSize", ac.buff.countFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack font",
+			kind = SettingType.Dropdown,
+			field = "buffStackFont",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.countFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.buff.countFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.buff.countFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Stack outline",
+			kind = SettingType.Dropdown,
+			field = "buffStackOutline",
+			parentId = "buffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.countFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.buff.countFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.buff.countFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.buff.countFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "buffStackOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
 			name = "Debuffs",
 			kind = SettingType.Collapsible,
 			id = "debuffs",
@@ -8615,6 +9134,382 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "debuffs",
+		},
+		{
+			name = "Show cooldown text",
+			kind = SettingType.Checkbox,
+			field = "debuffCooldownTextEnabled",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.debuff) or {}
+				if ac.debuff.showCooldownText == nil then return def.showCooldownText ~= false end
+				return ac.debuff.showCooldownText ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.showCooldownText = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextEnabled", ac.debuff.showCooldownText, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text anchor",
+			kind = SettingType.Dropdown,
+			field = "debuffCooldownTextAnchor",
+			parentId = "debuffs",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.cooldownAnchor or "CENTER"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffCooldownTextOffsetX",
+			parentId = "debuffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownOffset = ac.debuff.cooldownOffset or {}
+				ac.debuff.cooldownOffset.x = clampNumber(value, -50, 50, (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextOffsetX", ac.debuff.cooldownOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffCooldownTextOffsetY",
+			parentId = "debuffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownOffset = ac.debuff.cooldownOffset or {}
+				ac.debuff.cooldownOffset.y = clampNumber(value, -50, 50, (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextOffsetY", ac.debuff.cooldownOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffCooldownTextSize",
+			parentId = "debuffs",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.cooldownFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownFontSize = clampNumber(value, 6, 30, ac.debuff.cooldownFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextSize", ac.debuff.cooldownFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text font",
+			kind = SettingType.Dropdown,
+			field = "debuffCooldownTextFont",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.cooldownFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.debuff.cooldownFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.debuff.cooldownFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Cooldown text outline",
+			kind = SettingType.Dropdown,
+			field = "debuffCooldownTextOutline",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.cooldownFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.cooldownFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.debuff.cooldownFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.debuff.cooldownFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffCooldownTextOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "debuffs",
+		},
+		{
+			name = "Show stacks",
+			kind = SettingType.Checkbox,
+			field = "debuffStackTextEnabled",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.debuff) or {}
+				if ac.debuff.showStacks == nil then return def.showStacks ~= false end
+				return ac.debuff.showStacks ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.showStacks = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackTextEnabled", ac.debuff.showStacks, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack anchor",
+			kind = SettingType.Dropdown,
+			field = "debuffStackAnchor",
+			parentId = "debuffs",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.countAnchor or "BOTTOMRIGHT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffStackOffsetX",
+			parentId = "debuffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.debuff.countOffset and ac.debuff.countOffset.x) or -2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countOffset = ac.debuff.countOffset or {}
+				ac.debuff.countOffset.x = clampNumber(value, -50, 50, (ac.debuff.countOffset and ac.debuff.countOffset.x) or -2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackOffsetX", ac.debuff.countOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffStackOffsetY",
+			parentId = "debuffs",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.debuff.countOffset and ac.debuff.countOffset.y) or 2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countOffset = ac.debuff.countOffset or {}
+				ac.debuff.countOffset.y = clampNumber(value, -50, 50, (ac.debuff.countOffset and ac.debuff.countOffset.y) or 2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackOffsetY", ac.debuff.countOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "debuffStackSize",
+			parentId = "debuffs",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.countFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countFontSize = clampNumber(value, 6, 30, ac.debuff.countFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackSize", ac.debuff.countFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack font",
+			kind = SettingType.Dropdown,
+			field = "debuffStackFont",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.countFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.debuff.countFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.debuff.countFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Stack outline",
+			kind = SettingType.Dropdown,
+			field = "debuffStackOutline",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.debuff.countFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.countFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.debuff.countFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.debuff.countFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffStackOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
 			name = "Externals",
 			kind = SettingType.Collapsible,
 			id = "externals",
@@ -8809,6 +9704,382 @@ local function buildEditModeSettings(kind, editModeId)
 				ac.externals.spacing = clampNumber(value, 0, 10, ac.externals.spacing or 2)
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalSpacing", ac.externals.spacing, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "externals",
+		},
+		{
+			name = "Show cooldown text",
+			kind = SettingType.Checkbox,
+			field = "externalCooldownTextEnabled",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.externals) or {}
+				if ac.externals.showCooldownText == nil then return def.showCooldownText ~= false end
+				return ac.externals.showCooldownText ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.showCooldownText = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextEnabled", ac.externals.showCooldownText, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text anchor",
+			kind = SettingType.Dropdown,
+			field = "externalCooldownTextAnchor",
+			parentId = "externals",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.cooldownAnchor or "CENTER"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalCooldownTextOffsetX",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.cooldownOffset and ac.externals.cooldownOffset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownOffset = ac.externals.cooldownOffset or {}
+				ac.externals.cooldownOffset.x = clampNumber(value, -50, 50, (ac.externals.cooldownOffset and ac.externals.cooldownOffset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextOffsetX", ac.externals.cooldownOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalCooldownTextOffsetY",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.cooldownOffset and ac.externals.cooldownOffset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownOffset = ac.externals.cooldownOffset or {}
+				ac.externals.cooldownOffset.y = clampNumber(value, -50, 50, (ac.externals.cooldownOffset and ac.externals.cooldownOffset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextOffsetY", ac.externals.cooldownOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalCooldownTextSize",
+			parentId = "externals",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.cooldownFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownFontSize = clampNumber(value, 6, 30, ac.externals.cooldownFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextSize", ac.externals.cooldownFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Cooldown text font",
+			kind = SettingType.Dropdown,
+			field = "externalCooldownTextFont",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.cooldownFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.cooldownFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.cooldownFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Cooldown text outline",
+			kind = SettingType.Dropdown,
+			field = "externalCooldownTextOutline",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.cooldownFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.cooldownFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.cooldownFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.cooldownFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalCooldownTextOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "externals",
+		},
+		{
+			name = "Show stacks",
+			kind = SettingType.Checkbox,
+			field = "externalStackTextEnabled",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.externals) or {}
+				if ac.externals.showStacks == nil then return def.showStacks ~= false end
+				return ac.externals.showStacks ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.showStacks = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackTextEnabled", ac.externals.showStacks, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack anchor",
+			kind = SettingType.Dropdown,
+			field = "externalStackAnchor",
+			parentId = "externals",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.countAnchor or "BOTTOMRIGHT"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countAnchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalStackOffsetX",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.countOffset and ac.externals.countOffset.x) or -2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countOffset = ac.externals.countOffset or {}
+				ac.externals.countOffset.x = clampNumber(value, -50, 50, (ac.externals.countOffset and ac.externals.countOffset.x) or -2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackOffsetX", ac.externals.countOffset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalStackOffsetY",
+			parentId = "externals",
+			minValue = -50,
+			maxValue = 50,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return (ac.externals.countOffset and ac.externals.countOffset.y) or 2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countOffset = ac.externals.countOffset or {}
+				ac.externals.countOffset.y = clampNumber(value, -50, 50, (ac.externals.countOffset and ac.externals.countOffset.y) or 2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackOffsetY", ac.externals.countOffset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "externalStackSize",
+			parentId = "externals",
+			minValue = 6,
+			maxValue = 30,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.countFontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countFontSize = clampNumber(value, 6, 30, ac.externals.countFontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackSize", ac.externals.countFontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Stack font",
+			kind = SettingType.Dropdown,
+			field = "externalStackFont",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.countFont or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countFont = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.countFont or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.countFont = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+		},
+		{
+			name = "Stack outline",
+			kind = SettingType.Dropdown,
+			field = "externalStackOutline",
+			parentId = "externals",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.externals.countFontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				ac.externals.countFontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local ac = ensureAuraConfig(cfg)
+						return (ac.externals.countFontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						local ac = ensureAuraConfig(cfg)
+						ac.externals.countFontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "externalStackOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
 			end,
 		},
 		{
@@ -9435,9 +10706,7 @@ local function applyEditModeData(kind, data)
 		if data.statusTextShowOffline ~= nil then cfg.status.unitStatus.showOffline = data.statusTextShowOffline and true or false end
 		if data.statusTextShowAFK ~= nil then cfg.status.unitStatus.showAFK = data.statusTextShowAFK and true or false end
 		if data.statusTextShowDND ~= nil then cfg.status.unitStatus.showDND = data.statusTextShowDND and true or false end
-		if data.statusTextHideHealthTextOffline ~= nil then
-			cfg.status.unitStatus.hideHealthTextWhenOffline = data.statusTextHideHealthTextOffline and true or false
-		end
+		if data.statusTextHideHealthTextOffline ~= nil then cfg.status.unitStatus.hideHealthTextWhenOffline = data.statusTextHideHealthTextOffline and true or false end
 	end
 	if data.raidIconEnabled ~= nil or data.raidIconSize ~= nil or data.raidIconPoint ~= nil or data.raidIconOffsetX ~= nil or data.raidIconOffsetY ~= nil then
 		cfg.status.raidIcon = cfg.status.raidIcon or {}
@@ -9598,6 +10867,26 @@ local function applyEditModeData(kind, data)
 	if data.buffPerRow ~= nil then ac.buff.perRow = data.buffPerRow end
 	if data.buffMax ~= nil then ac.buff.max = data.buffMax end
 	if data.buffSpacing ~= nil then ac.buff.spacing = data.buffSpacing end
+	if data.buffCooldownTextEnabled ~= nil then ac.buff.showCooldownText = data.buffCooldownTextEnabled and true or false end
+	if data.buffCooldownTextAnchor ~= nil then ac.buff.cooldownAnchor = data.buffCooldownTextAnchor end
+	if data.buffCooldownTextOffsetX ~= nil or data.buffCooldownTextOffsetY ~= nil then
+		ac.buff.cooldownOffset = ac.buff.cooldownOffset or {}
+		if data.buffCooldownTextOffsetX ~= nil then ac.buff.cooldownOffset.x = data.buffCooldownTextOffsetX end
+		if data.buffCooldownTextOffsetY ~= nil then ac.buff.cooldownOffset.y = data.buffCooldownTextOffsetY end
+	end
+	if data.buffCooldownTextSize ~= nil then ac.buff.cooldownFontSize = data.buffCooldownTextSize end
+	if data.buffCooldownTextFont ~= nil then ac.buff.cooldownFont = data.buffCooldownTextFont end
+	if data.buffCooldownTextOutline ~= nil then ac.buff.cooldownFontOutline = data.buffCooldownTextOutline end
+	if data.buffStackTextEnabled ~= nil then ac.buff.showStacks = data.buffStackTextEnabled and true or false end
+	if data.buffStackAnchor ~= nil then ac.buff.countAnchor = data.buffStackAnchor end
+	if data.buffStackOffsetX ~= nil or data.buffStackOffsetY ~= nil then
+		ac.buff.countOffset = ac.buff.countOffset or {}
+		if data.buffStackOffsetX ~= nil then ac.buff.countOffset.x = data.buffStackOffsetX end
+		if data.buffStackOffsetY ~= nil then ac.buff.countOffset.y = data.buffStackOffsetY end
+	end
+	if data.buffStackSize ~= nil then ac.buff.countFontSize = data.buffStackSize end
+	if data.buffStackFont ~= nil then ac.buff.countFont = data.buffStackFont end
+	if data.buffStackOutline ~= nil then ac.buff.countFontOutline = data.buffStackOutline end
 
 	if data.debuffsEnabled ~= nil then ac.debuff.enabled = data.debuffsEnabled and true or false end
 	if data.debuffAnchor ~= nil then ac.debuff.anchorPoint = data.debuffAnchor end
@@ -9613,6 +10902,26 @@ local function applyEditModeData(kind, data)
 	if data.debuffPerRow ~= nil then ac.debuff.perRow = data.debuffPerRow end
 	if data.debuffMax ~= nil then ac.debuff.max = data.debuffMax end
 	if data.debuffSpacing ~= nil then ac.debuff.spacing = data.debuffSpacing end
+	if data.debuffCooldownTextEnabled ~= nil then ac.debuff.showCooldownText = data.debuffCooldownTextEnabled and true or false end
+	if data.debuffCooldownTextAnchor ~= nil then ac.debuff.cooldownAnchor = data.debuffCooldownTextAnchor end
+	if data.debuffCooldownTextOffsetX ~= nil or data.debuffCooldownTextOffsetY ~= nil then
+		ac.debuff.cooldownOffset = ac.debuff.cooldownOffset or {}
+		if data.debuffCooldownTextOffsetX ~= nil then ac.debuff.cooldownOffset.x = data.debuffCooldownTextOffsetX end
+		if data.debuffCooldownTextOffsetY ~= nil then ac.debuff.cooldownOffset.y = data.debuffCooldownTextOffsetY end
+	end
+	if data.debuffCooldownTextSize ~= nil then ac.debuff.cooldownFontSize = data.debuffCooldownTextSize end
+	if data.debuffCooldownTextFont ~= nil then ac.debuff.cooldownFont = data.debuffCooldownTextFont end
+	if data.debuffCooldownTextOutline ~= nil then ac.debuff.cooldownFontOutline = data.debuffCooldownTextOutline end
+	if data.debuffStackTextEnabled ~= nil then ac.debuff.showStacks = data.debuffStackTextEnabled and true or false end
+	if data.debuffStackAnchor ~= nil then ac.debuff.countAnchor = data.debuffStackAnchor end
+	if data.debuffStackOffsetX ~= nil or data.debuffStackOffsetY ~= nil then
+		ac.debuff.countOffset = ac.debuff.countOffset or {}
+		if data.debuffStackOffsetX ~= nil then ac.debuff.countOffset.x = data.debuffStackOffsetX end
+		if data.debuffStackOffsetY ~= nil then ac.debuff.countOffset.y = data.debuffStackOffsetY end
+	end
+	if data.debuffStackSize ~= nil then ac.debuff.countFontSize = data.debuffStackSize end
+	if data.debuffStackFont ~= nil then ac.debuff.countFont = data.debuffStackFont end
+	if data.debuffStackOutline ~= nil then ac.debuff.countFontOutline = data.debuffStackOutline end
 
 	if data.externalsEnabled ~= nil then ac.externals.enabled = data.externalsEnabled and true or false end
 	if data.externalAnchor ~= nil then ac.externals.anchorPoint = data.externalAnchor end
@@ -9628,6 +10937,26 @@ local function applyEditModeData(kind, data)
 	if data.externalPerRow ~= nil then ac.externals.perRow = data.externalPerRow end
 	if data.externalMax ~= nil then ac.externals.max = data.externalMax end
 	if data.externalSpacing ~= nil then ac.externals.spacing = data.externalSpacing end
+	if data.externalCooldownTextEnabled ~= nil then ac.externals.showCooldownText = data.externalCooldownTextEnabled and true or false end
+	if data.externalCooldownTextAnchor ~= nil then ac.externals.cooldownAnchor = data.externalCooldownTextAnchor end
+	if data.externalCooldownTextOffsetX ~= nil or data.externalCooldownTextOffsetY ~= nil then
+		ac.externals.cooldownOffset = ac.externals.cooldownOffset or {}
+		if data.externalCooldownTextOffsetX ~= nil then ac.externals.cooldownOffset.x = data.externalCooldownTextOffsetX end
+		if data.externalCooldownTextOffsetY ~= nil then ac.externals.cooldownOffset.y = data.externalCooldownTextOffsetY end
+	end
+	if data.externalCooldownTextSize ~= nil then ac.externals.cooldownFontSize = data.externalCooldownTextSize end
+	if data.externalCooldownTextFont ~= nil then ac.externals.cooldownFont = data.externalCooldownTextFont end
+	if data.externalCooldownTextOutline ~= nil then ac.externals.cooldownFontOutline = data.externalCooldownTextOutline end
+	if data.externalStackTextEnabled ~= nil then ac.externals.showStacks = data.externalStackTextEnabled and true or false end
+	if data.externalStackAnchor ~= nil then ac.externals.countAnchor = data.externalStackAnchor end
+	if data.externalStackOffsetX ~= nil or data.externalStackOffsetY ~= nil then
+		ac.externals.countOffset = ac.externals.countOffset or {}
+		if data.externalStackOffsetX ~= nil then ac.externals.countOffset.x = data.externalStackOffsetX end
+		if data.externalStackOffsetY ~= nil then ac.externals.countOffset.y = data.externalStackOffsetY end
+	end
+	if data.externalStackSize ~= nil then ac.externals.countFontSize = data.externalStackSize end
+	if data.externalStackFont ~= nil then ac.externals.countFont = data.externalStackFont end
+	if data.externalStackOutline ~= nil then ac.externals.countFontOutline = data.externalStackOutline end
 	if data.externalDrEnabled ~= nil then ac.externals.showDR = data.externalDrEnabled and true or false end
 	if data.externalDrAnchor ~= nil then ac.externals.drAnchor = data.externalDrAnchor end
 	if data.externalDrOffsetX ~= nil or data.externalDrOffsetY ~= nil then
@@ -9682,6 +11011,8 @@ function GF:EnsureEditMode()
 			local defH = def.health or {}
 			local defP = def.power or {}
 			local defAuras = def.auras or {}
+			local defBuff = defAuras.buff or {}
+			local defDebuff = defAuras.debuff or {}
 			local defExt = defAuras.externals or {}
 			local hcBackdrop = hc.backdrop or {}
 			local defHBackdrop = defH.backdrop or {}
@@ -9796,32 +11127,16 @@ function GF:EnsureEditMode()
 				levelOffsetX = (sc.levelOffset and sc.levelOffset.x) or 0,
 				levelOffsetY = (sc.levelOffset and sc.levelOffset.y) or 0,
 				statusTextEnabled = (sc.unitStatus and sc.unitStatus.enabled) ~= false,
-				statusTextColor = (sc.unitStatus and sc.unitStatus.color)
-					or (def.status and def.status.unitStatus and def.status.unitStatus.color)
-					or { 1, 1, 1, 1 },
-				statusTextFontSize = (sc.unitStatus and sc.unitStatus.fontSize)
-					or (cfg.health and cfg.health.fontSize)
-					or (defH and defH.fontSize)
-					or 12,
+				statusTextColor = (sc.unitStatus and sc.unitStatus.color) or (def.status and def.status.unitStatus and def.status.unitStatus.color) or { 1, 1, 1, 1 },
+				statusTextFontSize = (sc.unitStatus and sc.unitStatus.fontSize) or (cfg.health and cfg.health.fontSize) or (defH and defH.fontSize) or 12,
 				statusTextFont = (sc.unitStatus and sc.unitStatus.font) or (cfg.health and cfg.health.font) or (defH and defH.font) or nil,
-				statusTextFontOutline = (sc.unitStatus and sc.unitStatus.fontOutline)
-					or (cfg.health and cfg.health.fontOutline)
-					or (defH and defH.fontOutline)
-					or "OUTLINE",
-				statusTextAnchor = (sc.unitStatus and sc.unitStatus.anchor)
-					or (def.status and def.status.unitStatus and def.status.unitStatus.anchor)
-					or "CENTER",
+				statusTextFontOutline = (sc.unitStatus and sc.unitStatus.fontOutline) or (cfg.health and cfg.health.fontOutline) or (defH and defH.fontOutline) or "OUTLINE",
+				statusTextAnchor = (sc.unitStatus and sc.unitStatus.anchor) or (def.status and def.status.unitStatus and def.status.unitStatus.anchor) or "CENTER",
 				statusTextOffsetX = (sc.unitStatus and sc.unitStatus.offset and sc.unitStatus.offset.x) or 0,
 				statusTextOffsetY = (sc.unitStatus and sc.unitStatus.offset and sc.unitStatus.offset.y) or 0,
-				statusTextShowOffline = (sc.unitStatus and sc.unitStatus.showOffline)
-					or (def.status and def.status.unitStatus and def.status.unitStatus.showOffline)
-					or true,
-				statusTextShowAFK = (sc.unitStatus and sc.unitStatus.showAFK)
-					or (def.status and def.status.unitStatus and def.status.unitStatus.showAFK)
-					or false,
-				statusTextShowDND = (sc.unitStatus and sc.unitStatus.showDND)
-					or (def.status and def.status.unitStatus and def.status.unitStatus.showDND)
-					or false,
+				statusTextShowOffline = (sc.unitStatus and sc.unitStatus.showOffline) or (def.status and def.status.unitStatus and def.status.unitStatus.showOffline) or true,
+				statusTextShowAFK = (sc.unitStatus and sc.unitStatus.showAFK) or (def.status and def.status.unitStatus and def.status.unitStatus.showAFK) or false,
+				statusTextShowDND = (sc.unitStatus and sc.unitStatus.showDND) or (def.status and def.status.unitStatus and def.status.unitStatus.showDND) or false,
 				statusTextHideHealthTextOffline = (sc.unitStatus and sc.unitStatus.hideHealthTextWhenOffline)
 					or (def.status and def.status.unitStatus and def.status.unitStatus.hideHealthTextWhenOffline)
 					or false,
@@ -9879,6 +11194,20 @@ function GF:EnsureEditMode()
 				buffPerRow = ac.buff.perRow or 6,
 				buffMax = ac.buff.max or 6,
 				buffSpacing = ac.buff.spacing or 2,
+				buffCooldownTextEnabled = (ac.buff.showCooldownText ~= nil and ac.buff.showCooldownText ~= false) or (ac.buff.showCooldownText == nil and defBuff.showCooldownText ~= false),
+				buffCooldownTextAnchor = ac.buff.cooldownAnchor or defBuff.cooldownAnchor or "CENTER",
+				buffCooldownTextOffsetX = (ac.buff.cooldownOffset and ac.buff.cooldownOffset.x) or (defBuff.cooldownOffset and defBuff.cooldownOffset.x) or 0,
+				buffCooldownTextOffsetY = (ac.buff.cooldownOffset and ac.buff.cooldownOffset.y) or (defBuff.cooldownOffset and defBuff.cooldownOffset.y) or 0,
+				buffCooldownTextSize = ac.buff.cooldownFontSize or defBuff.cooldownFontSize or 12,
+				buffCooldownTextFont = ac.buff.cooldownFont or defBuff.cooldownFont or nil,
+				buffCooldownTextOutline = ac.buff.cooldownFontOutline or defBuff.cooldownFontOutline or "OUTLINE",
+				buffStackTextEnabled = (ac.buff.showStacks ~= nil and ac.buff.showStacks ~= false) or (ac.buff.showStacks == nil and defBuff.showStacks ~= false),
+				buffStackAnchor = ac.buff.countAnchor or defBuff.countAnchor or "BOTTOMRIGHT",
+				buffStackOffsetX = (ac.buff.countOffset and ac.buff.countOffset.x) or (defBuff.countOffset and defBuff.countOffset.x) or -2,
+				buffStackOffsetY = (ac.buff.countOffset and ac.buff.countOffset.y) or (defBuff.countOffset and defBuff.countOffset.y) or 2,
+				buffStackSize = ac.buff.countFontSize or defBuff.countFontSize or 12,
+				buffStackFont = ac.buff.countFont or defBuff.countFont or nil,
+				buffStackOutline = ac.buff.countFontOutline or defBuff.countFontOutline or "OUTLINE",
 				debuffsEnabled = ac.debuff.enabled == true,
 				debuffAnchor = debuffAnchor,
 				debuffGrowth = debuffGrowth,
@@ -9888,6 +11217,20 @@ function GF:EnsureEditMode()
 				debuffPerRow = ac.debuff.perRow or 6,
 				debuffMax = ac.debuff.max or 6,
 				debuffSpacing = ac.debuff.spacing or 2,
+				debuffCooldownTextEnabled = (ac.debuff.showCooldownText ~= nil and ac.debuff.showCooldownText ~= false) or (ac.debuff.showCooldownText == nil and defDebuff.showCooldownText ~= false),
+				debuffCooldownTextAnchor = ac.debuff.cooldownAnchor or defDebuff.cooldownAnchor or "CENTER",
+				debuffCooldownTextOffsetX = (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.x) or (defDebuff.cooldownOffset and defDebuff.cooldownOffset.x) or 0,
+				debuffCooldownTextOffsetY = (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.y) or (defDebuff.cooldownOffset and defDebuff.cooldownOffset.y) or 0,
+				debuffCooldownTextSize = ac.debuff.cooldownFontSize or defDebuff.cooldownFontSize or 12,
+				debuffCooldownTextFont = ac.debuff.cooldownFont or defDebuff.cooldownFont or nil,
+				debuffCooldownTextOutline = ac.debuff.cooldownFontOutline or defDebuff.cooldownFontOutline or "OUTLINE",
+				debuffStackTextEnabled = (ac.debuff.showStacks ~= nil and ac.debuff.showStacks ~= false) or (ac.debuff.showStacks == nil and defDebuff.showStacks ~= false),
+				debuffStackAnchor = ac.debuff.countAnchor or defDebuff.countAnchor or "BOTTOMRIGHT",
+				debuffStackOffsetX = (ac.debuff.countOffset and ac.debuff.countOffset.x) or (defDebuff.countOffset and defDebuff.countOffset.x) or -2,
+				debuffStackOffsetY = (ac.debuff.countOffset and ac.debuff.countOffset.y) or (defDebuff.countOffset and defDebuff.countOffset.y) or 2,
+				debuffStackSize = ac.debuff.countFontSize or defDebuff.countFontSize or 12,
+				debuffStackFont = ac.debuff.countFont or defDebuff.countFont or nil,
+				debuffStackOutline = ac.debuff.countFontOutline or defDebuff.countFontOutline or "OUTLINE",
 				externalsEnabled = ac.externals.enabled == true,
 				externalAnchor = externalAnchor,
 				externalGrowth = externalGrowth,
@@ -9897,6 +11240,21 @@ function GF:EnsureEditMode()
 				externalPerRow = ac.externals.perRow or 6,
 				externalMax = ac.externals.max or 4,
 				externalSpacing = ac.externals.spacing or 2,
+				externalCooldownTextEnabled = (ac.externals.showCooldownText ~= nil and ac.externals.showCooldownText ~= false)
+					or (ac.externals.showCooldownText == nil and defExt.showCooldownText ~= false),
+				externalCooldownTextAnchor = ac.externals.cooldownAnchor or defExt.cooldownAnchor or "CENTER",
+				externalCooldownTextOffsetX = (ac.externals.cooldownOffset and ac.externals.cooldownOffset.x) or (defExt.cooldownOffset and defExt.cooldownOffset.x) or 0,
+				externalCooldownTextOffsetY = (ac.externals.cooldownOffset and ac.externals.cooldownOffset.y) or (defExt.cooldownOffset and defExt.cooldownOffset.y) or 0,
+				externalCooldownTextSize = ac.externals.cooldownFontSize or defExt.cooldownFontSize or 12,
+				externalCooldownTextFont = ac.externals.cooldownFont or defExt.cooldownFont or nil,
+				externalCooldownTextOutline = ac.externals.cooldownFontOutline or defExt.cooldownFontOutline or "OUTLINE",
+				externalStackTextEnabled = (ac.externals.showStacks ~= nil and ac.externals.showStacks ~= false) or (ac.externals.showStacks == nil and defExt.showStacks ~= false),
+				externalStackAnchor = ac.externals.countAnchor or defExt.countAnchor or "BOTTOMRIGHT",
+				externalStackOffsetX = (ac.externals.countOffset and ac.externals.countOffset.x) or (defExt.countOffset and defExt.countOffset.x) or -2,
+				externalStackOffsetY = (ac.externals.countOffset and ac.externals.countOffset.y) or (defExt.countOffset and defExt.countOffset.y) or 2,
+				externalStackSize = ac.externals.countFontSize or defExt.countFontSize or 12,
+				externalStackFont = ac.externals.countFont or defExt.countFont or nil,
+				externalStackOutline = ac.externals.countFontOutline or defExt.countFontOutline or "OUTLINE",
 				externalDrEnabled = ac.externals.showDR == true,
 				externalDrAnchor = ac.externals.drAnchor or defExt.drAnchor or "TOPLEFT",
 				externalDrOffsetX = (ac.externals.drOffset and ac.externals.drOffset.x) or (defExt.drOffset and defExt.drOffset.x) or 0,
@@ -9932,6 +11290,10 @@ function GF:EnsureEditMode()
 						text = "Toggle sample auras",
 						click = function() GF:ToggleEditModeSampleAuras() end,
 					},
+					{
+						text = "Toggle status text",
+						click = function() GF:ToggleEditModeStatusText() end,
+					},
 				})
 			end
 
@@ -9946,6 +11308,7 @@ end
 function GF:OnEnterEditMode(kind)
 	if not isFeatureEnabled() then return end
 	if GF._editModeSampleAuras == nil then GF._editModeSampleAuras = true end
+	if GF._editModeSampleStatusText == nil then GF._editModeSampleStatusText = true end
 	GF:EnsureHeaders()
 	local header = GF.headers and GF.headers[kind]
 	if not header then return end

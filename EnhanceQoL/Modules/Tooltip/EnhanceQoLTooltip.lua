@@ -143,7 +143,7 @@ end
 fInspect:SetScript("OnEvent", function(_, ev, arg1, arg2)
 	if ev == "INSPECT_READY" then
 		local guid = arg1
-		if issecretvalue(guid) or issecretvalue(arg1) or issecretvalue(arg2) then return end
+		if issecretvalue(guid) or issecretvalue(arg1) or issecretvalue(arg2) or issecretvalue(pendingGUID) then return end
 		if not guid or guid ~= pendingGUID then return end
 		local unit = (pendingUnit and UnitGUID(pendingUnit) == guid) and pendingUnit or nil
 		pendingGUID, pendingUnit = nil, nil

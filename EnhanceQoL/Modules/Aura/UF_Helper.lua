@@ -67,9 +67,7 @@ end
 function H.getFont(path)
 	if type(path) == "string" and path ~= "" then
 		local lower = path:lower()
-		if path:find("\\") or path:find("/") or lower:find(".ttf", 1, true) or lower:find(".otf", 1, true) or lower:find(".ttc", 1, true) then
-			return path
-		end
+		if path:find("\\") or path:find("/") or lower:find(".ttf", 1, true) or lower:find(".otf", 1, true) or lower:find(".ttc", 1, true) then return path end
 		if LSM and LSM.Fetch then
 			local fetched = LSM:Fetch("font", path, true)
 			if type(fetched) == "string" and fetched ~= "" then return fetched end
@@ -83,10 +81,9 @@ function H.applyFont(fs, fontPath, size, outline)
 	if not fs then return end
 	local flags = normalizeFontOutline(outline)
 	local fontFile = H.getFont(fontPath)
+	if size == nil or size <= 0 then size = 1 end
 	local ok = fs.SetFont and fs:SetFont(fontFile, size or 14, flags)
-	if not ok and fontPath and fontPath ~= "" then
-		fs:SetFont(H.getFont(nil), size or 14, flags)
-	end
+	if not ok and fontPath and fontPath ~= "" then fs:SetFont(H.getFont(nil), size or 14, flags) end
 	if wantsDropShadow(outline) then
 		fs:SetShadowColor(0, 0, 0, 0.5)
 		fs:SetShadowOffset(0.5, -0.5)
@@ -1053,6 +1050,7 @@ function H.setupEmpowerStages(st, unit, numStages)
 end
 
 local WrapString = _G.C_StringUtil and _G.C_StringUtil.WrapString
+local TruncateWhenZero = _G.C_StringUtil and _G.C_StringUtil.TruncateWhenZero
 
 function H.formatCastName(nameText, castTarget, showTarget)
 	if not showTarget or type(castTarget) == "nil" then return nameText end
@@ -1098,6 +1096,7 @@ function H.shortValue(val)
 end
 
 function H.textModeUsesLevel(mode) return type(mode) == "string" and mode:find("LEVEL", 1, true) ~= nil end
+function H.textModeUsesDeficit(mode) return mode == "DEFICIT" end
 
 function H.getUnitLevelText(unit, levelOverride, hideClassificationText)
 	if not unit then return "??" end
@@ -1118,12 +1117,24 @@ function H.getUnitLevelText(unit, levelOverride, hideClassificationText)
 	return levelText
 end
 
-function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText)
+function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 	if mode == "NONE" then return "" end
 	local joinPrimary, joinSecondary, joinTertiary = H.resolveTextDelimiters(delimiter, delimiter2, delimiter3)
 	local percentSuffix = hidePercentSymbol and "" or "%"
 	if levelText == nil or levelText == "" then levelText = "??" end
 	local isPercentMode = type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil
+	if mode == "DEFICIT" then
+		if issecretvalue and issecretvalue(missingValue) then
+			if not (addon.variables and addon.variables.isMidnight) then return "" end
+			local infix = useShort and H.shortValue(missingValue) or BreakUpLargeNumbers(missingValue)
+			return "-" .. infix
+		end
+		if missingValue == nil then return "" end
+		local missNum = tonumber(missingValue) or 0
+		if missNum <= 0 then return "" end
+		local infix = useShort == false and tostring(missNum) or (AbbreviateNumbers and AbbreviateNumbers(missNum) or H.shortValue(missNum))
+		return "-" .. infix
+	end
 	local function formatPercentMode(curText, maxText, percentText)
 		if not percentText then return "" end
 		if mode == "PERCENT" then return percentText end

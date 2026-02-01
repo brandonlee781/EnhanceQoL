@@ -173,6 +173,21 @@ H.textModeOptions = {
 	{ value = "NONE", label = "None", text = "None" },
 }
 
+H.healthTextModeOptions = {
+	{ value = "PERCENT", label = "Percent", text = "Percent" },
+	{ value = "CURMAX", label = "Current/Max", text = "Current/Max" },
+	{ value = "CURRENT", label = "Current", text = "Current" },
+	{ value = "MAX", label = "Max", text = "Max" },
+	{ value = "DEFICIT", label = "Deficit", text = "Deficit" },
+	{ value = "CURPERCENT", label = "Current / Percent", text = "Current / Percent" },
+	{ value = "CURMAXPERCENT", label = "Current/Max Percent", text = "Current/Max Percent" },
+	{ value = "MAXPERCENT", label = "Max / Percent", text = "Max / Percent" },
+	{ value = "PERCENTMAX", label = "Percent / Max", text = "Percent / Max" },
+	{ value = "PERCENTCUR", label = "Percent / Current", text = "Percent / Current" },
+	{ value = "PERCENTCURMAX", label = "Percent / Current / Max", text = "Percent / Current / Max" },
+	{ value = "NONE", label = "None", text = "None" },
+}
+
 H.delimiterOptions = {
 	{ value = " ", label = "Space", text = "Space" },
 	{ value = "  ", label = "Double space", text = "Double space" },
