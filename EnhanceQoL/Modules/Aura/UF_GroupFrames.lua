@@ -109,11 +109,52 @@ local EDIT_MODE_SAMPLE_MAX = 100
 -- local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID|PLAYER"
 local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID_IN_COMBAT|PLAYER"
 local AURA_FILTER_HARMFUL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY"
-local AURA_FILTER_HARMFUL_ALL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE"
+local AURA_FILTER_DISPELLABLE = "HARMFUL|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE"
 local AURA_FILTER_BIG_DEFENSIVE = "HELPFUL|BIG_DEFENSIVE"
 local function dprint(...)
 	if not (GF and GF._debugAuras) then return end
 	print("|cff00ff98EQOL GF|r:", ...)
+end
+local function dprintDispel(...)
+	if not (GF and GF._debugDispel) then return end
+	print("|cff00ff98EQOL GF Dispel|r:", ...)
+end
+local function dprintDispel(...)
+	if not (GF and GF._debugDispel) then return end
+	print("|cff00ff98EQOL GF Dispel|r:", ...)
+end
+
+local debuffinfo = {
+	[1] = DEBUFF_TYPE_MAGIC_COLOR,
+	[2] = DEBUFF_TYPE_CURSE_COLOR,
+	[3] = DEBUFF_TYPE_DISEASE_COLOR,
+	[4] = DEBUFF_TYPE_POISON_COLOR,
+	[5] = DEBUFF_TYPE_BLEED_COLOR,
+	[0] = DEBUFF_TYPE_NONE_COLOR,
+}
+local dispelIndexByName = {
+	Magic = 1,
+	Curse = 2,
+	Disease = 3,
+	Poison = 4,
+	Bleed = 5,
+	None = 0,
+}
+local function getDebuffColorFromName(name)
+	local idx = dispelIndexByName[name] or 0
+	local col = debuffinfo[idx] or debuffinfo[0]
+	if not col then return nil end
+	if col.GetRGBA then return col:GetRGBA() end
+	if col.GetRGB then return col:GetRGB() end
+	if col.r then return col.r, col.g, col.b, col.a end
+	return col[1], col[2], col[3], col[4]
+end
+local colorcurve = C_CurveUtil and C_CurveUtil.CreateColorCurve() or nil
+if colorcurve and Enum.LuaCurveType and Enum.LuaCurveType.Step then
+	colorcurve:SetType(Enum.LuaCurveType.Step)
+	for dispeltype, v in pairs(debuffinfo) do
+		colorcurve:AddPoint(dispeltype, v)
+	end
 end
 
 local function resolveBorderTexture(key)
@@ -721,6 +762,11 @@ local DEFAULTS = {
 				alpha = 0.55,
 				offlineAlpha = 0.4,
 			},
+			dispelTint = {
+				enabled = true,
+				alpha = 0.25,
+				showSample = false,
+			},
 		},
 		roleIcon = {
 			enabled = true,
@@ -778,6 +824,7 @@ local DEFAULTS = {
 				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showDispelIcon = true,
 				showCooldownText = false,
 				cooldownAnchor = "CENTER",
 				cooldownOffset = { x = 0, y = 0 },
@@ -1000,6 +1047,11 @@ local DEFAULTS = {
 				alpha = 0.55,
 				offlineAlpha = 0.4,
 			},
+			dispelTint = {
+				enabled = true,
+				alpha = 0.25,
+				showSample = false,
+			},
 		},
 		roleIcon = {
 			enabled = true,
@@ -1028,6 +1080,7 @@ local DEFAULTS = {
 				y = 0,
 				showTooltip = true,
 				showCooldown = true,
+				showDispelIcon = true,
 				showCooldownText = false,
 				cooldownAnchor = "CENTER",
 				cooldownOffset = { x = 0, y = 0 },
@@ -1226,6 +1279,7 @@ local function updateButtonConfig(self, cfg)
 	st._wantsAbsorb = (hc.absorbEnabled ~= false) or (hc.healAbsorbEnabled ~= false)
 	st._wantsStatusText = scfg and scfg.unitStatus and scfg.unitStatus.enabled ~= false
 	st._wantsRangeFade = scfg and scfg.rangeFade and scfg.rangeFade.enabled ~= false
+	st._wantsDispelTint = scfg and scfg.dispelTint and scfg.dispelTint.enabled ~= false
 
 	local wantsPower = true
 	local powerHeight = cfg.powerHeight
@@ -1311,6 +1365,23 @@ function GF:BuildButton(self)
 	st.barGroup:SetAllPoints(self)
 	-- Border handling (same pattern as UF.lua: border lives on a dedicated child frame)
 	setBackdrop(st.barGroup, cfg.border)
+	if not st.dispelTint then
+		st.dispelTint = CreateFrame("Frame", nil, st.barGroup)
+		st.dispelTint:SetAllPoints(st.barGroup)
+		st.dispelTintBackground = st.dispelTint:CreateTexture(nil, "ARTWORK", nil, -6)
+		st.dispelTintBackground:SetAllPoints(st.dispelTint)
+		if st.dispelTintBackground.SetAtlas then
+			st.dispelTintBackground:SetAtlas("RaidFrame-Dispel-Fill", true)
+		end
+		st.dispelTintGradient = st.dispelTint:CreateTexture(nil, "ARTWORK", nil, -5)
+		st.dispelTintGradient:SetAllPoints(st.dispelTint)
+		st.dispelTintBorder = st.dispelTint:CreateTexture(nil, "ARTWORK", nil, -5)
+		st.dispelTintBorder:SetAllPoints(st.dispelTint)
+		if st.dispelTintBorder.SetAtlas then
+			st.dispelTintBorder:SetAtlas("RaidFrame-DispelHighlight", true)
+		end
+		st.dispelTint:Hide()
+	end
 
 	-- Health bar
 	if not st.health then
@@ -1367,6 +1438,14 @@ function GF:BuildButton(self)
 	if not st.powerTextLayer then
 		st.powerTextLayer = CreateFrame("Frame", nil, st.power)
 		st.powerTextLayer:SetAllPoints(st.power)
+	end
+	if st.dispelTint then
+		if st.dispelTint.GetParent and st.dispelTint:GetParent() ~= st.healthTextLayer then st.dispelTint:SetParent(st.healthTextLayer) end
+		if st.dispelTint.SetFrameLevel and st.healthTextLayer then
+			local lvl = st.healthTextLayer:GetFrameLevel() or 0
+			st.dispelTint:SetFrameLevel(lvl)
+		end
+		st.dispelTint:SetAllPoints(st.barGroup)
 	end
 
 	-- Mirror your UF.lua text triplets (Left/Center/Right) so you can expand easily.
@@ -2113,6 +2192,13 @@ local function isAuraBigDefensive(unit, aura, externalFilter)
 	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, externalFilter)
 end
 
+local function isAuraDispellable(unit, aura, dispelFilter)
+	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and dispelFilter) then return false end
+	local res = C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, dispelFilter)
+	if issecretvalue and issecretvalue(res) then return false end
+	return not res
+end
+
 local AURA_TYPE_META = {
 	buff = {
 		containerKey = "buffContainer",
@@ -2300,6 +2386,7 @@ function GF:LayoutAuras(self)
 			style.padding = spacing
 			style.showTooltip = typeCfg.showTooltip ~= false
 			style.showCooldown = typeCfg.showCooldown ~= false
+			style.blizzardDispelBorder = typeCfg.showDispelIcon == true
 			if typeCfg.showCooldownText ~= nil then style.showCooldownText = typeCfg.showCooldownText end
 			style.cooldownAnchor = typeCfg.cooldownAnchor
 			style.cooldownOffset = typeCfg.cooldownOffset
@@ -2454,10 +2541,12 @@ local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, har
 	if not (unit and st and updateInfo and AuraUtil and AuraUtil.updateAuraCacheFromEvent) then return end
 	local cache = getAuraCache(st)
 	local externalCache = getAuraCache(st, "externals")
+	local dispelCache = getAuraCache(st, "dispel")
 	if not cache then return end
 	local wantsHelpful = ac and (ac.buff and ac.buff.enabled ~= false) or false
 	local wantsHarmful = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
 	local wantsExternals = ac and (ac.externals and ac.externals.enabled ~= false) or false
+	local wantsDispel = st._wantsDispelTint == true
 	dprint(
 		"AuraCache:update",
 		unit,
@@ -2483,6 +2572,13 @@ local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, har
 			helpfulFilter = AURA_FILTER_BIG_DEFENSIVE,
 		}) end
 	end
+	if wantsDispel then
+		if dispelCache then AuraUtil.updateAuraCacheFromEvent(dispelCache, unit, updateInfo, {
+			showHelpful = false,
+			showHarmful = true,
+			harmfulFilter = AURA_FILTER_DISPELLABLE,
+		}) end
+	end
 end
 
 function GF:UpdateAuras(self, updateInfo)
@@ -2499,6 +2595,7 @@ function GF:UpdateAuras(self, updateInfo)
 			hideAuraButtons(st.debuffButtons, 1)
 			hideAuraButtons(st.externalButtons, 1)
 			st._auraSampleActive = nil
+			GF:UpdateDispelTint(self, nil, nil)
 			return
 		end
 		dprint("UpdateAuras", unit or "nil", "editmode", tostring(inEditMode), "preview", tostring(self._eqolPreview))
@@ -2512,16 +2609,21 @@ function GF:UpdateAuras(self, updateInfo)
 		hideAuraButtons(st.debuffButtons, 1)
 		hideAuraButtons(st.externalButtons, 1)
 		st._auraSampleActive = nil
+		GF:UpdateDispelTint(self, nil, nil)
 		return
 	end
-	if not (unit and C_UnitAuras) then return end
+	if not (unit and C_UnitAuras) then
+		GF:UpdateDispelTint(self, nil, nil)
+		return
+	end
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
 	if cfg then syncAurasEnabled(cfg) end
 	local wantsAuras = st._wantsAuras
 	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
+	local wantsDispelTint = st._wantsDispelTint == true
 	dprint("UpdateAuras", unit, "wants", tostring(wantsAuras), "enabled", tostring(ac.enabled))
-	if wantsAuras == false then
+	if wantsAuras == false and not wantsDispelTint then
 		if st.buffContainer then st.buffContainer:Hide() end
 		if st.debuffContainer then st.debuffContainer:Hide() end
 		if st.externalContainer then st.externalContainer:Hide() end
@@ -2530,45 +2632,80 @@ function GF:UpdateAuras(self, updateInfo)
 		hideAuraButtons(st.externalButtons, 1)
 		return
 	end
+	if wantsAuras == false then
+		if st.buffContainer then st.buffContainer:Hide() end
+		if st.debuffContainer then st.debuffContainer:Hide() end
+		if st.externalContainer then st.externalContainer:Hide() end
+		hideAuraButtons(st.buffButtons, 1)
+		hideAuraButtons(st.debuffButtons, 1)
+		hideAuraButtons(st.externalButtons, 1)
+	end
 
 	st._auraSampleActive = nil
 
-	local wantBuff = ac.buff and ac.buff.enabled ~= false
-	local wantDebuff = ac.debuff and ac.debuff.enabled ~= false
-	local wantExternals = ac.externals and ac.externals.enabled ~= false
-	if
-		not st._auraLayout
-		or (wantBuff and not (st._auraLayout.buff and st._auraLayout.buff.key))
-		or (wantDebuff and not (st._auraLayout.debuff and st._auraLayout.debuff.key))
-		or (wantExternals and not (st._auraLayout.externals and st._auraLayout.externals.key))
-	then
-		GF:LayoutAuras(self)
+	local wantBuff = wantsAuras and ac.buff and ac.buff.enabled ~= false
+	local wantDebuff = wantsAuras and ac.debuff and ac.debuff.enabled ~= false
+	local wantExternals = wantsAuras and ac.externals and ac.externals.enabled ~= false
+	if wantsAuras then
+		if
+			not st._auraLayout
+			or (wantBuff and not (st._auraLayout.buff and st._auraLayout.buff.key))
+			or (wantDebuff and not (st._auraLayout.debuff and st._auraLayout.debuff.key))
+			or (wantExternals and not (st._auraLayout.externals and st._auraLayout.externals.key))
+		then
+			GF:LayoutAuras(self)
+		end
 	end
 	local helpfulFilter = AURA_FILTER_HELPFUL
-	local harmfulFilter = (unit == "player") and AURA_FILTER_HARMFUL_ALL or AURA_FILTER_HARMFUL
+	local harmfulFilter = AURA_FILTER_HARMFUL
+	local dispelFilter = AURA_FILTER_DISPELLABLE
 	local externalFilter = AURA_FILTER_BIG_DEFENSIVE
 	local cache = getAuraCache(st)
 	local externalCache = getAuraCache(st, "externals")
+	local dispelCache = getAuraCache(st, "dispel")
 	if not updateInfo or updateInfo.isFullUpdate then
 		dprint("UpdateAuras", unit, "fullScan", true, "filters", helpfulFilter or "nil", harmfulFilter or "nil")
-		fullScanGroupAuras(unit, cache, (wantBuff and helpfulFilter) or nil, (wantDebuff and harmfulFilter) or nil)
+		if wantsAuras then
+			fullScanGroupAuras(unit, cache, (wantBuff and helpfulFilter) or nil, (wantDebuff and harmfulFilter) or nil)
+		elseif cache then
+			resetAuraCache(cache)
+		end
 		if wantExternals and externalCache then
 			fullScanGroupAuras(unit, externalCache, externalFilter, nil)
 		elseif externalCache then
 			resetAuraCache(externalCache)
 		end
+		if wantsDispelTint and dispelCache then
+			fullScanGroupAuras(unit, dispelCache, nil, dispelFilter)
+		elseif dispelCache then
+			resetAuraCache(dispelCache)
+		end
 		dprint("AuraCache:full", unit, "count", cache and cache.order and #cache.order or 0)
-		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
-		updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
-		updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
+		if wantsAuras then
+			updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
+			updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
+			updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
+		end
+		if wantsDispelTint then
+			GF:UpdateDispelTint(self, dispelCache or cache, dispelFilter)
+		else
+			GF:UpdateDispelTint(self, nil, nil)
+		end
 		return
 	end
 
 	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
 	dprint("UpdateAuras", unit, "partial", true)
-	updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
-	updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
-	updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
+	if wantsAuras then
+		updateAuraType(self, unit, st, ac, "buff", cache, helpfulFilter, harmfulFilter, externalFilter)
+		updateAuraType(self, unit, st, ac, "debuff", cache, helpfulFilter, harmfulFilter, externalFilter)
+		updateAuraType(self, unit, st, ac, "externals", externalCache or cache, externalFilter, harmfulFilter, externalFilter)
+	end
+	if wantsDispelTint then
+		GF:UpdateDispelTint(self, dispelCache or cache, dispelFilter)
+	else
+		GF:UpdateDispelTint(self, nil, nil)
+	end
 end
 
 function GF:UpdateSampleAuras(self)
@@ -2577,6 +2714,9 @@ function GF:UpdateSampleAuras(self)
 	if not (st and AuraUtil) then return end
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
+	local scfg = cfg and cfg.status or {}
+	local wantsDispelTint = scfg and scfg.dispelTint and scfg.dispelTint.enabled ~= false
+	st._wantsDispelTint = wantsDispelTint
 	if cfg then syncAurasEnabled(cfg) end
 	local wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false
 	if ac.enabled == true then wantsAuras = true end
@@ -2590,6 +2730,11 @@ function GF:UpdateSampleAuras(self)
 		hideAuraButtons(st.debuffButtons, 1)
 		hideAuraButtons(st.externalButtons, 1)
 		st._auraSampleActive = nil
+		if wantsDispelTint then
+			GF:UpdateDispelTint(self, nil, nil, true)
+		else
+			GF:UpdateDispelTint(self, nil, nil)
+		end
 		return
 	end
 
@@ -2708,6 +2853,11 @@ function GF:UpdateSampleAuras(self)
 	updateSampleType("buff")
 	updateSampleType("debuff")
 	updateSampleType("externals")
+	if wantsDispelTint then
+		GF:UpdateDispelTint(self, nil, nil, true)
+	else
+		GF:UpdateDispelTint(self, nil, nil)
+	end
 	st._auraSampleActive = true
 end
 
@@ -2857,6 +3007,82 @@ function GF:UpdateStatusText(self)
 	else
 		st.statusText:SetText("")
 		st.statusText:Hide()
+	end
+end
+
+function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
+	local st = getState(self)
+	if not (st and st.dispelTint) then return end
+	local kind = self._eqolGroupKind or "party"
+	local cfg = self._eqolCfg or getCfg(kind)
+	local scfg = cfg and cfg.status or {}
+	local dcfg = scfg.dispelTint or {}
+	if dcfg.enabled == false then
+		st.dispelTint:Hide()
+		return
+	end
+	if allowSample then
+		local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+		local showSample = dcfg.showSample
+		if showSample == nil then showSample = defDispel.showSample == true end
+		if not showSample then
+			st.dispelTint:Hide()
+			return
+		end
+	end
+	local alpha = dcfg.alpha
+	if alpha == nil then alpha = 0.25 end
+	if allowSample then
+		local r, g, b = getDebuffColorFromName("Magic")
+		if r then
+			if st.dispelTintBackground then st.dispelTintBackground:SetVertexColor(r, g, b, alpha) end
+			if st.dispelTintGradient then st.dispelTintGradient:SetVertexColor(r, g, b, alpha) end
+			if st.dispelTintBorder then st.dispelTintBorder:SetVertexColor(r, g, b, alpha) end
+			st.dispelTint:Show()
+		else
+			st.dispelTint:Hide()
+		end
+		return
+	end
+	local unit = getUnit(self)
+	if not (unit and cache and cache.order and cache.auras) then
+		st.dispelTint:Hide()
+		return
+	end
+	local auras = cache.auras
+	local order = cache.order
+	local r, g, b
+	local found = false
+	for i = 1, #order do
+		local auraId = order[i]
+		local aura = auraId and auras[auraId]
+		if aura and isAuraDispellable(unit, aura, dispelFilter or AURA_FILTER_DISPELLABLE) then
+			found = true
+			if not aura.isSample and aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
+				local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, colorcurve)
+				if color then
+					if color.GetRGBA then
+						r, g, b = color:GetRGBA()
+					elseif color.r then
+						r, g, b = color.r, color.g, color.b
+					end
+				end
+			end
+			if not r then
+				r, g, b = getDebuffColorFromName(aura.dispelName or "None")
+			end
+			break
+		end
+	end
+	if r then
+		if st.dispelTintBackground then st.dispelTintBackground:SetVertexColor(r, g or 0, b or 0, alpha) end
+		if st.dispelTintGradient then st.dispelTintGradient:SetVertexColor(r, g or 0, b or 0, alpha) end
+		if st.dispelTintBorder then st.dispelTintBorder:SetVertexColor(r, g or 0, b or 0, alpha) end
+		st.dispelTint:Show()
+		dprintDispel("DispelTint", unit, "found", tostring(found), "color", tostring(r), tostring(g), tostring(b))
+	else
+		st.dispelTint:Hide()
+		dprintDispel("DispelTint", unit, "found", tostring(found))
 	end
 end
 
@@ -3537,7 +3763,7 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	end
 	if wantsLevel then reg("UNIT_LEVEL") end
 
-	if self._eqolUFState and self._eqolUFState._wantsAuras then reg("UNIT_AURA") end
+	if self._eqolUFState and (self._eqolUFState._wantsAuras or self._eqolUFState._wantsDispelTint) then reg("UNIT_AURA") end
 	-- if self._eqolUFState and self._eqolUFState._wantsRangeFade then
 	reg("UNIT_IN_RANGE_UPDATE")
 	-- end
@@ -3920,6 +4146,22 @@ function GF:RefreshGroupIcons()
 		forEachChild(header, function(child)
 			if child then GF:UpdateGroupIcons(child) end
 		end)
+	end
+end
+
+function GF:RefreshStatusText()
+	if not isFeatureEnabled() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateStatusText(child) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateStatusText(btn) end
+			end
+		end
 	end
 end
 
@@ -7007,6 +7249,100 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
+			name = "Dispel tint",
+			kind = SettingType.Collapsible,
+			id = "dispeltint",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Enable dispel tint",
+			kind = SettingType.Checkbox,
+			field = "dispelTintEnabled",
+			parentId = "dispeltint",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.enabled == nil then return def.enabled ~= false end
+				return dt.enabled == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintEnabled", cfg.status.dispelTint.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Show sample",
+			kind = SettingType.Checkbox,
+			field = "dispelTintSample",
+			parentId = "dispeltint",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.showSample == nil then return def.showSample == true end
+				return dt.showSample == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.showSample = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintSample", cfg.status.dispelTint.showSample, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.enabled == nil then return def.enabled ~= false end
+				return dt.enabled == true
+			end,
+		},
+		{
+			name = "Tint alpha",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintAlpha",
+			parentId = "dispeltint",
+			minValue = 0,
+			maxValue = 1,
+			valueStep = 0.01,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.alpha or def.alpha or 0.25
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.alpha = clampNumber(value, 0, 1, cfg.status.dispelTint.alpha or 0.25)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintAlpha", cfg.status.dispelTint.alpha, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.enabled == nil then return def.enabled ~= false end
+				return dt.enabled == true
+			end,
+		},
+		{
 			name = "Group icons",
 			kind = SettingType.Collapsible,
 			id = "groupicons",
@@ -9134,6 +9470,26 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
+			name = "Show dispel icon",
+			kind = SettingType.Checkbox,
+			field = "debuffShowDispelIcon",
+			parentId = "debuffs",
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].auras and DEFAULTS[kind].auras.debuff) or {}
+				if ac.debuff.showDispelIcon == nil then return def.showDispelIcon ~= false end
+				return ac.debuff.showDispelIcon ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				ac.debuff.showDispelIcon = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "debuffShowDispelIcon", ac.debuff.showDispelIcon, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
 			name = "",
 			kind = SettingType.Divider,
 			parentId = "debuffs",
@@ -10654,6 +11010,9 @@ local function applyEditModeData(kind, data)
 		or data.statusTextAnchor ~= nil
 		or data.statusTextOffsetX ~= nil
 		or data.statusTextOffsetY ~= nil
+		or data.dispelTintEnabled ~= nil
+		or data.dispelTintAlpha ~= nil
+		or data.dispelTintSample ~= nil
 	then
 		cfg.status = cfg.status or {}
 	end
@@ -10707,6 +11066,14 @@ local function applyEditModeData(kind, data)
 		if data.statusTextShowAFK ~= nil then cfg.status.unitStatus.showAFK = data.statusTextShowAFK and true or false end
 		if data.statusTextShowDND ~= nil then cfg.status.unitStatus.showDND = data.statusTextShowDND and true or false end
 		if data.statusTextHideHealthTextOffline ~= nil then cfg.status.unitStatus.hideHealthTextWhenOffline = data.statusTextHideHealthTextOffline and true or false end
+	end
+	if data.dispelTintEnabled ~= nil or data.dispelTintAlpha ~= nil or data.dispelTintSample ~= nil then
+		cfg.status.dispelTint = cfg.status.dispelTint or {}
+		if data.dispelTintEnabled ~= nil then cfg.status.dispelTint.enabled = data.dispelTintEnabled and true or false end
+		if data.dispelTintAlpha ~= nil then
+			cfg.status.dispelTint.alpha = clampNumber(data.dispelTintAlpha, 0, 1, cfg.status.dispelTint.alpha or 0.25)
+		end
+		if data.dispelTintSample ~= nil then cfg.status.dispelTint.showSample = data.dispelTintSample and true or false end
 	end
 	if data.raidIconEnabled ~= nil or data.raidIconSize ~= nil or data.raidIconPoint ~= nil or data.raidIconOffsetX ~= nil or data.raidIconOffsetY ~= nil then
 		cfg.status.raidIcon = cfg.status.raidIcon or {}
@@ -10902,6 +11269,7 @@ local function applyEditModeData(kind, data)
 	if data.debuffPerRow ~= nil then ac.debuff.perRow = data.debuffPerRow end
 	if data.debuffMax ~= nil then ac.debuff.max = data.debuffMax end
 	if data.debuffSpacing ~= nil then ac.debuff.spacing = data.debuffSpacing end
+	if data.debuffShowDispelIcon ~= nil then ac.debuff.showDispelIcon = data.debuffShowDispelIcon and true or false end
 	if data.debuffCooldownTextEnabled ~= nil then ac.debuff.showCooldownText = data.debuffCooldownTextEnabled and true or false end
 	if data.debuffCooldownTextAnchor ~= nil then ac.debuff.cooldownAnchor = data.debuffCooldownTextAnchor end
 	if data.debuffCooldownTextOffsetX ~= nil or data.debuffCooldownTextOffsetY ~= nil then
@@ -11014,6 +11382,7 @@ function GF:EnsureEditMode()
 			local defBuff = defAuras.buff or {}
 			local defDebuff = defAuras.debuff or {}
 			local defExt = defAuras.externals or {}
+			local defDispel = def.status and def.status.dispelTint or {}
 			local hcBackdrop = hc.backdrop or {}
 			local defHBackdrop = defH.backdrop or {}
 			local pcfgBackdrop = pcfg.backdrop or {}
@@ -11140,6 +11509,13 @@ function GF:EnsureEditMode()
 				statusTextHideHealthTextOffline = (sc.unitStatus and sc.unitStatus.hideHealthTextWhenOffline)
 					or (def.status and def.status.unitStatus and def.status.unitStatus.hideHealthTextWhenOffline)
 					or false,
+				dispelTintEnabled = (sc.dispelTint and sc.dispelTint.enabled ~= nil)
+						and (sc.dispelTint.enabled ~= false)
+					or ((sc.dispelTint == nil or sc.dispelTint.enabled == nil) and defDispel.enabled ~= false),
+				dispelTintAlpha = (sc.dispelTint and sc.dispelTint.alpha) or defDispel.alpha or 0.25,
+				dispelTintSample = (sc.dispelTint and sc.dispelTint.showSample ~= nil)
+						and (sc.dispelTint.showSample == true)
+					or ((sc.dispelTint == nil or sc.dispelTint.showSample == nil) and defDispel.showSample == true),
 				raidIconEnabled = (sc.raidIcon and sc.raidIcon.enabled) ~= false,
 				raidIconSize = (sc.raidIcon and sc.raidIcon.size) or 18,
 				raidIconPoint = (sc.raidIcon and sc.raidIcon.point) or "TOP",
@@ -11217,6 +11593,7 @@ function GF:EnsureEditMode()
 				debuffPerRow = ac.debuff.perRow or 6,
 				debuffMax = ac.debuff.max or 6,
 				debuffSpacing = ac.debuff.spacing or 2,
+				debuffShowDispelIcon = (ac.debuff.showDispelIcon ~= nil and ac.debuff.showDispelIcon ~= false) or (ac.debuff.showDispelIcon == nil and defDebuff.showDispelIcon ~= false),
 				debuffCooldownTextEnabled = (ac.debuff.showCooldownText ~= nil and ac.debuff.showCooldownText ~= false) or (ac.debuff.showCooldownText == nil and defDebuff.showCooldownText ~= false),
 				debuffCooldownTextAnchor = ac.debuff.cooldownAnchor or defDebuff.cooldownAnchor or "CENTER",
 				debuffCooldownTextOffsetX = (ac.debuff.cooldownOffset and ac.debuff.cooldownOffset.x) or (defDebuff.cooldownOffset and defDebuff.cooldownOffset.x) or 0,
@@ -11350,6 +11727,7 @@ registerFeatureEvents = function(frame)
 	if not frame then return end
 	if frame.RegisterEvent then
 		frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+		frame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 		frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 		frame:RegisterEvent("PARTY_LEADER_CHANGED")
 		frame:RegisterEvent("PLAYER_ROLES_ASSIGNED")
@@ -11363,6 +11741,7 @@ unregisterFeatureEvents = function(frame)
 	if not frame then return end
 	if frame.UnregisterEvent then
 		frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+		frame:UnregisterEvent("PLAYER_FLAGS_CHANGED")
 		frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
 		frame:UnregisterEvent("PARTY_LEADER_CHANGED")
 		frame:UnregisterEvent("PLAYER_ROLES_ASSIGNED")
@@ -11398,9 +11777,12 @@ do
 			GF:RefreshRaidIcons()
 		elseif event == "PLAYER_TARGET_CHANGED" then
 			GF:RefreshTargetHighlights()
+		elseif event == "PLAYER_FLAGS_CHANGED" then
+			GF:RefreshStatusText()
 		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" or event == "PARTY_LEADER_CHANGED" then
 			GF:RefreshRoleIcons()
 			GF:RefreshGroupIcons()
+			if event == "GROUP_ROSTER_UPDATE" then GF:RefreshStatusText() end
 		elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
 			GF:RefreshPowerVisibility()
 		end

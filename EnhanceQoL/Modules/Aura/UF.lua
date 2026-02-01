@@ -3682,11 +3682,17 @@ local function updateUnitStatusIndicator(cfg, unit)
 		return
 	end
 	local statusTag
-	if UnitIsConnected and UnitIsConnected(unit) == false then
+	local connected = UnitIsConnected and UnitIsConnected(unit)
+	if issecretvalue and issecretvalue(connected) then connected = nil end
+	local isAFK = UnitIsAFK and UnitIsAFK(unit)
+	if issecretvalue and issecretvalue(isAFK) then isAFK = nil end
+	local isDND = UnitIsDND and UnitIsDND(unit)
+	if issecretvalue and issecretvalue(isDND) then isDND = nil end
+	if connected == false then
 		statusTag = PLAYER_OFFLINE or "Offline"
-	elseif UnitIsAFK and UnitIsAFK(unit) then
+	elseif isAFK == true then
 		statusTag = DEFAULT_AFK_MESSAGE or "AFK"
-	elseif UnitIsDND and UnitIsDND(unit) then
+	elseif isDND == true then
 		statusTag = DEFAULT_DND_MESSAGE or "DND"
 	end
 	if not statusTag and allowSample then statusTag = DEFAULT_AFK_MESSAGE or "AFK" end
