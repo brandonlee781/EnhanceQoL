@@ -690,6 +690,10 @@ local DEFAULTS = {
 				color = { 1, 1, 1, 1 },
 				anchor = "CENTER",
 				offset = { x = 0, y = 0 },
+				showOffline = true,
+				showAFK = false,
+				showDND = false,
+				hideHealthTextWhenOffline = false,
 			},
 			rangeFade = {
 				enabled = true,
@@ -921,6 +925,10 @@ local DEFAULTS = {
 				color = { 1, 1, 1, 1 },
 				anchor = "CENTER",
 				offset = { x = 0, y = 0 },
+				showOffline = true,
+				showAFK = false,
+				showDND = false,
+				hideHealthTextWhenOffline = false,
 			},
 			rangeFade = {
 				enabled = true,
@@ -2371,9 +2379,28 @@ function GF:UpdateAuras(self, updateInfo)
 	if not (st and AuraUtil) then return end
 	local unit = getUnit(self)
 	local inEditMode = isEditModeActive()
-	if inEditMode or self._eqolPreview then
+	if inEditMode then
+		if GF and GF._editModeSampleAuras == false then
+			if st.buffContainer then st.buffContainer:Hide() end
+			if st.debuffContainer then st.debuffContainer:Hide() end
+			if st.externalContainer then st.externalContainer:Hide() end
+			hideAuraButtons(st.buffButtons, 1)
+			hideAuraButtons(st.debuffButtons, 1)
+			hideAuraButtons(st.externalButtons, 1)
+			st._auraSampleActive = nil
+			return
+		end
 		dprint("UpdateAuras", unit or "nil", "editmode", tostring(inEditMode), "preview", tostring(self._eqolPreview))
 		GF:UpdateSampleAuras(self)
+		return
+	elseif self._eqolPreview then
+		if st.buffContainer then st.buffContainer:Hide() end
+		if st.debuffContainer then st.debuffContainer:Hide() end
+		if st.externalContainer then st.externalContainer:Hide() end
+		hideAuraButtons(st.buffButtons, 1)
+		hideAuraButtons(st.debuffButtons, 1)
+		hideAuraButtons(st.externalButtons, 1)
+		st._auraSampleActive = nil
 		return
 	end
 	if not (unit and C_UnitAuras) then return end
@@ -2681,14 +2708,32 @@ function GF:UpdateStatusText(self)
 		return
 	end
 	local statusTag
+	local showOffline = us.showOffline
+	if showOffline == nil then showOffline = true end
+	local showAFK = us.showAFK == true
+	local showDND = us.showDND == true
 	if unit and UnitIsConnected and UnitIsConnected(unit) == false then
-		statusTag = PLAYER_OFFLINE or "Offline"
+		if showOffline then
+			statusTag = PLAYER_OFFLINE or "Offline"
+		end
 	elseif unit and UnitIsAFK and UnitIsAFK(unit) then
-		statusTag = DEFAULT_AFK_MESSAGE or "AFK"
+		if showAFK then
+			statusTag = DEFAULT_AFK_MESSAGE or "AFK"
+		end
 	elseif unit and UnitIsDND and UnitIsDND(unit) then
-		statusTag = DEFAULT_DND_MESSAGE or "DND"
+		if showDND then
+			statusTag = DEFAULT_DND_MESSAGE or "DND"
+		end
 	end
-	if not statusTag and allowSample then statusTag = DEFAULT_AFK_MESSAGE or "AFK" end
+	if not statusTag and allowSample then
+		if showOffline then
+			statusTag = PLAYER_OFFLINE or "Offline"
+		elseif showAFK then
+			statusTag = DEFAULT_AFK_MESSAGE or "AFK"
+		elseif showDND then
+			statusTag = DEFAULT_DND_MESSAGE or "DND"
+		end
+	end
 	if statusTag then
 		st.statusText:SetText(statusTag)
 		local col = us.color or { 1, 1, 1, 1 }
@@ -2891,6 +2936,16 @@ function GF:UpdateHealthValue(self)
 	local centerMode = (hc.textCenter ~= nil) and hc.textCenter or defH.textCenter or "NONE"
 	local rightMode = (hc.textRight ~= nil) and hc.textRight or defH.textRight or "NONE"
 	local hasText = (leftMode ~= "NONE") or (centerMode ~= "NONE") or (rightMode ~= "NONE")
+	local scfg = cfg and cfg.status or {}
+	local us = scfg.unitStatus or {}
+	local hideTextOffline = us.hideHealthTextWhenOffline == true
+	if hideTextOffline and unit and UnitIsConnected and UnitIsConnected(unit) == false then
+		if st.healthTextLeft then st.healthTextLeft:SetText("") end
+		if st.healthTextCenter then st.healthTextCenter:SetText("") end
+		if st.healthTextRight then st.healthTextRight:SetText("") end
+		st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+		return
+	end
 	if hasText and (st.healthTextLeft or st.healthTextCenter or st.healthTextRight) then
 		local allowSecretText = secretHealth and addon.variables and addon.variables.isMidnight
 		if secretHealth and not allowSecretText then
@@ -3653,7 +3708,7 @@ function GF:UpdatePreviewLayout(kind)
 			if btn._eqolUFState then
 				GF:LayoutButton(btn)
 				GF:UpdateAll(btn)
-				if btn._eqolPreview then GF:UpdateSampleAuras(btn) end
+				if btn._eqolPreview then GF:UpdateAuras(btn) end
 			end
 		end
 	end
@@ -3681,6 +3736,29 @@ local function forEachChild(header, fn)
 	for _, child in ipairs(children) do
 		fn(child)
 	end
+end
+
+function GF:SetEditModeSampleAuras(show)
+	local enabled = show ~= false
+	if GF._editModeSampleAuras == enabled then return end
+	GF._editModeSampleAuras = enabled
+	if not isEditModeActive() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateAuras(child) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateAuras(btn) end
+			end
+		end
+	end
+end
+
+function GF:ToggleEditModeSampleAuras()
+	GF:SetEditModeSampleAuras(GF._editModeSampleAuras == false)
 end
 
 function GF:RefreshRoleIcons()
@@ -6387,6 +6465,405 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
+			name = "Status text",
+			kind = SettingType.Collapsible,
+			id = "statustext",
+			defaultCollapsed = true,
+		},
+		{
+			name = "Show status text",
+			kind = SettingType.Checkbox,
+			field = "statusTextEnabled",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.enabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextEnabled", cfg.status.unitStatus.enabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Show offline",
+			kind = SettingType.Checkbox,
+			field = "statusTextShowOffline",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
+				if us.showOffline == nil then return def.showOffline ~= false end
+				return us.showOffline == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.showOffline = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextShowOffline", cfg.status.unitStatus.showOffline, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Show AFK",
+			kind = SettingType.Checkbox,
+			field = "statusTextShowAFK",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
+				if us.showAFK == nil then return def.showAFK == true end
+				return us.showAFK == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.showAFK = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextShowAFK", cfg.status.unitStatus.showAFK, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Show DND",
+			kind = SettingType.Checkbox,
+			field = "statusTextShowDND",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
+				if us.showDND == nil then return def.showDND == true end
+				return us.showDND == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.showDND = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextShowDND", cfg.status.unitStatus.showDND, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Hide health text when offline",
+			kind = SettingType.Checkbox,
+			field = "statusTextHideHealthTextOffline",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
+				if us.hideHealthTextWhenOffline == nil then return def.hideHealthTextWhenOffline == true end
+				return us.hideHealthTextWhenOffline == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.hideHealthTextWhenOffline = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextHideHealthTextOffline", cfg.status.unitStatus.hideHealthTextWhenOffline, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Color",
+			kind = SettingType.Color,
+			field = "statusTextColor",
+			parentId = "statustext",
+			hasOpacity = true,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus and DEFAULTS[kind].status.unitStatus.color) or { 1, 1, 1, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus and DEFAULTS[kind].status.unitStatus.color)
+					or { 1, 1, 1, 1 }
+				local r, g, b, a = unpackColor(us.color, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.color = { value.r or 1, value.g or 1, value.b or 1, value.a or 1 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextColor", cfg.status.unitStatus.color, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Font size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "statusTextFontSize",
+			parentId = "statustext",
+			minValue = 8,
+			maxValue = 100,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local hc = cfg and cfg.health or {}
+				local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+				return us.fontSize or hc.fontSize or defH.fontSize or 12
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.fontSize = clampNumber(value, 8, 100, cfg.status.unitStatus.fontSize or 12)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextFontSize", cfg.status.unitStatus.fontSize, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Font",
+			kind = SettingType.Dropdown,
+			field = "statusTextFont",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local hc = cfg and cfg.health or {}
+				local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+				return us.font or hc.font or defH.font or nil
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.font = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextFont", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(fontOptions()) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local sc = cfg and cfg.status or {}
+						local us = sc.unitStatus or {}
+						local hc = cfg and cfg.health or {}
+						local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+						return (us.font or hc.font or defH.font or nil) == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.status = cfg.status or {}
+						cfg.status.unitStatus = cfg.status.unitStatus or {}
+						cfg.status.unitStatus.font = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextFont", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Font outline",
+			kind = SettingType.Dropdown,
+			field = "statusTextFontOutline",
+			parentId = "statustext",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				local hc = cfg and cfg.health or {}
+				local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+				return us.fontOutline or hc.fontOutline or defH.fontOutline or "OUTLINE"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.fontOutline = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextFontOutline", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root)
+				for _, option in ipairs(outlineOptions) do
+					root:CreateRadio(option.label, function()
+						local cfg = getCfg(kind)
+						local sc = cfg and cfg.status or {}
+						local us = sc.unitStatus or {}
+						local hc = cfg and cfg.health or {}
+						local defH = (DEFAULTS[kind] and DEFAULTS[kind].health) or {}
+						return (us.fontOutline or hc.fontOutline or defH.fontOutline or "OUTLINE") == option.value
+					end, function()
+						local cfg = getCfg(kind)
+						if not cfg then return end
+						cfg.status = cfg.status or {}
+						cfg.status.unitStatus = cfg.status.unitStatus or {}
+						cfg.status.unitStatus.fontOutline = option.value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextFontOutline", option.value, nil, true) end
+						GF:ApplyHeaderAttributes(kind)
+					end)
+				end
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Anchor",
+			kind = SettingType.Dropdown,
+			field = "statusTextAnchor",
+			parentId = "statustext",
+			values = anchorOptions9,
+			height = 180,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.anchor or "CENTER"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.anchor = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextAnchor", value, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "statusTextOffsetX",
+			parentId = "statustext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return (us.offset and us.offset.x) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.offset = cfg.status.unitStatus.offset or {}
+				cfg.status.unitStatus.offset.x = clampNumber(value, -200, 200, (cfg.status.unitStatus.offset and cfg.status.unitStatus.offset.x) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextOffsetX", cfg.status.unitStatus.offset.x, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
+			name = "Offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "statusTextOffsetY",
+			parentId = "statustext",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return (us.offset and us.offset.y) or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.unitStatus = cfg.status.unitStatus or {}
+				cfg.status.unitStatus.offset = cfg.status.unitStatus.offset or {}
+				cfg.status.unitStatus.offset.y = clampNumber(value, -200, 200, (cfg.status.unitStatus.offset and cfg.status.unitStatus.offset.y) or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextOffsetY", cfg.status.unitStatus.offset.y, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local us = sc.unitStatus or {}
+				return us.enabled ~= false
+			end,
+		},
+		{
 			name = "Group icons",
 			kind = SettingType.Collapsible,
 			id = "groupicons",
@@ -8898,6 +9375,14 @@ local function applyEditModeData(kind, data)
 		or data.levelColor ~= nil
 		or data.hideLevelAtMax ~= nil
 		or data.levelClassColor ~= nil
+		or data.statusTextEnabled ~= nil
+		or data.statusTextColor ~= nil
+		or data.statusTextFontSize ~= nil
+		or data.statusTextFont ~= nil
+		or data.statusTextFontOutline ~= nil
+		or data.statusTextAnchor ~= nil
+		or data.statusTextOffsetX ~= nil
+		or data.statusTextOffsetY ~= nil
 	then
 		cfg.status = cfg.status or {}
 	end
@@ -8920,6 +9405,39 @@ local function applyEditModeData(kind, data)
 		cfg.status.levelOffset = cfg.status.levelOffset or {}
 		if data.levelOffsetX ~= nil then cfg.status.levelOffset.x = data.levelOffsetX end
 		if data.levelOffsetY ~= nil then cfg.status.levelOffset.y = data.levelOffsetY end
+	end
+	if
+		data.statusTextEnabled ~= nil
+		or data.statusTextColor ~= nil
+		or data.statusTextFontSize ~= nil
+		or data.statusTextFont ~= nil
+		or data.statusTextFontOutline ~= nil
+		or data.statusTextAnchor ~= nil
+		or data.statusTextOffsetX ~= nil
+		or data.statusTextOffsetY ~= nil
+		or data.statusTextShowOffline ~= nil
+		or data.statusTextShowAFK ~= nil
+		or data.statusTextShowDND ~= nil
+		or data.statusTextHideHealthTextOffline ~= nil
+	then
+		cfg.status.unitStatus = cfg.status.unitStatus or {}
+		if data.statusTextEnabled ~= nil then cfg.status.unitStatus.enabled = data.statusTextEnabled and true or false end
+		if data.statusTextColor ~= nil then cfg.status.unitStatus.color = data.statusTextColor end
+		if data.statusTextFontSize ~= nil then cfg.status.unitStatus.fontSize = data.statusTextFontSize end
+		if data.statusTextFont ~= nil then cfg.status.unitStatus.font = data.statusTextFont end
+		if data.statusTextFontOutline ~= nil then cfg.status.unitStatus.fontOutline = data.statusTextFontOutline end
+		if data.statusTextAnchor ~= nil then cfg.status.unitStatus.anchor = data.statusTextAnchor end
+		if data.statusTextOffsetX ~= nil or data.statusTextOffsetY ~= nil then
+			cfg.status.unitStatus.offset = cfg.status.unitStatus.offset or {}
+			if data.statusTextOffsetX ~= nil then cfg.status.unitStatus.offset.x = data.statusTextOffsetX end
+			if data.statusTextOffsetY ~= nil then cfg.status.unitStatus.offset.y = data.statusTextOffsetY end
+		end
+		if data.statusTextShowOffline ~= nil then cfg.status.unitStatus.showOffline = data.statusTextShowOffline and true or false end
+		if data.statusTextShowAFK ~= nil then cfg.status.unitStatus.showAFK = data.statusTextShowAFK and true or false end
+		if data.statusTextShowDND ~= nil then cfg.status.unitStatus.showDND = data.statusTextShowDND and true or false end
+		if data.statusTextHideHealthTextOffline ~= nil then
+			cfg.status.unitStatus.hideHealthTextWhenOffline = data.statusTextHideHealthTextOffline and true or false
+		end
 	end
 	if data.raidIconEnabled ~= nil or data.raidIconSize ~= nil or data.raidIconPoint ~= nil or data.raidIconOffsetX ~= nil or data.raidIconOffsetY ~= nil then
 		cfg.status.raidIcon = cfg.status.raidIcon or {}
@@ -9277,6 +9795,36 @@ function GF:EnsureEditMode()
 				levelAnchor = sc.levelAnchor or "RIGHT",
 				levelOffsetX = (sc.levelOffset and sc.levelOffset.x) or 0,
 				levelOffsetY = (sc.levelOffset and sc.levelOffset.y) or 0,
+				statusTextEnabled = (sc.unitStatus and sc.unitStatus.enabled) ~= false,
+				statusTextColor = (sc.unitStatus and sc.unitStatus.color)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.color)
+					or { 1, 1, 1, 1 },
+				statusTextFontSize = (sc.unitStatus and sc.unitStatus.fontSize)
+					or (cfg.health and cfg.health.fontSize)
+					or (defH and defH.fontSize)
+					or 12,
+				statusTextFont = (sc.unitStatus and sc.unitStatus.font) or (cfg.health and cfg.health.font) or (defH and defH.font) or nil,
+				statusTextFontOutline = (sc.unitStatus and sc.unitStatus.fontOutline)
+					or (cfg.health and cfg.health.fontOutline)
+					or (defH and defH.fontOutline)
+					or "OUTLINE",
+				statusTextAnchor = (sc.unitStatus and sc.unitStatus.anchor)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.anchor)
+					or "CENTER",
+				statusTextOffsetX = (sc.unitStatus and sc.unitStatus.offset and sc.unitStatus.offset.x) or 0,
+				statusTextOffsetY = (sc.unitStatus and sc.unitStatus.offset and sc.unitStatus.offset.y) or 0,
+				statusTextShowOffline = (sc.unitStatus and sc.unitStatus.showOffline)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.showOffline)
+					or true,
+				statusTextShowAFK = (sc.unitStatus and sc.unitStatus.showAFK)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.showAFK)
+					or false,
+				statusTextShowDND = (sc.unitStatus and sc.unitStatus.showDND)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.showDND)
+					or false,
+				statusTextHideHealthTextOffline = (sc.unitStatus and sc.unitStatus.hideHealthTextWhenOffline)
+					or (def.status and def.status.unitStatus and def.status.unitStatus.hideHealthTextWhenOffline)
+					or false,
 				raidIconEnabled = (sc.raidIcon and sc.raidIcon.enabled) ~= false,
 				raidIconSize = (sc.raidIcon and sc.raidIcon.size) or 18,
 				raidIconPoint = (sc.raidIcon and sc.raidIcon.point) or "TOP",
@@ -9378,6 +9926,15 @@ function GF:EnsureEditMode()
 				settingsMaxHeight = 700,
 			})
 
+			if EditMode and EditMode.RegisterButtons then
+				EditMode:RegisterButtons(EDITMODE_IDS[kind], {
+					{
+						text = "Toggle sample auras",
+						click = function() GF:ToggleEditModeSampleAuras() end,
+					},
+				})
+			end
+
 			if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then addon.EditModeLib:SetFrameResetVisible(anchor, false) end
 		end
 	end
@@ -9388,6 +9945,7 @@ end
 
 function GF:OnEnterEditMode(kind)
 	if not isFeatureEnabled() then return end
+	if GF._editModeSampleAuras == nil then GF._editModeSampleAuras = true end
 	GF:EnsureHeaders()
 	local header = GF.headers and GF.headers[kind]
 	if not header then return end
