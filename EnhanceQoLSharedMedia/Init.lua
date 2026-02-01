@@ -56,3 +56,4 @@ LSM:Register("statusbar", "EQOL: Holy", "Interface\\AddOns\\" .. addonName .. "\
 LSM:Register("statusbar", "EQOL: Thunder", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Thunder.tga")
 LSM:Register("statusbar", "EQOL: Astral", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Astral.tga")
 LSM:Register("statusbar", "EQOL: Rage", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Rage.tga")
+LSM:Register("statusbar", "EQOL: Absorb", "Interface\\AddOns\\" .. addonName .. "\\Assets\\Absorb.tga")
