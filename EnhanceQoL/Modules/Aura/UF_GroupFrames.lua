@@ -682,6 +682,20 @@ local DEFAULTS = {
 				x = 18,
 				y = -2,
 			},
+			unitStatus = {
+				enabled = true,
+				font = nil,
+				fontSize = 12,
+				fontOutline = "OUTLINE",
+				color = { 1, 1, 1, 1 },
+				anchor = "CENTER",
+				offset = { x = 0, y = 0 },
+			},
+			rangeFade = {
+				enabled = true,
+				alpha = 0.55,
+				offlineAlpha = 0.4,
+			},
 		},
 		roleIcon = {
 			enabled = true,
@@ -899,6 +913,20 @@ local DEFAULTS = {
 				x = 14,
 				y = -1,
 			},
+			unitStatus = {
+				enabled = true,
+				font = nil,
+				fontSize = 12,
+				fontOutline = "OUTLINE",
+				color = { 1, 1, 1, 1 },
+				anchor = "CENTER",
+				offset = { x = 0, y = 0 },
+			},
+			rangeFade = {
+				enabled = true,
+				alpha = 0.55,
+				offlineAlpha = 0.4,
+			},
 		},
 		roleIcon = {
 			enabled = true,
@@ -1079,6 +1107,8 @@ local function updateButtonConfig(self, cfg)
 	st._wantsName = tc.showName ~= false
 	st._wantsLevel = scfg.levelEnabled ~= false
 	st._wantsAbsorb = (hc.absorbEnabled ~= false) or (hc.healAbsorbEnabled ~= false)
+	st._wantsStatusText = scfg and scfg.unitStatus and scfg.unitStatus.enabled ~= false
+	st._wantsRangeFade = scfg and scfg.rangeFade and scfg.rangeFade.enabled ~= false
 
 	local wantsPower = true
 	local powerHeight = cfg.powerHeight
@@ -1233,6 +1263,7 @@ function GF:BuildButton(self)
 	if not st.nameText then st.nameText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 	st.name = st.nameText
 	if not st.levelText then st.levelText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+	if not st.statusText then st.statusText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 
 	local indicatorLayer = st.healthTextLayer
 	if not st.leaderIcon then st.leaderIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
@@ -1336,9 +1367,22 @@ function GF:LayoutButton(self)
 		UFHelper.applyFont(st.powerTextLeft, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
 		UFHelper.applyFont(st.powerTextCenter, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
 		UFHelper.applyFont(st.powerTextRight, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
+		if st.statusText then
+			local scfg = cfg.status or {}
+			local us = scfg.unitStatus or {}
+			UFHelper.applyFont(st.statusText, us.font or hc.font, us.fontSize or hc.fontSize or 12, us.fontOutline or hc.fontOutline)
+		end
 	end
 	layoutTexts(st.health, st.healthTextLeft, st.healthTextCenter, st.healthTextRight, cfg.health)
 	layoutTexts(st.power, st.powerTextLeft, st.powerTextCenter, st.powerTextRight, cfg.power)
+	if st.statusText then
+		local scfg = cfg.status or {}
+		local us = scfg.unitStatus or {}
+		local anchor = us.anchor or "CENTER"
+		local off = us.offset or {}
+		st.statusText:ClearAllPoints()
+		st.statusText:SetPoint(anchor, st.health, anchor, off.x or 0, off.y or 0)
+	end
 
 	local healthTexKey = getEffectiveBarTexture(cfg, hc)
 	if st.health.SetStatusBarTexture and UFHelper and UFHelper.resolveTexture then
@@ -2617,6 +2661,79 @@ function GF:UpdateLevel(self)
 	end
 end
 
+function GF:UpdateStatusText(self)
+	local st = getState(self)
+	local unit = getUnit(self)
+	if not (st and st.statusText) then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local scfg = cfg and cfg.status or {}
+	local us = scfg.unitStatus or {}
+	if st._wantsStatusText == false or us.enabled == false then
+		st.statusText:SetText("")
+		st.statusText:Hide()
+		return
+	end
+	local inEditMode = isEditModeActive()
+	local allowSample = inEditMode and self._eqolPreview
+	if UnitExists and unit and not UnitExists(unit) and not allowSample then
+		st.statusText:SetText("")
+		st.statusText:Hide()
+		return
+	end
+	local statusTag
+	if unit and UnitIsConnected and UnitIsConnected(unit) == false then
+		statusTag = PLAYER_OFFLINE or "Offline"
+	elseif unit and UnitIsAFK and UnitIsAFK(unit) then
+		statusTag = DEFAULT_AFK_MESSAGE or "AFK"
+	elseif unit and UnitIsDND and UnitIsDND(unit) then
+		statusTag = DEFAULT_DND_MESSAGE or "DND"
+	end
+	if not statusTag and allowSample then statusTag = DEFAULT_AFK_MESSAGE or "AFK" end
+	if statusTag then
+		st.statusText:SetText(statusTag)
+		local col = us.color or { 1, 1, 1, 1 }
+		st.statusText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
+		st.statusText:Show()
+	else
+		st.statusText:SetText("")
+		st.statusText:Hide()
+	end
+end
+
+function GF:UpdateRange(self, inRange)
+	local st = getState(self)
+	if not st then return end
+	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	local scfg = cfg and cfg.status or {}
+	local rcfg = scfg.rangeFade or {}
+	if rcfg.enabled == false then
+		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(1) end
+		return
+	end
+	local unit = getUnit(self)
+	if unit and UnitIsConnected and UnitIsConnected(unit) == false then
+		local offA = rcfg.offlineAlpha or rcfg.alpha or 0.55
+		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(offA) end
+		return
+	end
+	if inRange == nil and unit and UnitInRange then inRange = UnitInRange(unit) end
+	if issecretvalue and issecretvalue(inRange) then
+		if st.frame and st.frame.SetAlphaFromBoolean then st.frame:SetAlphaFromBoolean(inRange, 1, rcfg.alpha or 0.55) end
+		return
+	end
+	if inRange == nil then
+		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(1) end
+		return
+	end
+	if st.frame then
+		if st.frame.SetAlphaFromBoolean then
+			st.frame:SetAlphaFromBoolean(inRange, 1, rcfg.alpha or 0.55)
+		elseif st.frame.SetAlpha then
+			st.frame:SetAlpha(inRange and 1 or (rcfg.alpha or 0.55))
+		end
+	end
+end
+
 function GF:UpdateHealthValue(self)
 	local unit = getUnit(self)
 	local st = getState(self)
@@ -3080,6 +3197,7 @@ end
 
 function GF:UpdateAll(self)
 	GF:UpdateName(self)
+	GF:UpdateStatusText(self)
 	GF:UpdateLevel(self)
 	GF:UpdateHealth(self)
 	GF:UpdatePower(self)
@@ -3087,6 +3205,7 @@ function GF:UpdateAll(self)
 	GF:UpdateRaidIcon(self)
 	GF:UpdateGroupIcons(self)
 	GF:UpdateAuras(self)
+	GF:UpdateRange(self)
 	GF:UpdateHighlightState(self)
 end
 
@@ -3227,6 +3346,7 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	end
 
 	reg("UNIT_NAME_UPDATE")
+	if self._eqolUFState and self._eqolUFState._wantsStatusText then reg("UNIT_FLAGS") end
 	local wantsLevel = self._eqolUFState and self._eqolUFState._wantsLevel
 	if not wantsLevel and UFHelper and UFHelper.textModeUsesLevel then
 		local hc = cfg and cfg.health or {}
@@ -3240,6 +3360,7 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	if wantsLevel then reg("UNIT_LEVEL") end
 
 	if self._eqolUFState and self._eqolUFState._wantsAuras then reg("UNIT_AURA") end
+	if self._eqolUFState and self._eqolUFState._wantsRangeFade then reg("UNIT_IN_RANGE_UPDATE") end
 end
 
 function GF.UnitButton_OnAttributeChanged(self, name, value)
@@ -3281,8 +3402,12 @@ local function dispatchUnitConnection(btn)
 	GF:UpdateHealthValue(btn)
 	GF:UpdatePowerValue(btn)
 	GF:UpdateName(btn)
+	GF:UpdateStatusText(btn)
 	GF:UpdateLevel(btn)
+	GF:UpdateRange(btn)
 end
+local function dispatchUnitFlags(btn) GF:UpdateStatusText(btn) end
+local function dispatchUnitRange(btn, inRange) GF:UpdateRange(btn, inRange) end
 local function dispatchUnitAura(btn, updateInfo) GF:RequestAuraUpdate(btn, updateInfo) end
 
 local UNIT_DISPATCH = {
@@ -3296,6 +3421,8 @@ local UNIT_DISPATCH = {
 	UNIT_NAME_UPDATE = dispatchUnitName,
 	UNIT_LEVEL = dispatchUnitLevel,
 	UNIT_CONNECTION = dispatchUnitConnection,
+	UNIT_FLAGS = dispatchUnitFlags,
+	UNIT_IN_RANGE_UPDATE = dispatchUnitRange,
 	UNIT_AURA = dispatchUnitAura,
 }
 
