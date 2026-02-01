@@ -1240,10 +1240,46 @@ function AuraUtil.cacheTargetAura(aura, unit)
 	t.canActivePlayerDispel = aura.canActivePlayerDispel
 end
 
+function AuraUtil.cacheAura(cache, aura)
+	if not (cache and aura and aura.auraInstanceID) then return end
+	local id = aura.auraInstanceID
+	local auras = cache.auras
+	if not auras then return end
+	local t = auras[id]
+	if not t then
+		t = {}
+		auras[id] = t
+	end
+	t.auraInstanceID = id
+	t.spellId = aura.spellId
+	t.name = aura.name
+	t.icon = aura.icon
+	t.isHelpful = aura.isHelpful
+	t.isHarmful = aura.isHarmful
+	t.applications = aura.applications
+	t.duration = aura.duration
+	t.expirationTime = aura.expirationTime
+	t.sourceUnit = aura.sourceUnit
+	t.dispelName = aura.dispelName
+	t.canActivePlayerDispel = aura.canActivePlayerDispel
+end
+
 function AuraUtil.addTargetAuraToOrder(auraInstanceID, unit)
 	local _, order, indexById = AuraUtil.getAuraTables(unit)
 	if not order or not indexById then return end
 	if not auraInstanceID or indexById[auraInstanceID] then return end
+	local idx = #order + 1
+	order[idx] = auraInstanceID
+	indexById[auraInstanceID] = idx
+	return idx
+end
+
+function AuraUtil.addAuraToOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return nil end
+	if indexById[auraInstanceID] then return indexById[auraInstanceID] end
 	local idx = #order + 1
 	order[idx] = auraInstanceID
 	indexById[auraInstanceID] = idx
@@ -1258,6 +1294,16 @@ function AuraUtil.reindexTargetAuraOrder(startIndex, unit)
 	end
 end
 
+function AuraUtil.reindexAuraOrder(cache, startIndex)
+	if not cache then return end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return end
+	for i = startIndex or 1, #order do
+		indexById[order[i]] = i
+	end
+end
+
 function AuraUtil.removeTargetAuraFromOrder(auraInstanceID, unit)
 	local _, order, indexById = AuraUtil.getAuraTables(unit)
 	if not order or not indexById then return nil end
@@ -1267,6 +1313,90 @@ function AuraUtil.removeTargetAuraFromOrder(auraInstanceID, unit)
 	indexById[auraInstanceID] = nil
 	AuraUtil.reindexTargetAuraOrder(idx, unit)
 	return idx
+end
+
+function AuraUtil.removeAuraFromOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return nil end
+	local idx = indexById[auraInstanceID]
+	if not idx then return nil end
+	table.remove(order, idx)
+	indexById[auraInstanceID] = nil
+	AuraUtil.reindexAuraOrder(cache, idx)
+	return idx
+end
+
+function AuraUtil.updateAuraCacheFromEvent(cache, unit, updateInfo, opts)
+	if not (cache and unit and updateInfo) then return nil end
+	local auras = cache.auras
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (auras and order and indexById) then return nil end
+	local showHelpful = opts and opts.showHelpful
+	local showHarmful = opts and opts.showHarmful
+	local helpfulFilter = opts and opts.helpfulFilter
+	local harmfulFilter = opts and opts.harmfulFilter
+	local hidePermanent = opts and opts.hidePermanent
+	local trackFirst = opts and opts.trackFirstChanged
+	local maxCount = opts and opts.maxCount
+	local firstChanged
+
+	if updateInfo.addedAuras then
+		for _, aura in ipairs(updateInfo.addedAuras) do
+			if aura and aura.auraInstanceID then
+				if hidePermanent and AuraUtil.isPermanentAura(aura, unit) then
+					if auras[aura.auraInstanceID] then
+						auras[aura.auraInstanceID] = nil
+						local idx = AuraUtil.removeAuraFromOrder(cache, aura.auraInstanceID)
+						if trackFirst and idx and maxCount and idx <= (maxCount + 1) then
+							if not firstChanged or idx < firstChanged then firstChanged = idx end
+						end
+					end
+				elseif showHarmful and harmfulFilter and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, harmfulFilter) then
+					AuraUtil.cacheAura(cache, aura)
+					local idx = AuraUtil.addAuraToOrder(cache, aura.auraInstanceID)
+					if trackFirst and idx and maxCount and idx <= maxCount then
+						if not firstChanged or idx < firstChanged then firstChanged = idx end
+					end
+				elseif showHelpful and helpfulFilter and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, helpfulFilter) then
+					AuraUtil.cacheAura(cache, aura)
+					local idx = AuraUtil.addAuraToOrder(cache, aura.auraInstanceID)
+					if trackFirst and idx and maxCount and idx <= maxCount then
+						if not firstChanged or idx < firstChanged then firstChanged = idx end
+					end
+				end
+			end
+		end
+	end
+
+	if updateInfo.updatedAuraInstanceIDs and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+		for _, inst in ipairs(updateInfo.updatedAuraInstanceIDs) do
+			if auras[inst] then
+				local data = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, inst)
+				if data then AuraUtil.cacheAura(cache, data) end
+			end
+			if trackFirst then
+				local idx = indexById[inst]
+				if idx and maxCount and idx <= maxCount then
+					if not firstChanged or idx < firstChanged then firstChanged = idx end
+				end
+			end
+		end
+	end
+
+	if updateInfo.removedAuraInstanceIDs then
+		for _, inst in ipairs(updateInfo.removedAuraInstanceIDs) do
+			auras[inst] = nil
+			local idx = AuraUtil.removeAuraFromOrder(cache, inst)
+			if trackFirst and idx and maxCount and idx <= (maxCount + 1) then
+				if not firstChanged or idx < firstChanged then firstChanged = idx end
+			end
+		end
+	end
+
+	return firstChanged
 end
 
 function AuraUtil.isPermanentAura(aura, unitToken)

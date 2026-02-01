@@ -2067,8 +2067,9 @@ local function ensureEditor()
 	frame.subtitle:SetText(L["CooldownPanelEditModeHeader"] or "Configure the Panels in Edit Mode")
 	frame.subtitle:SetTextColor(0.8, 0.8, 0.8, 1)
 
-	frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+	frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButtonNoScripts")
 	frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 20, 13)
+	frame.close:SetScript("OnClick", function() frame:Hide() end)
 
 	local left = CreateFrame("Frame", nil, frame, "BackdropTemplate")
 	left:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -44)
