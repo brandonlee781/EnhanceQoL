@@ -35,6 +35,7 @@ addon.general.variables.autoOpen = {
 
 local AceLocale = LibStub("AceLocale-3.0")
 addon.L = AceLocale:GetLocale(addonName)
+_G["BINDING_NAME_EQOL_TOGGLE_FRIENDLY_NPCS"] = _G.UNIT_NAMEPLATES_SHOW_FRIENDLY_NPCS
 addon.elements = {}
 addon.itemBagFilters = {}
 addon.itemBagFiltersQuality = {}

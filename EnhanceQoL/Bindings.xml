@@ -47,4 +47,11 @@
             EnhanceQoL.Aura.CooldownPanels:ToggleEditor()
         end
     </Binding>
+
+    <Binding name="EQOL_TOGGLE_FRIENDLY_NPCS"
+             category="Enhance QoL"
+             >
+        local value = C_CVar.GetCVar("nameplateShowFriendlyNpcs")
+        C_CVar.SetCVar("nameplateShowFriendlyNpcs", value == "1" and "0" or "1")
+    </Binding>
 </Bindings>

@@ -2,6 +2,10 @@
 
 ## [7.8.2] - 2026-02-01
 
+### ✨ Added
+
+- Keybinding: Toggle friendly NPC nameplates (nameplateShowFriendlyNpcs)
+
 ### 🐛 Fixed
 
 - Secret error: LFG List sorting by mythic+ score is now ignored in restricted content
