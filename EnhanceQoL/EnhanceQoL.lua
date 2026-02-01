@@ -5358,6 +5358,7 @@ local function setAllHooks()
 	end
 
 	local function SortApplicants(applicants)
+		if addon.functions.isRestrictedContent() then return end
 		if addon.db.lfgSortByRio then
 			local function SortApplicantsCB(applicantID1, applicantID2)
 				local applicantInfo1 = C_LFGList.GetApplicantInfo(applicantID1)

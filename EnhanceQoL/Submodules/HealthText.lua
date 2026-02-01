@@ -136,6 +136,10 @@ function HealthText:Update(kind, idx)
 	if not hb then return end
 	local unit = unitFor(kind, idx)
 	if unit and not UnitExists(unit) and kind ~= "player" then return end
+	if UnitIsDead(unit) then
+		applyText(hb, "")
+		return
+	end
 	applyText(hb, fmt(self.modes[kind], UnitHealth(unit), UnitHealthMax(unit), unit))
 end
 
@@ -164,6 +168,10 @@ local function ensureBarHook(hb, ctx)
 			if not textString then return end
 			local unit = unitFor(kind, idx)
 			if unit ~= "player" and not UnitExists(unit) then return end
+			if UnitIsDead(unit) then
+				textString:SetText("")
+				return
+			end
 			textString:SetText(fmt(addon.HealthText.modes[kind], UnitHealth(unit), UnitHealthMax(unit), unit))
 			textString:Show()
 			if bar.LeftText then bar.LeftText:Hide() end
@@ -177,6 +185,10 @@ local function ensureBarHook(hb, ctx)
 			if not shouldApply(kind) then return end
 			local unit = unitFor(kind, idx)
 			if unit ~= "player" and not UnitExists(unit) then return end
+			if UnitIsDead(unit) then
+				textString:SetText("")
+				return
+			end
 			textString:SetText(fmt(addon.HealthText.modes[kind], UnitHealth(unit), UnitHealthMax(unit), unit))
 			textString:Show()
 			if statusBar.LeftText then statusBar.LeftText:Hide() end
