@@ -755,6 +755,9 @@ local DEFAULTS = {
 				enabled = true,
 				alpha = 0.25,
 				showSample = false,
+				fillEnabled = true,
+				fillAlpha = 0.2,
+				fillColor = { 0, 0, 0, 1 },
 			},
 		},
 		roleIcon = {
@@ -1041,6 +1044,9 @@ local DEFAULTS = {
 				enabled = true,
 				alpha = 0.25,
 				showSample = false,
+				fillEnabled = true,
+				fillAlpha = 0.2,
+				fillColor = { 0, 0, 0, 1 },
 			},
 		},
 		roleIcon = {
@@ -1359,6 +1365,8 @@ function GF:BuildButton(self)
 		st.dispelTint = CreateFrame("Frame", nil, st.barGroup, "CompactUnitFrameDispelOverlayTemplate")
 		st.dispelTint:SetAllPoints(st.barGroup)
 		st.dispelTint:Hide()
+		-- Avoid secret taint in AuraUtil.SetAuraBorderColor by disabling the mixin helper.
+		if st.dispelTint.SetDispelType then st.dispelTint.SetDispelType = nil end
 	end
 
 	-- Health bar
@@ -3031,8 +3039,8 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 		st.dispelTint:Hide()
 		return
 	end
+	local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
 	if allowSample then
-		local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
 		local showSample = dcfg.showSample
 		if showSample == nil then showSample = defDispel.showSample == true end
 		if not showSample then
@@ -3041,16 +3049,38 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 		end
 	end
 	local alpha = dcfg.alpha
-	if alpha == nil then alpha = 0.25 end
-	if allowSample then
-		if st.dispelTint.SetDispelType then
-			st.dispelTint:SetDispelType("Magic")
-		elseif AuraUtil then
-			if st.dispelTint.Gradient then AuraUtil.SetAuraBorderColor(st.dispelTint.Gradient, "Magic") end
-			if st.dispelTint.Border then AuraUtil.SetAuraBorderColor(st.dispelTint.Border, "Magic") end
+	if alpha == nil then alpha = defDispel.alpha or 0.25 end
+	local fillEnabled = dcfg.fillEnabled
+	if fillEnabled == nil then fillEnabled = defDispel.fillEnabled ~= false end
+	local fillAlpha = dcfg.fillAlpha
+	if fillAlpha == nil then fillAlpha = defDispel.fillAlpha or 0.2 end
+	local fillColor = dcfg.fillColor or defDispel.fillColor or { 0, 0, 0, 1 }
+	local fr, fg, fb, fa = unpackColor(fillColor, { 0, 0, 0, 1 })
+	if not fillEnabled then fillAlpha = 0 end
+	local bgAlpha = fillAlpha * (fa or 1)
+	local function applyTint(r, g, b)
+		if st.dispelTint.Background then
+			-- Use a solid color so the background color choice is visible (the atlas is dark).
+			if st.dispelTint.Background.SetColorTexture then
+				st.dispelTint.Background:SetColorTexture(fr, fg, fb, 1)
+			elseif st.dispelTint.Background.SetVertexColor then
+				st.dispelTint.Background:SetVertexColor(fr, fg, fb, 1)
+			end
+			if st.dispelTint.Background.SetAlpha then st.dispelTint.Background:SetAlpha(bgAlpha) end
+			if st.dispelTint.Background.SetShown then st.dispelTint.Background:SetShown(bgAlpha > 0) end
 		end
-		if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(alpha) end
+		if st.dispelTint.Gradient then st.dispelTint.Gradient:SetVertexColor(r, g, b, alpha) end
+		if st.dispelTint.Border then st.dispelTint.Border:SetVertexColor(r, g, b, alpha) end
+		if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(1) end
 		st.dispelTint:Show()
+	end
+	if allowSample then
+		local r, g, b = getDebuffColorFromName("Magic")
+		if r then
+			applyTint(r, g, b)
+		else
+			st.dispelTint:Hide()
+		end
 		return
 	end
 	local unit = getUnit(self)
@@ -3060,26 +3090,34 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 	end
 	local auras = cache.auras
 	local order = cache.order
-	local dispelType
 	local found = false
+	local r, g, b
 	for i = 1, #order do
 		local auraId = order[i]
 		local aura = auraId and auras[auraId]
 		if aura then
 			found = true
-			dispelType = aura.dispelName or "None"
+			if aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
+				local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, colorcurve)
+				if not (issecretvalue and issecretvalue(color)) then
+					if color and color.GetRGBA then
+						r, g, b = color:GetRGBA()
+					elseif color and color.r then
+						r, g, b = color.r, color.g, color.b
+					end
+				end
+			end
+			if not r then
+				local dispelName = aura.dispelName
+				if not (issecretvalue and issecretvalue(dispelName)) then
+					r, g, b = getDebuffColorFromName(dispelName or "None")
+				end
+			end
 			break
 		end
 	end
-	if dispelType then
-		if st.dispelTint.SetDispelType then
-			st.dispelTint:SetDispelType(dispelType)
-		elseif AuraUtil then
-			if st.dispelTint.Gradient then AuraUtil.SetAuraBorderColor(st.dispelTint.Gradient, dispelType) end
-			if st.dispelTint.Border then AuraUtil.SetAuraBorderColor(st.dispelTint.Border, dispelType) end
-		end
-		if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(alpha) end
-		st.dispelTint:Show()
+	if r then
+		applyTint(r, g or 0, b or 0)
 	else
 		st.dispelTint:Hide()
 	end
@@ -4148,6 +4186,31 @@ function GF:RefreshStatusText()
 		for _, frames in pairs(GF._previewFrames) do
 			for _, btn in ipairs(frames) do
 				if btn then GF:UpdateStatusText(btn) end
+			end
+		end
+	end
+end
+
+function GF:RefreshDispelTint()
+	if not isFeatureEnabled() then return end
+	local inEdit = isEditModeActive()
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then
+				if inEdit or child._eqolPreview then
+					GF:UpdateDispelTint(child, nil, nil, true)
+				else
+					local st = getState(child)
+					local cache = st and getAuraCache(st, "dispel")
+					GF:UpdateDispelTint(child, cache, AURA_FILTER_DISPELLABLE)
+				end
+			end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateDispelTint(btn, nil, nil, true) end
 			end
 		end
 	end
@@ -7292,6 +7355,114 @@ local function buildEditModeSettings(kind, editModeId)
 				cfg.status.dispelTint.enabled = value and true or false
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintEnabled", cfg.status.dispelTint.enabled, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
+			end,
+		},
+		{
+			name = "Background color change",
+			kind = SettingType.Checkbox,
+			field = "dispelTintFillEnabled",
+			parentId = "dispeltint",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.fillEnabled == nil then return def.fillEnabled ~= false end
+				return dt.fillEnabled == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.fillEnabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintFillEnabled", cfg.status.dispelTint.fillEnabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.enabled == nil then return def.enabled ~= false end
+				return dt.enabled == true
+			end,
+		},
+		{
+			name = "Background color",
+			kind = SettingType.Color,
+			field = "dispelTintFillColor",
+			parentId = "dispeltint",
+			hasOpacity = false,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint and DEFAULTS[kind].status.dispelTint.fillColor) or { 0, 0, 0, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint and DEFAULTS[kind].status.dispelTint.fillColor) or { 0, 0, 0, 1 }
+				local r, g, b, a = unpackColor(dt.fillColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.fillColor = { value.r or 0, value.g or 0, value.b or 0, 1 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintFillColor", cfg.status.dispelTint.fillColor, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local enabled = dt.enabled
+				if enabled == nil then enabled = def.enabled ~= false end
+				local fillEnabled = dt.fillEnabled
+				if fillEnabled == nil then fillEnabled = def.fillEnabled ~= false end
+				return enabled and fillEnabled
+			end,
+		},
+		{
+			name = "Background alpha",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintFillAlpha",
+			parentId = "dispeltint",
+			minValue = 0,
+			maxValue = 1,
+			valueStep = 0.01,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.fillAlpha or def.fillAlpha or 0.2
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.fillAlpha = clampNumber(value, 0, 1, cfg.status.dispelTint.fillAlpha or 0.2)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintFillAlpha", cfg.status.dispelTint.fillAlpha, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local enabled = dt.enabled
+				if enabled == nil then enabled = def.enabled ~= false end
+				local fillEnabled = dt.fillEnabled
+				if fillEnabled == nil then fillEnabled = def.fillEnabled ~= false end
+				return enabled and fillEnabled
 			end,
 		},
 		{
@@ -7315,6 +7486,7 @@ local function buildEditModeSettings(kind, editModeId)
 				cfg.status.dispelTint.showSample = value and true or false
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintSample", cfg.status.dispelTint.showSample, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
 			end,
 			isEnabled = function()
 				local cfg = getCfg(kind)
@@ -7349,6 +7521,7 @@ local function buildEditModeSettings(kind, editModeId)
 				cfg.status.dispelTint.alpha = clampNumber(value, 0, 1, cfg.status.dispelTint.alpha or 0.25)
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintAlpha", cfg.status.dispelTint.alpha, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
 			end,
 			isEnabled = function()
 				local cfg = getCfg(kind)
@@ -11033,6 +11206,9 @@ local function applyEditModeData(kind, data)
 		or data.statusTextOffsetY ~= nil
 		or data.dispelTintEnabled ~= nil
 		or data.dispelTintAlpha ~= nil
+		or data.dispelTintFillEnabled ~= nil
+		or data.dispelTintFillAlpha ~= nil
+		or data.dispelTintFillColor ~= nil
 		or data.dispelTintSample ~= nil
 	then
 		cfg.status = cfg.status or {}
@@ -11088,10 +11264,20 @@ local function applyEditModeData(kind, data)
 		if data.statusTextShowDND ~= nil then cfg.status.unitStatus.showDND = data.statusTextShowDND and true or false end
 		if data.statusTextHideHealthTextOffline ~= nil then cfg.status.unitStatus.hideHealthTextWhenOffline = data.statusTextHideHealthTextOffline and true or false end
 	end
-	if data.dispelTintEnabled ~= nil or data.dispelTintAlpha ~= nil or data.dispelTintSample ~= nil then
+	if
+		data.dispelTintEnabled ~= nil
+		or data.dispelTintAlpha ~= nil
+		or data.dispelTintFillEnabled ~= nil
+		or data.dispelTintFillAlpha ~= nil
+		or data.dispelTintFillColor ~= nil
+		or data.dispelTintSample ~= nil
+	then
 		cfg.status.dispelTint = cfg.status.dispelTint or {}
 		if data.dispelTintEnabled ~= nil then cfg.status.dispelTint.enabled = data.dispelTintEnabled and true or false end
 		if data.dispelTintAlpha ~= nil then cfg.status.dispelTint.alpha = clampNumber(data.dispelTintAlpha, 0, 1, cfg.status.dispelTint.alpha or 0.25) end
+		if data.dispelTintFillEnabled ~= nil then cfg.status.dispelTint.fillEnabled = data.dispelTintFillEnabled and true or false end
+		if data.dispelTintFillAlpha ~= nil then cfg.status.dispelTint.fillAlpha = clampNumber(data.dispelTintFillAlpha, 0, 1, cfg.status.dispelTint.fillAlpha or 0.2) end
+		if data.dispelTintFillColor ~= nil then cfg.status.dispelTint.fillColor = data.dispelTintFillColor end
 		if data.dispelTintSample ~= nil then cfg.status.dispelTint.showSample = data.dispelTintSample and true or false end
 	end
 	if data.raidIconEnabled ~= nil or data.raidIconSize ~= nil or data.raidIconPoint ~= nil or data.raidIconOffsetX ~= nil or data.raidIconOffsetY ~= nil then
@@ -11546,6 +11732,10 @@ function GF:EnsureEditMode()
 				dispelTintEnabled = (sc.dispelTint and sc.dispelTint.enabled ~= nil) and (sc.dispelTint.enabled ~= false)
 					or ((sc.dispelTint == nil or sc.dispelTint.enabled == nil) and defDispel.enabled ~= false),
 				dispelTintAlpha = (sc.dispelTint and sc.dispelTint.alpha) or defDispel.alpha or 0.25,
+				dispelTintFillEnabled = (sc.dispelTint and sc.dispelTint.fillEnabled ~= nil) and (sc.dispelTint.fillEnabled == true)
+					or ((sc.dispelTint == nil or sc.dispelTint.fillEnabled == nil) and defDispel.fillEnabled ~= false),
+				dispelTintFillAlpha = (sc.dispelTint and sc.dispelTint.fillAlpha) or defDispel.fillAlpha or 0.2,
+				dispelTintFillColor = (sc.dispelTint and sc.dispelTint.fillColor) or defDispel.fillColor or { 0, 0, 0, 1 },
 				dispelTintSample = (sc.dispelTint and sc.dispelTint.showSample ~= nil) and (sc.dispelTint.showSample == true)
 					or ((sc.dispelTint == nil or sc.dispelTint.showSample == nil) and defDispel.showSample == true),
 				raidIconEnabled = (sc.raidIcon and sc.raidIcon.enabled) ~= false,
