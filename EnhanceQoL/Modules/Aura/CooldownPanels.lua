@@ -34,6 +34,11 @@ curveDesat:SetType(Enum.LuaCurveType.Step)
 curveDesat:AddPoint(0, 0)
 curveDesat:AddPoint(0.1, 1)
 
+local curveAlpha = C_CurveUtil.CreateCurve()
+curveAlpha:SetType(Enum.LuaCurveType.Step)
+curveAlpha:AddPoint(0, 1)
+curveAlpha:AddPoint(0.1, 0)
+
 local GetItemInfoInstantFn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 local GetItemIconByID = C_Item and C_Item.GetItemIconByID
 local GetItemCooldownFn = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
@@ -2200,6 +2205,7 @@ local function copyPanelSettings(targetPanelId, sourcePanelId)
 			data.opacityOutOfCombat = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
 			data.opacityInCombat = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat)
 			data.showTooltips = layout.showTooltips == true
+			data.hideOnCooldown = layout.hideOnCooldown == true
 		end
 	end
 	if runtime and runtime.editModeId and EditMode and EditMode.RefreshFrame then EditMode:RefreshFrame(runtime.editModeId) end
@@ -3672,6 +3678,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
+	local hideOnCooldown = layout.hideOnCooldown == true
 	local gcdDrawEdge = layout.cooldownGcdDrawEdge == true
 	local gcdDrawBling = layout.cooldownGcdDrawBling == true
 	local gcdDrawSwipe = layout.cooldownGcdDrawSwipe == true
@@ -3917,6 +3924,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	for i = 1, count do
 		local data = visible[i]
 		local icon = frame.icons[i]
+		if not hideOnCooldown then icon:SetAlpha(1) end
 		clearPreviewCooldown(icon.cooldown)
 		entryToIcon[data.entryId] = icon
 		icon.texture:SetTexture(data.icon or Helper.PREVIEW_ICON)
@@ -3945,6 +3953,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local cooldownActive = data.showCooldown and (durationActive or (cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration)))
 		local usingCooldown = false
 		local desaturate = false
+		local hidden = false
 
 		if data.showCharges and data.chargesInfo and data.chargesInfo.maxCharges ~= nil then
 			if data.chargesInfo.currentCharges ~= nil then
@@ -3966,6 +3975,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			if usingCooldown then
 				if isSafeNumber(data.chargesInfo.currentCharges) then
 					desaturate = data.chargesInfo.currentCharges == 0
+					if hideOnCooldown then hidden = desaturate end
 				else
 					-- local CCD = C_Spell.GetSpellChargeDuration(data.entry.spellID)
 					-- local SCD = C_Spell.GetSpellCooldownDuration(data.entry.spellID)
@@ -3995,6 +4005,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 
 		if not isSafeNumber(cooldownRate) then cooldownRate = 1 end
 		icon.texture:SetDesaturated(desaturate)
+		if hideOnCooldown then icon:SetAlphaFromBoolean(hidden, 0, 1) end
 		if data.showCooldown then
 			if usingCooldown then
 				-- if data.entry.spellID == 204019 then print(cooldownDurationObject:GetRemainingDuration(), cooldownStart, cooldownRate)end
@@ -4038,6 +4049,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 						if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", onCooldownDone) end
 						setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 						icon.texture:SetDesaturation(cooldownDurationObject:EvaluateRemainingDuration(curveDesat))
+						if hideOnCooldown then icon:SetAlpha(cooldownDurationObject:EvaluateRemainingDuration(curveAlpha)) end
 						if data.showChargesCooldown then
 							local entrySpellId = data.entry and data.entry.spellID
 							local effectiveId = entrySpellId and getEffectiveSpellId(entrySpellId) or entrySpellId
@@ -4052,13 +4064,16 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				icon.cooldown:SetCooldownFromDurationObject(cooldownDurationObject)
 				if data.cooldownGCD then
 					icon.texture:SetDesaturation(0)
+					if hideOnCooldown then icon:SetAlpha(1) end
 					desaturate = false
+					hidden = false
 					setCooldownDrawState(icon.cooldown, gcdDrawEdge, gcdDrawBling, gcdDrawSwipe)
 				else
 					setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 
 					local desat = cooldownDurationObject:EvaluateRemainingDuration(curveDesat)
 					icon.texture:SetDesaturation(desat)
+					if hideOnCooldown then icon:SetAlpha(cooldownDurationObject:EvaluateRemainingDuration(curveAlpha)) end
 				end
 				if data.cooldownGCD then
 				else
@@ -4068,6 +4083,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 				icon.cooldown:SetCooldown(cooldownStart, cooldownDuration, cooldownRate)
 				desaturate = true
 				icon.texture:SetDesaturated(desaturate)
+				if hideOnCooldown then icon:SetAlpha(0) end
 				setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
 				if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", onCooldownDone) end
 			else
@@ -4080,7 +4096,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			icon.cooldown:Clear()
 			if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 		end
-		icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1)
+		if not hidden then icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1) end
 		if data.spellUnusable then
 			icon.texture:SetVertexColor(unusableTintR or 0.6, unusableTintG or 0.6, unusableTintB or 0.6)
 		elseif data.powerInsufficient then
@@ -4393,6 +4409,8 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.cooldownGcdDrawSwipe = value == true
 	elseif field == "showTooltips" then
 		layout.showTooltips = value == true
+	elseif field == "hideOnCooldown" then
+		layout.hideOnCooldown = value == true
 	elseif field == "opacityOutOfCombat" then
 		layout.opacityOutOfCombat = Helper.NormalizeOpacity(value, layout.opacityOutOfCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
 	elseif field == "opacityInCombat" then
@@ -4486,6 +4504,7 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "cooldownGcdDrawBling", data.cooldownGcdDrawBling, true)
 	applyEditLayout(panelId, "cooldownGcdDrawSwipe", data.cooldownGcdDrawSwipe, true)
 	applyEditLayout(panelId, "showTooltips", data.showTooltips, true)
+	applyEditLayout(panelId, "hideOnCooldown", data.hideOnCooldown, true)
 	applyEditLayout(panelId, "opacityOutOfCombat", data.opacityOutOfCombat, true)
 	applyEditLayout(panelId, "opacityInCombat", data.opacityInCombat, true)
 
@@ -5164,6 +5183,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				set = function(_, value) applyEditLayout(panelId, "showTooltips", value) end,
 			},
 			{
+				name = L["CooldownPanelHideOnCooldown"] or "Hide on cooldown",
+				kind = SettingType.Checkbox,
+				field = "hideOnCooldown",
+				parentId = "cooldownPanelDisplay",
+				default = layout.hideOnCooldown == true,
+				get = function() return layout.hideOnCooldown == true end,
+				set = function(_, value) applyEditLayout(panelId, "hideOnCooldown", value) end,
+			},
+			{
 				name = L["CooldownPanelOpacityOutOfCombat"] or "Opacity (out of combat)",
 				kind = SettingType.Slider,
 				field = "opacityOutOfCombat",
@@ -5667,6 +5695,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			opacityOutOfCombat = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
 			opacityInCombat = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
 			showTooltips = layout.showTooltips == true,
+			hideOnCooldown = layout.hideOnCooldown == true,
 		},
 		onApply = function(_, _, data)
 			local a = ensureAnchorTable()

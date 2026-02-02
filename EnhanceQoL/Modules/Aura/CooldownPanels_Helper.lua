@@ -33,6 +33,7 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	unusableTintColor = { 0.6, 0.6, 0.6, 1 },
 	opacityOutOfCombat = 1,
 	opacityInCombat = 1,
+	hideOnCooldown = false,
 	stackAnchor = "BOTTOMRIGHT",
 	stackX = -1,
 	stackY = 1,

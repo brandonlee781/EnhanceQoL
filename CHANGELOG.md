@@ -7,7 +7,12 @@
 - Unit Frames: Aura icons can use custom border textures (boss frames included)
 - Cooldown Panels: Optional radial layout with radius/rotation controls (layout fields auto-hide on switch)
 - Cooldown Panels: Cursor anchor mode with Edit Mode preview and live cursor follow
+- Cooldown Panels: Hide on CD option for cooldown icons
 - Unit Frames: Combat feedback text with configurable font/anchor/events
+
+### 🐛 Fixed
+
+- Tooltips: Guard secret values when resolving unit names (prevents secret boolean test errors)
 
 ---
 
