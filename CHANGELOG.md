@@ -5,6 +5,7 @@
 ### ✨ Added
 
 - Keybinding: Toggle friendly NPC nameplates (nameplateShowFriendlyNpcs)
+- UF Plus: Unit status group number format options (e.g., Group 1, (1), | 1 |, G1)
 
 ### 🔁 Changed
 

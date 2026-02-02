@@ -114,6 +114,19 @@ local anchorOptions = {
 	{ value = "RIGHT", label = "RIGHT" },
 }
 
+local groupNumberFormatOptions = {
+	{ value = "GROUP", label = "Group 1" },
+	{ value = "G", label = "G1" },
+	{ value = "G_SPACE", label = "G 1" },
+	{ value = "NUMBER", label = "1" },
+	{ value = "PARENS", label = "(1)" },
+	{ value = "BRACKETS", label = "[1]" },
+	{ value = "BRACES", label = "{1}" },
+	{ value = "ANGLE", label = "<1>" },
+	{ value = "PIPE", label = "|| 1 ||" },
+	{ value = "HASH", label = "#1" },
+}
+
 local classResourceClasses = {
 	DEATHKNIGHT = true,
 	DRUID = true,
@@ -3335,6 +3348,20 @@ local function buildUnitSettings(unit)
 			"unitStatus"
 		)
 		list[#list].isEnabled = isUnitStatusEnabled
+
+		local groupFormatSetting = checkboxDropdown(
+			L["UFUnitStatusGroupFormat"] or "Group number format",
+			groupNumberFormatOptions,
+			function() return getValue(unit, { "status", "unitStatus", "groupFormat" }, usDef.groupFormat or "GROUP") end,
+			function(val)
+				setValue(unit, { "status", "unitStatus", "groupFormat" }, val or "GROUP")
+				refresh()
+			end,
+			usDef.groupFormat or "GROUP",
+			"unitStatus"
+		)
+		groupFormatSetting.isEnabled = isGroupEnabled
+		list[#list + 1] = groupFormatSetting
 
 		list[#list + 1] = slider(
 			L["UFUnitStatusGroupSize"] or "Group number size",

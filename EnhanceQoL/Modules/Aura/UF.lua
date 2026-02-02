@@ -319,6 +319,7 @@ local defaults = {
 				font = nil,
 				fontOutline = nil,
 				showGroup = true,
+				groupFormat = "GROUP",
 				groupFontSize = nil,
 				groupOffset = { x = 0, y = 0 },
 				offset = { x = 0, y = 0 },
@@ -3640,6 +3641,22 @@ local function getPlayerSubGroup()
 	return subgroup
 end
 
+local function formatGroupNumber(subgroup, format)
+	local num = tonumber(subgroup)
+	if not num then return nil end
+	local fmt = format or "GROUP"
+	if fmt == "NUMBER" then return tostring(num) end
+	if fmt == "PARENS" then return "(" .. num .. ")" end
+	if fmt == "BRACKETS" then return "[" .. num .. "]" end
+	if fmt == "BRACES" then return "{" .. num .. "}" end
+	if fmt == "PIPE" then return "|| " .. num .. " ||" end
+	if fmt == "ANGLE" then return "<" .. num .. ">" end
+	if fmt == "G" then return "G" .. num end
+	if fmt == "G_SPACE" then return "G " .. num end
+	if fmt == "HASH" then return "#" .. num end
+	return string.format(GROUP_NUMBER or "Group %d", num)
+end
+
 local function updateUnitStatusIndicator(cfg, unit)
 	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
@@ -3707,10 +3724,11 @@ local function updateUnitStatusIndicator(cfg, unit)
 	local groupTag
 	if unit == UNIT.PLAYER and usCfg.showGroup == true then
 		local subgroup = getPlayerSubGroup()
+		local groupFormat = usCfg.groupFormat or usDef.groupFormat or "GROUP"
 		if subgroup then
-			groupTag = string.format(GROUP_NUMBER or "Group %d", subgroup)
+			groupTag = formatGroupNumber(subgroup, groupFormat)
 		elseif addon.EditModeLib and addon.EditModeLib:IsInEditMode() then
-			groupTag = string.format(GROUP_NUMBER or "Group %d", 1)
+			groupTag = formatGroupNumber(1, groupFormat)
 		end
 	end
 	if st.unitGroupText then
