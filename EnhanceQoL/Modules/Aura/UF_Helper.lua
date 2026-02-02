@@ -18,6 +18,8 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local CASTING_BAR_TYPES = _G.CASTING_BAR_TYPES
 local EnumPowerType = Enum and Enum.PowerType
 local BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
+local DEFAULT_AURA_BORDER_TEX = "Interface\\Buttons\\UI-Debuff-Overlays"
+local DEFAULT_AURA_BORDER_COORDS = { 0.296875, 0.5703125, 0, 0.515625 }
 local abs = math.abs
 local floor = math.floor
 local UnitThreatSituation = UnitThreatSituation
@@ -168,6 +170,47 @@ function H.resolveBorderTexture(key)
 		if tex and tex ~= "" then return tex end
 	end
 	return key
+end
+
+function H.resolveAuraBorderTexture(key)
+	if not key or key == "" or key == "DEFAULT" then return DEFAULT_AURA_BORDER_TEX, DEFAULT_AURA_BORDER_COORDS, false end
+	if LSM then
+		local tex = LSM:Fetch("border", key)
+		if tex and tex ~= "" then return tex, nil, true end
+	end
+	return key, nil, false
+end
+
+function H.ensureAuraBorderFrame(btn)
+	if not btn then return nil end
+	local border = btn._eqolAuraBorder
+	if not border then
+		border = CreateFrame("Frame", nil, btn.overlay or btn, "BackdropTemplate")
+		border:EnableMouse(false)
+		btn._eqolAuraBorder = border
+	end
+	local parent = btn.overlay or btn
+	border:SetParent(parent)
+	border:SetFrameStrata(parent:GetFrameStrata() or btn:GetFrameStrata())
+	local baseLevel = parent:GetFrameLevel() or btn:GetFrameLevel() or 0
+	border:SetFrameLevel(baseLevel + 1)
+	border:ClearAllPoints()
+	border:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+	border:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+	return border
+end
+
+function H.hideAuraBorderFrame(btn)
+	local border = btn and btn._eqolAuraBorder
+	if border then border:Hide() end
+end
+
+function H.calcAuraBorderSize(btn, ac)
+	local baseSize = (btn and btn.GetWidth and btn:GetWidth()) or (ac and ac.size) or 24
+	local size = floor((baseSize or 24) * 0.08 + 0.5)
+	if size < 1 then size = 1 end
+	if size > 6 then size = 6 end
+	return size
 end
 
 local function ensureHighlightFrame(frame)

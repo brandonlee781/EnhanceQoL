@@ -73,6 +73,10 @@ local directionOptions = {
 	{ value = "UP", label = _G.HUD_EDIT_MODE_SETTING_BAGS_DIRECTION_UP or _G.UP or "Up" },
 	{ value = "DOWN", label = _G.HUD_EDIT_MODE_SETTING_BAGS_DIRECTION_DOWN or _G.DOWN or "Down" },
 }
+local layoutModeOptions = {
+	{ value = "GRID", label = L["CooldownPanelLayoutModeGrid"] or "Grid" },
+	{ value = "RADIAL", label = L["CooldownPanelLayoutModeRadial"] or "Radial" },
+}
 local anchorOptions = {
 	{ value = "TOPLEFT", label = L["Top Left"] or "Top Left" },
 	{ value = "TOP", label = L["Top"] or "Top" },
@@ -237,6 +241,17 @@ local function refreshEditModeSettingValues()
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 end
 
+local function refreshEditModeSettings()
+	local lib = addon.EditModeLib
+	if not (lib and lib.internal) then return end
+	if lib.internal.RequestRefreshSettings then
+		lib.internal:RequestRefreshSettings()
+	elseif lib.internal.RefreshSettings then
+		lib.internal:RefreshSettings()
+	end
+	if lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
+end
+
 local function getMasqueGroup()
 	if not Masque and LibStub then Masque = LibStub("Masque", true) end
 	if not Masque then return nil end
@@ -281,10 +296,13 @@ local function getLayoutKey(layout)
 	return table.concat({
 		tostring(layout.iconSize or ""),
 		tostring(layout.spacing or ""),
+		tostring(layout.layoutMode or ""),
 		tostring(layout.direction or ""),
 		tostring(layout.wrapCount or ""),
 		tostring(layout.wrapDirection or ""),
 		tostring(layout.growthPoint or ""),
+		tostring(layout.radialRadius or ""),
+		tostring(layout.radialRotation or ""),
 		tostring(rowSizes and rowSizes[1] or ""),
 		tostring(rowSizes and rowSizes[2] or ""),
 		tostring(rowSizes and rowSizes[3] or ""),
@@ -451,6 +469,9 @@ local function getEditorPreviewCount(panel, previewFrame, baseLayout, entries)
 		if count <= 0 then return Helper.DEFAULT_PREVIEW_COUNT end
 	end
 	if not previewFrame then return count end
+
+	local layoutMode = Helper.NormalizeLayoutMode(baseLayout and baseLayout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode)
+	if layoutMode == "RADIAL" then return count end
 
 	local spacing = Helper.ClampInt((baseLayout and baseLayout.spacing) or 0, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
 	local step = Helper.PREVIEW_ICON_SIZE + spacing
@@ -1460,6 +1481,7 @@ local function applyIconLayout(frame, count, layout)
 	if not frame then return end
 	local iconSize = Helper.ClampInt(layout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 	local spacing = Helper.ClampInt(layout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
+	local layoutMode = Helper.NormalizeLayoutMode(layout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode)
 	local direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
 	local wrapCount = Helper.ClampInt(layout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 	local wrapDirection = Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN")
@@ -1478,45 +1500,53 @@ local function applyIconLayout(frame, count, layout)
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
 
-	local cols, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
+	local cols, rows = 1, 1
 	local baseIconSize = iconSize
 	local rowSizes = {}
 	local rowOffsets = {}
 	local rowWidths = {}
 	local width = 0
 	local height = 0
+	local radialRadius = nil
 
-	if primaryHorizontal then
-		local totalHeight = 0
-		for rowIndex = 1, rows do
-			local rowSize = baseIconSize
-			if type(layout.rowSizes) == "table" then
-				local override = tonumber(layout.rowSizes[rowIndex])
-				if override then rowSize = Helper.ClampInt(override, 12, 128, baseIconSize) end
-			end
-			rowSizes[rowIndex] = rowSize
-			rowOffsets[rowIndex] = totalHeight
-			local rowCols = cols
-			if wrapCount and wrapCount > 0 then
-				local fillIndex = rowIndex
-				if wrapDirection == "UP" then fillIndex = rows - rowIndex + 1 end
-				rowCols = math.min(wrapCount, count - ((fillIndex - 1) * wrapCount))
-				if rowCols < 1 then rowCols = 1 end
-			end
-			local rowWidth = (rowCols * rowSize) + ((rowCols - 1) * spacing)
-			rowWidths[rowIndex] = rowWidth
-			if rowWidth > width then width = rowWidth end
-			totalHeight = totalHeight + rowSize + spacing
-		end
-		if rows > 0 then height = totalHeight - spacing end
+	if layoutMode == "RADIAL" then
+		radialRadius = Helper.ClampInt(layout.radialRadius, 0, Helper.RADIAL_RADIUS_RANGE or 600, Helper.PANEL_LAYOUT_DEFAULTS.radialRadius)
+		width = (radialRadius * 2) + baseIconSize
+		height = width
 	else
-		local step = baseIconSize + spacing
-		width = (cols * baseIconSize) + ((cols - 1) * spacing)
-		height = (rows * baseIconSize) + ((rows - 1) * spacing)
-		for rowIndex = 1, rows do
-			rowSizes[rowIndex] = baseIconSize
-			rowOffsets[rowIndex] = (rowIndex - 1) * step
-			rowWidths[rowIndex] = width
+		cols, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
+		if primaryHorizontal then
+			local totalHeight = 0
+			for rowIndex = 1, rows do
+				local rowSize = baseIconSize
+				if type(layout.rowSizes) == "table" then
+					local override = tonumber(layout.rowSizes[rowIndex])
+					if override then rowSize = Helper.ClampInt(override, 12, 128, baseIconSize) end
+				end
+				rowSizes[rowIndex] = rowSize
+				rowOffsets[rowIndex] = totalHeight
+				local rowCols = cols
+				if wrapCount and wrapCount > 0 then
+					local fillIndex = rowIndex
+					if wrapDirection == "UP" then fillIndex = rows - rowIndex + 1 end
+					rowCols = math.min(wrapCount, count - ((fillIndex - 1) * wrapCount))
+					if rowCols < 1 then rowCols = 1 end
+				end
+				local rowWidth = (rowCols * rowSize) + ((rowCols - 1) * spacing)
+				rowWidths[rowIndex] = rowWidth
+				if rowWidth > width then width = rowWidth end
+				totalHeight = totalHeight + rowSize + spacing
+			end
+			if rows > 0 then height = totalHeight - spacing end
+		else
+			local step = baseIconSize + spacing
+			width = (cols * baseIconSize) + ((cols - 1) * spacing)
+			height = (rows * baseIconSize) + ((rows - 1) * spacing)
+			for rowIndex = 1, rows do
+				rowSizes[rowIndex] = baseIconSize
+				rowOffsets[rowIndex] = (rowIndex - 1) * step
+				rowWidths[rowIndex] = width
+			end
 		end
 	end
 
@@ -1566,6 +1596,58 @@ local function applyIconLayout(frame, count, layout)
 		return x, y, h, v
 	end
 	local growthOffsetX, growthOffsetY, anchorH, anchorV = getGrowthOffset(growthPoint, width, height)
+
+	local function applyIconCommon(icon, rowSize)
+		icon:SetSize(rowSize, rowSize)
+		if icon._eqolMasqueNeedsReskin then
+			local group = getMasqueGroup()
+			if group and group.ReSkin then group:ReSkin(icon) end
+			icon._eqolMasqueNeedsReskin = nil
+		end
+		if icon.count then
+			icon.count:ClearAllPoints()
+			icon.count:SetPoint(stackAnchor, icon, stackAnchor, stackX, stackY)
+			icon.count:SetFont(countFontPath, countFontSize, countFontStyle)
+		end
+		if icon.charges then
+			icon.charges:ClearAllPoints()
+			icon.charges:SetPoint(chargesAnchor, icon, chargesAnchor, chargesX, chargesY)
+			icon.charges:SetFont(chargesPath, chargesSize, chargesStyle)
+		end
+		if icon.keybind then
+			icon.keybind:ClearAllPoints()
+			icon.keybind:SetPoint(keybindAnchor, icon, keybindAnchor, keybindX, keybindY)
+			icon.keybind:SetFont(keybindFontPath, keybindFontSize, keybindFontStyle)
+		end
+		setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
+		if icon.previewGlow then
+			icon.previewGlow:ClearAllPoints()
+			icon.previewGlow:SetPoint("CENTER", icon, "CENTER", 0, 0)
+			icon.previewGlow:SetSize(rowSize * 1.8, rowSize * 1.8)
+		end
+		if icon.previewBling then
+			icon.previewBling:ClearAllPoints()
+			icon.previewBling:SetPoint("CENTER", icon, "CENTER", 0, 0)
+			icon.previewBling:SetSize(rowSize * 1.5, rowSize * 1.5)
+		end
+	end
+
+	if layoutMode == "RADIAL" then
+		local rotation = Helper.ClampNumber(layout.radialRotation, -Helper.RADIAL_ROTATION_RANGE, Helper.RADIAL_ROTATION_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.radialRotation)
+		local step = count > 0 and ((2 * math.pi) / count) or 0
+		local baseAngle = (math.pi / 2) - math.rad(rotation or 0)
+		local radius = radialRadius or 0
+		for i = 1, count do
+			local icon = frame.icons[i]
+			applyIconCommon(icon, baseIconSize)
+			local angle = baseAngle - ((i - 1) * step)
+			local x = math.cos(angle) * radius
+			local y = math.sin(angle) * radius
+			icon:ClearAllPoints()
+			icon:SetPoint("CENTER", frame, "CENTER", x, y)
+		end
+		return
+	end
 
 	for i = 1, count do
 		local icon = frame.icons[i]
@@ -1625,38 +1707,7 @@ local function applyIconLayout(frame, count, layout)
 		end
 		local stepX = primaryHorizontal and (rowSize + spacing) or (baseIconSize + spacing)
 
-		icon:SetSize(rowSize, rowSize)
-		if icon._eqolMasqueNeedsReskin then
-			local group = getMasqueGroup()
-			if group and group.ReSkin then group:ReSkin(icon) end
-			icon._eqolMasqueNeedsReskin = nil
-		end
-		if icon.count then
-			icon.count:ClearAllPoints()
-			icon.count:SetPoint(stackAnchor, icon, stackAnchor, stackX, stackY)
-			icon.count:SetFont(countFontPath, countFontSize, countFontStyle)
-		end
-		if icon.charges then
-			icon.charges:ClearAllPoints()
-			icon.charges:SetPoint(chargesAnchor, icon, chargesAnchor, chargesX, chargesY)
-			icon.charges:SetFont(chargesPath, chargesSize, chargesStyle)
-		end
-		if icon.keybind then
-			icon.keybind:ClearAllPoints()
-			icon.keybind:SetPoint(keybindAnchor, icon, keybindAnchor, keybindX, keybindY)
-			icon.keybind:SetFont(keybindFontPath, keybindFontSize, keybindFontStyle)
-		end
-		setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
-		if icon.previewGlow then
-			icon.previewGlow:ClearAllPoints()
-			icon.previewGlow:SetPoint("CENTER", icon, "CENTER", 0, 0)
-			icon.previewGlow:SetSize(rowSize * 1.8, rowSize * 1.8)
-		end
-		if icon.previewBling then
-			icon.previewBling:ClearAllPoints()
-			icon.previewBling:SetPoint("CENTER", icon, "CENTER", 0, 0)
-			icon.previewBling:SetSize(rowSize * 1.5, rowSize * 1.5)
-		end
+		applyIconCommon(icon, rowSize)
 		icon:ClearAllPoints()
 		icon:SetPoint(growthPoint, frame, growthPoint, growthOffsetX + anchorXAdjust + rowAlignOffset + (col * stepX), growthOffsetY + anchorYAdjust - rowOffset)
 	end
@@ -2849,15 +2900,17 @@ local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
 	local baseIconSize = Helper.ClampInt(baseLayout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
+	local scale = baseIconSize > 0 and (Helper.PREVIEW_ICON_SIZE / baseIconSize) or 1
 	previewLayout.iconSize = Helper.PREVIEW_ICON_SIZE
 	if type(baseLayout.rowSizes) == "table" then
-		local scale = baseIconSize > 0 and (Helper.PREVIEW_ICON_SIZE / baseIconSize) or 1
 		previewLayout.rowSizes = {}
 		for index, size in pairs(baseLayout.rowSizes) do
 			local num = tonumber(size)
 			if num then previewLayout.rowSizes[index] = Helper.ClampInt(num * scale, 12, 128, Helper.PREVIEW_ICON_SIZE) end
 		end
 	end
+	local baseRadius = Helper.ClampInt(baseLayout.radialRadius, 0, Helper.RADIAL_RADIUS_RANGE or 600, Helper.PANEL_LAYOUT_DEFAULTS.radialRadius)
+	previewLayout.radialRadius = Helper.ClampInt(baseRadius * scale, 0, Helper.RADIAL_RADIUS_RANGE or 600, baseRadius)
 	local stackSize = tonumber(previewLayout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize
 	previewLayout.stackFontSize = math.max(stackSize, Helper.PREVIEW_COUNT_FONT_MIN)
 	local chargesSize = tonumber(previewLayout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize
@@ -4108,6 +4161,8 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.iconSize = Helper.ClampInt(value, 12, 128, layout.iconSize)
 	elseif field == "spacing" then
 		layout.spacing = Helper.ClampInt(value, 0, 50, layout.spacing)
+	elseif field == "layoutMode" then
+		layout.layoutMode = Helper.NormalizeLayoutMode(value, layout.layoutMode or Helper.PANEL_LAYOUT_DEFAULTS.layoutMode)
 	elseif field == "direction" then
 		layout.direction = Helper.NormalizeDirection(value, layout.direction)
 	elseif field == "wrapCount" then
@@ -4116,6 +4171,11 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.wrapDirection = Helper.NormalizeDirection(value, layout.wrapDirection)
 	elseif field == "growthPoint" then
 		layout.growthPoint = Helper.NormalizeGrowthPoint(value, layout.growthPoint or Helper.PANEL_LAYOUT_DEFAULTS.growthPoint)
+	elseif field == "radialRadius" then
+		layout.radialRadius = Helper.ClampInt(value, 0, Helper.RADIAL_RADIUS_RANGE or 600, layout.radialRadius or Helper.PANEL_LAYOUT_DEFAULTS.radialRadius)
+	elseif field == "radialRotation" then
+		layout.radialRotation =
+			Helper.ClampNumber(value, -(Helper.RADIAL_ROTATION_RANGE or 360), Helper.RADIAL_ROTATION_RANGE or 360, layout.radialRotation or Helper.PANEL_LAYOUT_DEFAULTS.radialRotation)
 	elseif field == "rangeOverlayEnabled" then
 		layout.rangeOverlayEnabled = value == true
 		if updateRangeCheckSpells then updateRangeCheckSpells() end
@@ -4223,6 +4283,7 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		CooldownPanels:UpdatePreviewIcons(panelId)
 		CooldownPanels:UpdateVisibility(panelId)
 	end
+	if field == "layoutMode" and not skipRefresh then refreshEditModeSettings() end
 end
 
 function CooldownPanels:ApplyEditMode(panelId, data)
@@ -4233,6 +4294,7 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 
 	applyEditLayout(panelId, "iconSize", data.iconSize, true)
 	applyEditLayout(panelId, "spacing", data.spacing, true)
+	applyEditLayout(panelId, "layoutMode", data.layoutMode, true)
 	applyEditLayout(panelId, "direction", data.direction, true)
 	applyEditLayout(panelId, "wrapCount", data.wrapCount, true)
 	applyEditLayout(panelId, "wrapDirection", data.wrapDirection, true)
@@ -4241,6 +4303,8 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 		if data[key] ~= nil then applyEditLayout(panelId, key, data[key], true) end
 	end
 	applyEditLayout(panelId, "growthPoint", data.growthPoint, true)
+	applyEditLayout(panelId, "radialRadius", data.radialRadius, true)
+	applyEditLayout(panelId, "radialRotation", data.radialRotation, true)
 	applyEditLayout(panelId, "rangeOverlayEnabled", data.rangeOverlayEnabled, true)
 	applyEditLayout(panelId, "rangeOverlayColor", data.rangeOverlayColor, true)
 	applyEditLayout(panelId, "checkPower", data.checkPower, true)
@@ -4403,7 +4467,9 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 		local value = rowSizes and tonumber(rowSizes[index]) or nil
 		return Helper.ClampInt(value, 12, 128, base)
 	end
+	local function isRadialLayout() return Helper.NormalizeLayoutMode(layout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode) == "RADIAL" end
 	local function shouldShowRowSize(index)
+		if isRadialLayout() then return false end
 		local rows, primaryHorizontal = getPanelRowCount(panel, layout)
 		return primaryHorizontal and rows >= index
 	end
@@ -4653,6 +4719,24 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				defaultCollapsed = false,
 			},
 			{
+				name = L["CooldownPanelLayoutMode"] or "Layout mode",
+				kind = SettingType.Dropdown,
+				field = "layoutMode",
+				parentId = "cooldownPanelLayout",
+				height = 80,
+				get = function() return Helper.NormalizeLayoutMode(layout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode) end,
+				set = function(_, value) applyEditLayout(panelId, "layoutMode", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(layoutModeOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return Helper.NormalizeLayoutMode(layout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode) == option.value end,
+							function() applyEditLayout(panelId, "layoutMode", option.value) end
+						)
+					end
+				end,
+			},
+			{
 				name = "Icon size",
 				kind = SettingType.Slider,
 				field = "iconSize",
@@ -4674,6 +4758,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				minValue = 0,
 				maxValue = 50,
 				valueStep = 1,
+				isShown = function() return not isRadialLayout() end,
+				disabled = function() return isRadialLayout() end,
 				get = function() return layout.spacing end,
 				set = function(_, value) applyEditLayout(panelId, "spacing", value) end,
 				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
@@ -4684,6 +4770,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "direction",
 				parentId = "cooldownPanelLayout",
 				height = 120,
+				isShown = function() return not isRadialLayout() end,
+				disabled = function() return isRadialLayout() end,
 				get = function() return Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction) end,
 				set = function(_, value) applyEditLayout(panelId, "direction", value) end,
 				generator = function(_, root)
@@ -4705,6 +4793,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				minValue = 0,
 				maxValue = 40,
 				valueStep = 1,
+				isShown = function() return not isRadialLayout() end,
+				disabled = function() return isRadialLayout() end,
 				get = function() return layout.wrapCount or 0 end,
 				set = function(_, value) applyEditLayout(panelId, "wrapCount", value) end,
 				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
@@ -4715,7 +4805,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "wrapDirection",
 				parentId = "cooldownPanelLayout",
 				height = 120,
-				disabled = function() return (layout.wrapCount or 0) == 0 end,
+				isShown = function() return not isRadialLayout() end,
+				disabled = function() return isRadialLayout() or (layout.wrapCount or 0) == 0 end,
 				get = function() return Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN") end,
 				set = function(_, value) applyEditLayout(panelId, "wrapDirection", value) end,
 				generator = function(_, root)
@@ -4734,7 +4825,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				field = "growthPoint",
 				parentId = "cooldownPanelLayout",
 				height = 90,
-				disabled = function() return (layout.wrapCount or 0) == 0 end,
+				isShown = function() return not isRadialLayout() end,
+				disabled = function() return isRadialLayout() or (layout.wrapCount or 0) == 0 end,
 				get = function() return Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint) end,
 				set = function(_, value) applyEditLayout(panelId, "growthPoint", value) end,
 				generator = function(_, root)
@@ -4746,6 +4838,38 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 						)
 					end
 				end,
+			},
+			{
+				name = L["CooldownPanelRadialRadius"] or "Radius",
+				kind = SettingType.Slider,
+				field = "radialRadius",
+				parentId = "cooldownPanelLayout",
+				default = layout.radialRadius or Helper.PANEL_LAYOUT_DEFAULTS.radialRadius,
+				minValue = 0,
+				maxValue = Helper.RADIAL_RADIUS_RANGE or 600,
+				valueStep = 1,
+				allowInput = true,
+				isShown = function() return isRadialLayout() end,
+				disabled = function() return not isRadialLayout() end,
+				get = function() return layout.radialRadius or Helper.PANEL_LAYOUT_DEFAULTS.radialRadius end,
+				set = function(_, value) applyEditLayout(panelId, "radialRadius", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+			},
+			{
+				name = L["CooldownPanelRadialRotation"] or "Rotation",
+				kind = SettingType.Slider,
+				field = "radialRotation",
+				parentId = "cooldownPanelLayout",
+				default = layout.radialRotation or Helper.PANEL_LAYOUT_DEFAULTS.radialRotation,
+				minValue = -(Helper.RADIAL_ROTATION_RANGE or 360),
+				maxValue = Helper.RADIAL_ROTATION_RANGE or 360,
+				valueStep = 1,
+				allowInput = true,
+				isShown = function() return isRadialLayout() end,
+				disabled = function() return not isRadialLayout() end,
+				get = function() return layout.radialRotation or Helper.PANEL_LAYOUT_DEFAULTS.radialRotation end,
+				set = function(_, value) applyEditLayout(panelId, "radialRotation", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
 			},
 			{
 				name = "Strata",
@@ -4771,6 +4895,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				id = "cooldownPanelRowSizes",
 				parentId = "cooldownPanelLayout",
 				defaultCollapsed = true,
+				isShown = function() return not isRadialLayout() end,
 			},
 			{
 				name = (L["CooldownPanelRowSize"] or "Row %d size"):format(1),
@@ -5333,6 +5458,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			y = (anchor and anchor.y) or panel.y or 0,
 			iconSize = layout.iconSize,
 			spacing = layout.spacing,
+			layoutMode = Helper.NormalizeLayoutMode(layout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode),
 			direction = Helper.NormalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
 			wrapCount = layout.wrapCount or 0,
 			wrapDirection = Helper.NormalizeDirection(layout.wrapDirection, Helper.PANEL_LAYOUT_DEFAULTS.wrapDirection or "DOWN"),
@@ -5343,6 +5469,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			rowSize5 = (layout.rowSizes and layout.rowSizes[5]) or baseIconSize,
 			rowSize6 = (layout.rowSizes and layout.rowSizes[6]) or baseIconSize,
 			growthPoint = Helper.NormalizeGrowthPoint(layout.growthPoint, Helper.PANEL_LAYOUT_DEFAULTS.growthPoint),
+			radialRadius = layout.radialRadius or Helper.PANEL_LAYOUT_DEFAULTS.radialRadius,
+			radialRotation = layout.radialRotation or Helper.PANEL_LAYOUT_DEFAULTS.radialRotation,
 			rangeOverlayEnabled = layout.rangeOverlayEnabled == true,
 			rangeOverlayColor = layout.rangeOverlayColor or Helper.PANEL_LAYOUT_DEFAULTS.rangeOverlayColor,
 			checkPower = layout.checkPower == true,

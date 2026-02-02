@@ -421,6 +421,7 @@ local defaults = {
 			blizzardDispelBorder = false,
 			blizzardDispelBorderAlpha = 1,
 			blizzardDispelBorderAlphaNot = 0,
+			borderTexture = "DEFAULT",
 			showTooltip = true,
 			hidePermanentAuras = false,
 			anchor = "BOTTOM",
@@ -1702,11 +1703,6 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	if btn.border then
 		local useMasqueBorder = btn._eqolMasqueType ~= nil
 		if isDebuff then
-			if not useMasqueBorder then
-				btn.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
-				btn.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
-				btn.border:SetAllPoints(btn)
-			end
 			local r, g, b = 1, 0.25, 0.25
 			local usedApiColor
 			if not aura.isSample and aura.auraInstanceID and aura.auraInstanceID > 0 and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
@@ -1727,9 +1723,55 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 				end
 			end
 			dispelR, dispelG, dispelB = r, g, b
-			btn.border:SetVertexColor(r, g, b, 1)
-			btn.border:Show()
+			if useMasqueBorder then
+				if UFHelper and UFHelper.hideAuraBorderFrame then UFHelper.hideAuraBorderFrame(btn) end
+				btn.border:SetVertexColor(r, g, b, 1)
+				btn.border:Show()
+			else
+				local borderKey = ac and ac.borderTexture
+				local borderTex, borderCoords, borderIsEdge
+				if UFHelper and UFHelper.resolveAuraBorderTexture then
+					borderTex, borderCoords, borderIsEdge = UFHelper.resolveAuraBorderTexture(borderKey)
+				else
+					borderTex = "Interface\\Buttons\\UI-Debuff-Overlays"
+					borderCoords = { 0.296875, 0.5703125, 0, 0.515625 }
+					borderIsEdge = false
+				end
+				if borderIsEdge and borderTex and borderTex ~= "" then
+					local borderFrame = UFHelper and UFHelper.ensureAuraBorderFrame and UFHelper.ensureAuraBorderFrame(btn)
+					if borderFrame then
+						local edgeSize = (UFHelper and UFHelper.calcAuraBorderSize and UFHelper.calcAuraBorderSize(btn, ac)) or 1
+						local insetVal = edgeSize
+						local key = tostring(borderTex) .. "|" .. tostring(edgeSize)
+						if borderFrame._eqolAuraBorderKey ~= key then
+							borderFrame:SetBackdrop({
+								bgFile = "Interface\\Buttons\\WHITE8x8",
+								edgeFile = borderTex,
+								edgeSize = edgeSize,
+								insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
+							})
+							borderFrame:SetBackdropColor(0, 0, 0, 0)
+							borderFrame._eqolAuraBorderKey = key
+						end
+						borderFrame:SetBackdropBorderColor(r, g, b, 1)
+						borderFrame:Show()
+					end
+					btn.border:Hide()
+				else
+					if UFHelper and UFHelper.hideAuraBorderFrame then UFHelper.hideAuraBorderFrame(btn) end
+					btn.border:SetTexture(borderTex or "")
+					if borderCoords then
+						btn.border:SetTexCoord(borderCoords[1], borderCoords[2], borderCoords[3], borderCoords[4])
+					else
+						btn.border:SetTexCoord(0, 1, 0, 1)
+					end
+					btn.border:SetAllPoints(btn)
+					btn.border:SetVertexColor(r, g, b, 1)
+					btn.border:Show()
+				end
+			end
 		else
+			if UFHelper and UFHelper.hideAuraBorderFrame then UFHelper.hideAuraBorderFrame(btn) end
 			if not useMasqueBorder then btn.border:SetTexture(nil) end
 			btn.border:Hide()
 		end
@@ -2508,6 +2550,7 @@ do
 		blizzardDispelBorder = false,
 		blizzardDispelBorderAlpha = 1,
 		blizzardDispelBorderAlphaNot = 0,
+		borderTexture = "DEFAULT",
 		anchor = "BOTTOM",
 		offset = { x = 0, y = -5 },
 		growth = nil,

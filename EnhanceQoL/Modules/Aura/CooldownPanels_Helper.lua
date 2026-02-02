@@ -18,10 +18,13 @@ local LSM = LibStub("LibSharedMedia-3.0", true)
 Helper.PANEL_LAYOUT_DEFAULTS = {
 	iconSize = 36,
 	spacing = 2,
+	layoutMode = "GRID",
 	direction = "RIGHT",
 	wrapCount = 0,
 	wrapDirection = "DOWN",
 	growthPoint = "TOPLEFT",
+	radialRadius = 80,
+	radialRotation = 0,
 	strata = "MEDIUM",
 	rangeOverlayEnabled = false,
 	rangeOverlayColor = { 1, 0.1, 0.1, 0.35 },
@@ -78,12 +81,18 @@ Helper.PREVIEW_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 Helper.PREVIEW_ICON_SIZE = 36
 Helper.PREVIEW_COUNT_FONT_MIN = 12
 Helper.OFFSET_RANGE = 200
+Helper.RADIAL_RADIUS_RANGE = 600
+Helper.RADIAL_ROTATION_RANGE = 360
 Helper.EXAMPLE_COOLDOWN_PERCENT = 0.55
 Helper.VALID_DIRECTIONS = {
 	RIGHT = true,
 	LEFT = true,
 	UP = true,
 	DOWN = true,
+}
+Helper.VALID_LAYOUT_MODES = {
+	GRID = true,
+	RADIAL = true,
 }
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 Helper.STRATA_ORDER = STRATA_ORDER
@@ -187,6 +196,18 @@ function Helper.NormalizeDirection(direction, fallback)
 	if direction and Helper.VALID_DIRECTIONS[direction] then return direction end
 	if fallback and Helper.VALID_DIRECTIONS[fallback] then return fallback end
 	return "RIGHT"
+end
+
+function Helper.NormalizeLayoutMode(value, fallback)
+	if type(value) == "string" then
+		local upper = string.upper(value)
+		if Helper.VALID_LAYOUT_MODES[upper] then return upper end
+	end
+	if type(fallback) == "string" then
+		local upper = string.upper(fallback)
+		if Helper.VALID_LAYOUT_MODES[upper] then return upper end
+	end
+	return "GRID"
 end
 
 function Helper.NormalizeStrata(strata, fallback)

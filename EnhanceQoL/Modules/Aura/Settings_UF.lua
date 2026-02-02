@@ -3711,6 +3711,20 @@ local function buildUnitSettings(unit)
 		)
 		list[#list].isEnabled = isAuraEnabled
 
+		list[#list + 1] = checkboxDropdown(
+			L["Aura border texture"] or "Aura border texture",
+			borderOptions,
+			function() return getValue(unit, { "auraIcons", "borderTexture" }, auraDef.borderTexture or "DEFAULT") end,
+			function(val)
+				setValue(unit, { "auraIcons", "borderTexture" }, val or "DEFAULT")
+				refresh()
+				refreshAuras()
+			end,
+			auraDef.borderTexture or "DEFAULT",
+			"auras"
+		)
+		list[#list].isEnabled = isAuraEnabled
+
 		list[#list + 1] = slider(
 			L["Cooldown text size (buffs)"] or "Cooldown text size (buffs)",
 			0,
