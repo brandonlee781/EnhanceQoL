@@ -13,7 +13,7 @@ local EditMode = addon.EditMode
 local ResourceBars = addon.Aura and addon.Aura.ResourceBars
 if not ResourceBars then return end
 
-local MIN_RESOURCE_BAR_WIDTH = (ResourceBars and ResourceBars.MIN_RESOURCE_BAR_WIDTH) or 50
+local MIN_RESOURCE_BAR_WIDTH = (ResourceBars and ResourceBars.MIN_RESOURCE_BAR_WIDTH) or 10
 local THRESHOLD_THICKNESS = (ResourceBars and ResourceBars.THRESHOLD_THICKNESS) or 1
 local THRESHOLD_DEFAULT = (ResourceBars and ResourceBars.THRESHOLD_DEFAULT) or { 1, 1, 1, 0.5 }
 local DEFAULT_THRESHOLDS = (ResourceBars and ResourceBars.DEFAULT_THRESHOLDS) or { 25, 50, 75, 90 }
@@ -466,7 +466,7 @@ local function registerEditModeBars()
 					kind = settingType.Slider,
 					allowInput = true,
 					field = "width",
-					minValue = 50,
+					minValue = 10,
 					maxValue = 600,
 					valueStep = 1,
 					default = widthDefault or 200,
@@ -588,7 +588,7 @@ local function registerEditModeBars()
 				local function enforceMinWidth()
 					local c = curSpecCfg()
 					if not c then return end
-					local minWidth = MIN_RESOURCE_BAR_WIDTH or 50
+					local minWidth = MIN_RESOURCE_BAR_WIDTH or 10
 					c.width = minWidth
 					if barType == "HEALTH" then
 						ResourceBars.SetHealthBarSize(c.width or minWidth, c.height or heightDefault or 20)

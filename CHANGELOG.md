@@ -1,10 +1,14 @@
 # Changelog
 
-## [7.8.2] - 2026-02-01
+## [7.8.2] - 2026-02-02
 
 ### ✨ Added
 
 - Keybinding: Toggle friendly NPC nameplates (nameplateShowFriendlyNpcs)
+
+### 🔁 Changed
+
+- Resource Bars: Bar width min value changed to 10
 
 ### 🐛 Fixed
 
