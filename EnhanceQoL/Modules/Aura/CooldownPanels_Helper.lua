@@ -34,6 +34,7 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	opacityOutOfCombat = 1,
 	opacityInCombat = 1,
 	hideOnCooldown = false,
+	showOnCooldown = false,
 	stackAnchor = "BOTTOMRIGHT",
 	stackX = -1,
 	stackY = 1,

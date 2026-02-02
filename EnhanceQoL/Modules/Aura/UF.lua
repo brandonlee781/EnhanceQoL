@@ -3495,8 +3495,13 @@ local function updateHealth(cfg, unit)
 		elseif hc.color then
 			hr, hg, hb, ha = hc.color[1], hc.color[2], hc.color[3], hc.color[4] or 1
 		end
-	elseif hc.useClassColor and isPlayerUnit then
-		local class = select(2, UnitClass(unit))
+	elseif hc.useClassColor then
+		local class
+		if isPlayerUnit then
+			class = select(2, UnitClass(unit))
+		elseif unit == UNIT.PET then
+			class = select(2, UnitClass(UNIT.PLAYER))
+		end
 		local cr, cg, cb, ca = getClassColor(class)
 		if cr then
 			hr, hg, hb, ha = cr, cg, cb, ca
