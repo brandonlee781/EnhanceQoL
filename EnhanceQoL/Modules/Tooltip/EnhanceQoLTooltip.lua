@@ -247,8 +247,12 @@ local function GetNPCIDFromGUID(guid)
 end
 
 local function FormatUnitName(unit)
-	if not unit then return nil end
-	if UnitIsUnit and UnitIsUnit(unit, "player") then return "<YOU>" end
+	if not unit or (issecretvalue and issecretvalue(unit)) then return nil end
+	if UnitIsUnit then
+		local same = UnitIsUnit(unit, "player")
+		if issecretvalue and issecretvalue(same) then return nil end
+		if same then return "<YOU>" end
+	end
 	local name, realm = UnitName(unit)
 	if not name then return nil end
 	if issecretvalue and issecretvalue(name) then return nil end
