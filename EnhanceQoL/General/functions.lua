@@ -23,9 +23,11 @@ function addon.functions.InitDBValue(key, defaultValue)
 end
 
 function addon.functions.getIDFromGUID(unitId)
+	if not unitId then return nil end
+	if issecretvalue(unitId) then return nil end
+	if type(unitId) ~= "string" then return nil end
 	local _, _, _, _, _, npcID = strsplit("-", unitId)
-	npcID = tonumber(npcID)
-	return npcID
+	return tonumber(npcID)
 end
 
 -- Global helper: detect Timerunner (Timerunning Season active)

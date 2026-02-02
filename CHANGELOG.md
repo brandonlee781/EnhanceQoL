@@ -9,7 +9,9 @@
 ### 🐛 Fixed
 
 - Secret error: LFG List sorting by mythic+ score is now ignored in restricted content
+- Questing: Guard UnitGUID secret values when checking ignored quest NPCs (prevents secret conversion errors)
 - Health Text: Text was shown when unit is dead
+- Nameplates: Class colors on nameplates now work in 12.0.1 (updated CVar)
 - Cooldown Panels: Guarding against a protection state produced by anchoring protected frames to CDPanels
 
 ---

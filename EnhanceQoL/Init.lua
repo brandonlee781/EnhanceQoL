@@ -890,6 +890,12 @@ addon.variables.cvarOptions = {
 		description = addon.L["ShowClassColorInNameplate"],
 		category = "cvarCategoryDisplay",
 	},
+	["nameplateUseClassColorForFriendlyPlayerUnitNames"] = {
+		trueValue = "1",
+		falseValue = "0",
+		description = addon.L["ShowClassColorInNameplate"],
+		category = "cvarCategoryDisplay",
+	},
 	["ShowTargetCastbar"] = {
 		trueValue = "1",
 		falseValue = "0",
@@ -922,6 +928,18 @@ addon.variables.cvarOptions = {
 		description = addon.L["UnitNamePlayerPVPTitle"],
 		category = "cvarCategoryDisplay",
 	},
+	["floatingCombatTextCombatDamage_v2"] = {
+		trueValue = "1",
+		falseValue = "0",
+		description = addon.L["floatingCombatTextCombatDamage_v2"],
+		category = "cvarCategoryDisplay",
+	},
+	["floatingCombatTextCombatHealing_v2"] = {
+		trueValue = "1",
+		falseValue = "0",
+		description = addon.L["floatingCombatTextCombatHealing_v2"],
+		category = "cvarCategoryDisplay",
+	},
 	["ffxDeath"] = {
 		trueValue = "0",
 		falseValue = "1",
@@ -945,13 +963,6 @@ addon.variables.cvarOptions = {
 		falseValue = "0",
 		description = addon.L["UberTooltips"],
 		category = "cvarCategorySystem",
-	},
-	["NameplatePersonalShowInCombat"] = {
-		trueValue = "1",
-		falseValue = "0",
-		description = addon.L["NameplatePersonalShowInCombat"],
-		persistent = true,
-		category = "cvarCategoryUtility",
 	},
 	["AutoPushSpellToActionBar"] = {
 		trueValue = "1",
