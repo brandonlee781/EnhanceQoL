@@ -4030,7 +4030,12 @@ function CooldownPanels:UpdateVisibility(panelId)
 	local runtime = getRuntime(panelId)
 	local frame = runtime.frame
 	if not frame then return end
-	frame:SetShown(self:ShouldShowPanel(panelId))
+	local shouldShow = self:ShouldShowPanel(panelId)
+	if frame:IsShown() ~= shouldShow then
+		local inCombat = (InCombatLockdown and InCombatLockdown()) or false
+		local isProtected = frame.IsProtected and frame:IsProtected()
+		if not (inCombat and isProtected) then frame:SetShown(shouldShow) end
+	end
 	self:UpdatePanelOpacity(panelId)
 	self:UpdatePanelMouseState(panelId)
 end

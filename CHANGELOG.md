@@ -10,6 +10,7 @@
 
 - Secret error: LFG List sorting by mythic+ score is now ignored in restricted content
 - Health Text: Text was shown when unit is dead
+- Cooldown Panels: Guarding against a protection state produced by anchoring protected frames to CDPanels
 
 ---
 
