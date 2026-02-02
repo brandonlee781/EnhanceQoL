@@ -26,6 +26,7 @@
 libs\LibStub\LibStub.lua
 libs\AceLocale-3.0\AceLocale-3.0.xml
 libs\LibButtonGlow-1.0\LibButtonGlow-1.0.lua
+libs\LibCustomGlow-1.0\LibCustomGlow-1.0.lua
 locales\[TextLocale].lua
 Modules\MythicPlus\Locales\[TextLocale].lua
 Init.lua

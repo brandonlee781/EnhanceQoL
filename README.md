@@ -144,3 +144,7 @@ English • German • French • Spanish • Italian • Russian • Korean •
 ### Sound Control
 
 *   Mute categories (class abilities, mounts, etc.).
+
+### Credits
+
+*   "You've Got Mail Sound" - Description: You've got mail sound. Original AOL alert for your incoming mail.

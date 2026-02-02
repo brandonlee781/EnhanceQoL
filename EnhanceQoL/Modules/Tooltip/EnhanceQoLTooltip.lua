@@ -145,7 +145,12 @@ fInspect:SetScript("OnEvent", function(_, ev, arg1, arg2)
 		local guid = arg1
 		if issecretvalue(guid) or issecretvalue(arg1) or issecretvalue(arg2) or issecretvalue(pendingGUID) then return end
 		if not guid or guid ~= pendingGUID then return end
-		local unit = (pendingUnit and UnitGUID(pendingUnit) == guid) and pendingUnit or nil
+		local unitGuid = pendingUnit and UnitGUID(pendingUnit)
+		if issecretvalue(unitGuid) or issecretvalue(pendingUnit) then
+			pendingGUID, pendingUnit = nil, nil
+			return
+		end
+		local unit = (unitGuid == guid) and pendingUnit or nil
 		pendingGUID, pendingUnit = nil, nil
 		if not unit or not UnitExists(unit) then return end
 
@@ -219,7 +224,14 @@ EnsureUnitData = function(unit)
 
 	-- Others: request inspect if possible
 	if CanInspect and CanInspect(unit) and not InCombatLockdown() and not issecretvalue(unit) then
-		if pendingGUID and pendingUnit and UnitGUID(pendingUnit) == pendingGUID and pendingGUID == guid then return end
+		if pendingGUID and pendingUnit then
+			local pendingUnitGuid = UnitGUID(pendingUnit)
+			if issecretvalue(pendingUnitGuid) or issecretvalue(pendingGUID) or issecretvalue(guid) then
+				pendingGUID, pendingUnit = nil, nil
+			elseif pendingUnitGuid == pendingGUID and pendingGUID == guid then
+				return
+			end
+		end
 		pendingGUID = guid
 		pendingUnit = unit
 		if NotifyInspect then NotifyInspect(unit) end

@@ -61,6 +61,8 @@ local GetMicroIconForRole = GetMicroIconForRole
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PowerBarColor = PowerBarColor
 local LSM = LibStub and LibStub("LibSharedMedia-3.0")
+local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
+local DISPEL_GLOW_KEY = "EQOL_DISPEL"
 
 local GFH = UF.GroupFramesHelper
 local clampNumber = GFH.ClampNumber
@@ -407,6 +409,25 @@ local function textModeUsesDeficit(mode) return mode == "DEFICIT" end
 local function unsecretBool(value)
 	if issecretvalue and issecretvalue(value) then return nil end
 	return value
+end
+
+local function stopDispelGlow(frame)
+	if not (LCG and frame) then return end
+	if LCG.PixelGlow_Stop then LCG.PixelGlow_Stop(frame, DISPEL_GLOW_KEY) end
+	if LCG.AutoCastGlow_Stop then LCG.AutoCastGlow_Stop(frame, DISPEL_GLOW_KEY) end
+	if LCG.ProcGlow_Stop then LCG.ProcGlow_Stop(frame, DISPEL_GLOW_KEY) end
+	if LCG.ButtonGlow_Stop then LCG.ButtonGlow_Stop(frame) end
+end
+
+local function resolveDispelIndicatorEnabled(cfg, kind)
+	local sc = cfg and cfg.status or {}
+	local dt = sc.dispelTint or {}
+	local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+	local overlay = dt.enabled
+	if overlay == nil then overlay = def.enabled ~= false end
+	local glow = dt.glowEnabled
+	if glow == nil then glow = def.glowEnabled == true end
+	return overlay == true or glow == true
 end
 
 local function setTextSlot(st, fs, cacheKey, mode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
@@ -758,6 +779,15 @@ local DEFAULTS = {
 				fillEnabled = true,
 				fillAlpha = 0.2,
 				fillColor = { 0, 0, 0, 1 },
+				glowEnabled = false,
+				glowColorMode = "DISPEL",
+				glowColor = { 1, 1, 1, 1 },
+				glowEffect = "PIXEL",
+				glowFrequency = 0.25,
+				glowX = 0,
+				glowY = 0,
+				glowLines = 8,
+				glowThickness = 3,
 			},
 		},
 		roleIcon = {
@@ -1047,6 +1077,15 @@ local DEFAULTS = {
 				fillEnabled = true,
 				fillAlpha = 0.2,
 				fillColor = { 0, 0, 0, 1 },
+				glowEnabled = false,
+				glowColorMode = "DISPEL",
+				glowColor = { 1, 1, 1, 1 },
+				glowEffect = "PIXEL",
+				glowFrequency = 0.25,
+				glowX = 0,
+				glowY = 0,
+				glowLines = 8,
+				glowThickness = 3,
 			},
 		},
 		roleIcon = {
@@ -1275,7 +1314,7 @@ local function updateButtonConfig(self, cfg)
 	st._wantsAbsorb = (hc.absorbEnabled ~= false) or (hc.healAbsorbEnabled ~= false)
 	st._wantsStatusText = scfg and scfg.unitStatus and scfg.unitStatus.enabled ~= false
 	st._wantsRangeFade = scfg and scfg.rangeFade and scfg.rangeFade.enabled ~= false
-	st._wantsDispelTint = scfg and scfg.dispelTint and scfg.dispelTint.enabled ~= false
+	st._wantsDispelTint = resolveDispelIndicatorEnabled(cfg, self._eqolGroupKind or "party")
 
 	local wantsPower = true
 	local powerHeight = cfg.powerHeight
@@ -2764,7 +2803,7 @@ function GF:UpdateSampleAuras(self)
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
 	local ac = cfg and cfg.auras or {}
 	local scfg = cfg and cfg.status or {}
-	local wantsDispelTint = scfg and scfg.dispelTint and scfg.dispelTint.enabled ~= false
+	local wantsDispelTint = resolveDispelIndicatorEnabled(cfg, self._eqolGroupKind or "party")
 	st._wantsDispelTint = wantsDispelTint
 	if cfg then syncAurasEnabled(cfg) end
 	local wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false
@@ -3030,21 +3069,27 @@ end
 
 function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 	local st = getState(self)
-	if not (st and st.dispelTint) then return end
+	if not st then return end
 	local kind = self._eqolGroupKind or "party"
 	local cfg = self._eqolCfg or getCfg(kind)
 	local scfg = cfg and cfg.status or {}
 	local dcfg = scfg.dispelTint or {}
-	if dcfg.enabled == false then
-		st.dispelTint:Hide()
+	local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+	local overlayEnabled = dcfg.enabled
+	if overlayEnabled == nil then overlayEnabled = defDispel.enabled ~= false end
+	local glowEnabled = dcfg.glowEnabled
+	if glowEnabled == nil then glowEnabled = defDispel.glowEnabled == true end
+	if not overlayEnabled and not glowEnabled then
+		if st.dispelTint then st.dispelTint:Hide() end
+		stopDispelGlow(st.barGroup or self)
 		return
 	end
-	local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
 	if allowSample then
 		local showSample = dcfg.showSample
 		if showSample == nil then showSample = defDispel.showSample == true end
 		if not showSample then
-			st.dispelTint:Hide()
+			if st.dispelTint then st.dispelTint:Hide() end
+			stopDispelGlow(st.barGroup or self)
 			return
 		end
 	end
@@ -3059,7 +3104,7 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 	if not fillEnabled then fillAlpha = 0 end
 	local bgAlpha = fillAlpha * (fa or 1)
 	local function applyTint(r, g, b)
-		if st.dispelTint.Background then
+		if st.dispelTint and st.dispelTint.Background then
 			-- Use a solid color so the background color choice is visible (the atlas is dark).
 			if st.dispelTint.Background.SetColorTexture then
 				st.dispelTint.Background:SetColorTexture(fr, fg, fb, 1)
@@ -3069,58 +3114,123 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 			if st.dispelTint.Background.SetAlpha then st.dispelTint.Background:SetAlpha(bgAlpha) end
 			if st.dispelTint.Background.SetShown then st.dispelTint.Background:SetShown(bgAlpha > 0) end
 		end
-		if st.dispelTint.Gradient then st.dispelTint.Gradient:SetVertexColor(r, g, b, alpha) end
-		if st.dispelTint.Border then st.dispelTint.Border:SetVertexColor(r, g, b, alpha) end
-		if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(1) end
-		st.dispelTint:Show()
+		if st.dispelTint and st.dispelTint.Gradient then st.dispelTint.Gradient:SetVertexColor(r, g, b, alpha) end
+		if st.dispelTint and st.dispelTint.Border then st.dispelTint.Border:SetVertexColor(r, g, b, alpha) end
+		if st.dispelTint and st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(1) end
+		if st.dispelTint then st.dispelTint:Show() end
 	end
+
+	local r, g, b
 	if allowSample then
-		local r, g, b = getDebuffColorFromName("Magic")
+		r, g, b = getDebuffColorFromName("Magic")
+	else
+		local unit = getUnit(self)
+		if unit and cache and cache.order and cache.auras then
+			local auras = cache.auras
+			local order = cache.order
+			for i = 1, #order do
+				local auraId = order[i]
+				local aura = auraId and auras[auraId]
+				if aura then
+					if aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
+						local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, colorcurve)
+						if not (issecretvalue and issecretvalue(color)) then
+							if color and color.GetRGBA then
+								r, g, b = color:GetRGBA()
+							elseif color and color.r then
+								r, g, b = color.r, color.g, color.b
+							end
+						end
+					end
+					if not r then
+						local dispelName = aura.dispelName
+						if not (issecretvalue and issecretvalue(dispelName)) then
+							r, g, b = getDebuffColorFromName(dispelName or "None")
+						end
+					end
+					break
+				end
+			end
+		end
+	end
+
+	if overlayEnabled then
 		if r then
-			applyTint(r, g, b)
-		else
+			applyTint(r, g or 0, b or 0)
+		elseif st.dispelTint then
 			st.dispelTint:Hide()
 		end
-		return
-	end
-	local unit = getUnit(self)
-	if not (unit and cache and cache.order and cache.auras) then
+	elseif st.dispelTint then
 		st.dispelTint:Hide()
-		return
 	end
-	local auras = cache.auras
-	local order = cache.order
-	local found = false
-	local r, g, b
-	for i = 1, #order do
-		local auraId = order[i]
-		local aura = auraId and auras[auraId]
-		if aura then
-			found = true
-			if aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
-				local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, colorcurve)
-				if not (issecretvalue and issecretvalue(color)) then
-					if color and color.GetRGBA then
-						r, g, b = color:GetRGBA()
-					elseif color and color.r then
-						r, g, b = color.r, color.g, color.b
-					end
-				end
-			end
-			if not r then
-				local dispelName = aura.dispelName
-				if not (issecretvalue and issecretvalue(dispelName)) then
-					r, g, b = getDebuffColorFromName(dispelName or "None")
-				end
-			end
-			break
-		end
-	end
-	if r then
-		applyTint(r, g or 0, b or 0)
+
+	if glowEnabled then
+		GF:UpdateDispelGlow(self, r, g, b)
 	else
-		st.dispelTint:Hide()
+		stopDispelGlow(st.barGroup or self)
 	end
+end
+
+function GF:UpdateDispelGlow(self, r, g, b)
+	local st = getState(self)
+	if not st then return end
+	if not (LCG and LCG.PixelGlow_Start) then return end
+	local kind = self._eqolGroupKind or "party"
+	local cfg = self._eqolCfg or getCfg(kind)
+	local scfg = cfg and cfg.status or {}
+	local dcfg = scfg.dispelTint or {}
+	local defDispel = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+	local glowEnabled = dcfg.glowEnabled
+	if glowEnabled == nil then glowEnabled = defDispel.glowEnabled == true end
+	if not glowEnabled then
+		stopDispelGlow(st.barGroup or self)
+		st._dispelGlowActive = nil
+		return
+	end
+	if not (r and g and b) then
+		stopDispelGlow(st.barGroup or self)
+		st._dispelGlowActive = nil
+		return
+	end
+
+	local colorMode = dcfg.glowColorMode or defDispel.glowColorMode or "DISPEL"
+	local cr, cg, cb = r, g, b
+	if colorMode == "CUSTOM" then
+		local col = dcfg.glowColor or defDispel.glowColor or { 1, 1, 1, 1 }
+		cr, cg, cb = unpackColor(col, { 1, 1, 1, 1 })
+	end
+	local effect = dcfg.glowEffect or defDispel.glowEffect or "PIXEL"
+	if effect ~= "PIXEL" then effect = "PIXEL" end
+
+	local lines = clampNumber(dcfg.glowLines or defDispel.glowLines or 8, 1, 20, 8)
+	local freq = clampNumber(dcfg.glowFrequency or defDispel.glowFrequency or 0.25, -1.5, 1.5, 0.25)
+	local thickness = clampNumber(dcfg.glowThickness or defDispel.glowThickness or 3, 1, 10, 3)
+	local xoff = clampNumber(dcfg.glowX or defDispel.glowX or 0, -10, 10, 0)
+	local yoff = clampNumber(dcfg.glowY or defDispel.glowY or 0, -10, 10, 0)
+
+	if
+		st._dispelGlowActive
+		and st._dispelGlowR == cr
+		and st._dispelGlowG == cg
+		and st._dispelGlowB == cb
+		and st._dispelGlowLines == lines
+		and st._dispelGlowFreq == freq
+		and st._dispelGlowThickness == thickness
+		and st._dispelGlowX == xoff
+		and st._dispelGlowY == yoff
+	then
+		return
+	end
+
+	local target = st.barGroup or self
+	stopDispelGlow(target)
+	LCG.PixelGlow_Start(target, { cr, cg, cb, 1 }, lines, freq, nil, thickness, xoff, yoff, nil, DISPEL_GLOW_KEY)
+	st._dispelGlowActive = true
+	st._dispelGlowR, st._dispelGlowG, st._dispelGlowB = cr, cg, cb
+	st._dispelGlowLines = lines
+	st._dispelGlowFreq = freq
+	st._dispelGlowThickness = thickness
+	st._dispelGlowX, st._dispelGlowY = xoff, yoff
 end
 
 function GF:UpdateRange(self, inRange)
@@ -7329,13 +7439,13 @@ local function buildEditModeSettings(kind, editModeId)
 			end,
 		},
 		{
-			name = "Dispel tint",
+			name = "Dispel indicator",
 			kind = SettingType.Collapsible,
 			id = "dispeltint",
 			defaultCollapsed = true,
 		},
 		{
-			name = "Enable dispel tint",
+			name = "Enable overlay",
 			kind = SettingType.Checkbox,
 			field = "dispelTintEnabled",
 			parentId = "dispeltint",
@@ -7493,8 +7603,11 @@ local function buildEditModeSettings(kind, editModeId)
 				local sc = cfg and cfg.status or {}
 				local dt = sc.dispelTint or {}
 				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
-				if dt.enabled == nil then return def.enabled ~= false end
-				return dt.enabled == true
+				local overlayEnabled = dt.enabled
+				if overlayEnabled == nil then overlayEnabled = def.enabled ~= false end
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return overlayEnabled == true or glowEnabled == true
 			end,
 		},
 		{
@@ -7530,6 +7643,316 @@ local function buildEditModeSettings(kind, editModeId)
 				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
 				if dt.enabled == nil then return def.enabled ~= false end
 				return dt.enabled == true
+			end,
+		},
+		{
+			name = "",
+			kind = SettingType.Divider,
+			parentId = "dispeltint",
+		},
+		{
+			name = "Enable glow",
+			kind = SettingType.Checkbox,
+			field = "dispelTintGlowEnabled",
+			parentId = "dispeltint",
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				if dt.glowEnabled == nil then return def.glowEnabled == true end
+				return dt.glowEnabled == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowEnabled = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowEnabled", cfg.status.dispelTint.glowEnabled, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				GF:RefreshDispelTint()
+			end,
+		},
+		{
+			name = "Glow color",
+			kind = SettingType.Dropdown,
+			field = "dispelTintGlowColorMode",
+			parentId = "dispeltint",
+			values = {
+				{ value = "DISPEL", text = "Dispel color" },
+				{ value = "CUSTOM", text = "Custom color" },
+			},
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowColorMode or def.glowColorMode or "DISPEL"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowColorMode = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowColorMode", value, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "Custom glow color",
+			kind = SettingType.Color,
+			field = "dispelTintGlowColor",
+			parentId = "dispeltint",
+			hasOpacity = false,
+			default = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint and DEFAULTS[kind].status.dispelTint.glowColor)
+				or { 1, 1, 1, 1 },
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint and DEFAULTS[kind].status.dispelTint.glowColor)
+					or { 1, 1, 1, 1 }
+				local r, g, b, a = unpackColor(dt.glowColor, def)
+				return { r = r, g = g, b = b, a = a }
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not (cfg and value) then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowColor = { value.r or 1, value.g or 1, value.b or 1, 1 }
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowColor", cfg.status.dispelTint.glowColor, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				local mode = dt.glowColorMode or def.glowColorMode or "DISPEL"
+				return glowEnabled == true and mode == "CUSTOM"
+			end,
+		},
+		{
+			name = "Glow effect",
+			kind = SettingType.Dropdown,
+			field = "dispelTintGlowEffect",
+			parentId = "dispeltint",
+			values = {
+				{ value = "PIXEL", text = "Pixel" },
+			},
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowEffect or def.glowEffect or "PIXEL"
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowEffect = value
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowEffect", value, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "Animation speed",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintGlowFrequency",
+			parentId = "dispeltint",
+			minValue = -1.5,
+			maxValue = 1.5,
+			valueStep = 0.25,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowFrequency or def.glowFrequency or 0.25
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowFrequency = clampNumber(value, -1.5, 1.5, cfg.status.dispelTint.glowFrequency or 0.25)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowFrequency", cfg.status.dispelTint.glowFrequency, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "X Offset",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintGlowX",
+			parentId = "dispeltint",
+			minValue = -10,
+			maxValue = 10,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowX or def.glowX or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowX = clampNumber(value, -10, 10, cfg.status.dispelTint.glowX or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowX", cfg.status.dispelTint.glowX, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "Y Offset",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintGlowY",
+			parentId = "dispeltint",
+			minValue = -10,
+			maxValue = 10,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowY or def.glowY or 0
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowY = clampNumber(value, -10, 10, cfg.status.dispelTint.glowY or 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowY", cfg.status.dispelTint.glowY, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "Number of lines",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintGlowLines",
+			parentId = "dispeltint",
+			minValue = 1,
+			maxValue = 20,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowLines or def.glowLines or 8
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowLines = clampNumber(value, 1, 20, cfg.status.dispelTint.glowLines or 8)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowLines", cfg.status.dispelTint.glowLines, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
+			end,
+		},
+		{
+			name = "Thickness",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = "dispelTintGlowThickness",
+			parentId = "dispeltint",
+			minValue = 1,
+			maxValue = 10,
+			valueStep = 1,
+			get = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				return dt.glowThickness or def.glowThickness or 3
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.status = cfg.status or {}
+				cfg.status.dispelTint = cfg.status.dispelTint or {}
+				cfg.status.dispelTint.glowThickness = clampNumber(value, 1, 10, cfg.status.dispelTint.glowThickness or 3)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "dispelTintGlowThickness", cfg.status.dispelTint.glowThickness, nil, true) end
+				GF:RefreshDispelTint()
+			end,
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local sc = cfg and cfg.status or {}
+				local dt = sc.dispelTint or {}
+				local def = (DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.dispelTint) or {}
+				local glowEnabled = dt.glowEnabled
+				if glowEnabled == nil then glowEnabled = def.glowEnabled == true end
+				return glowEnabled == true
 			end,
 		},
 		{
@@ -11210,6 +11633,15 @@ local function applyEditModeData(kind, data)
 		or data.dispelTintFillAlpha ~= nil
 		or data.dispelTintFillColor ~= nil
 		or data.dispelTintSample ~= nil
+		or data.dispelTintGlowEnabled ~= nil
+		or data.dispelTintGlowColorMode ~= nil
+		or data.dispelTintGlowColor ~= nil
+		or data.dispelTintGlowEffect ~= nil
+		or data.dispelTintGlowFrequency ~= nil
+		or data.dispelTintGlowX ~= nil
+		or data.dispelTintGlowY ~= nil
+		or data.dispelTintGlowLines ~= nil
+		or data.dispelTintGlowThickness ~= nil
 	then
 		cfg.status = cfg.status or {}
 	end
@@ -11271,6 +11703,15 @@ local function applyEditModeData(kind, data)
 		or data.dispelTintFillAlpha ~= nil
 		or data.dispelTintFillColor ~= nil
 		or data.dispelTintSample ~= nil
+		or data.dispelTintGlowEnabled ~= nil
+		or data.dispelTintGlowColorMode ~= nil
+		or data.dispelTintGlowColor ~= nil
+		or data.dispelTintGlowEffect ~= nil
+		or data.dispelTintGlowFrequency ~= nil
+		or data.dispelTintGlowX ~= nil
+		or data.dispelTintGlowY ~= nil
+		or data.dispelTintGlowLines ~= nil
+		or data.dispelTintGlowThickness ~= nil
 	then
 		cfg.status.dispelTint = cfg.status.dispelTint or {}
 		if data.dispelTintEnabled ~= nil then cfg.status.dispelTint.enabled = data.dispelTintEnabled and true or false end
@@ -11279,6 +11720,21 @@ local function applyEditModeData(kind, data)
 		if data.dispelTintFillAlpha ~= nil then cfg.status.dispelTint.fillAlpha = clampNumber(data.dispelTintFillAlpha, 0, 1, cfg.status.dispelTint.fillAlpha or 0.2) end
 		if data.dispelTintFillColor ~= nil then cfg.status.dispelTint.fillColor = data.dispelTintFillColor end
 		if data.dispelTintSample ~= nil then cfg.status.dispelTint.showSample = data.dispelTintSample and true or false end
+		if data.dispelTintGlowEnabled ~= nil then cfg.status.dispelTint.glowEnabled = data.dispelTintGlowEnabled and true or false end
+		if data.dispelTintGlowColorMode ~= nil then cfg.status.dispelTint.glowColorMode = data.dispelTintGlowColorMode end
+		if data.dispelTintGlowColor ~= nil then cfg.status.dispelTint.glowColor = data.dispelTintGlowColor end
+		if data.dispelTintGlowEffect ~= nil then cfg.status.dispelTint.glowEffect = data.dispelTintGlowEffect end
+		if data.dispelTintGlowFrequency ~= nil then
+			cfg.status.dispelTint.glowFrequency = clampNumber(data.dispelTintGlowFrequency, -1.5, 1.5, cfg.status.dispelTint.glowFrequency or 0.25)
+		end
+		if data.dispelTintGlowX ~= nil then cfg.status.dispelTint.glowX = clampNumber(data.dispelTintGlowX, -10, 10, cfg.status.dispelTint.glowX or 0) end
+		if data.dispelTintGlowY ~= nil then cfg.status.dispelTint.glowY = clampNumber(data.dispelTintGlowY, -10, 10, cfg.status.dispelTint.glowY or 0) end
+		if data.dispelTintGlowLines ~= nil then
+			cfg.status.dispelTint.glowLines = clampNumber(data.dispelTintGlowLines, 1, 20, cfg.status.dispelTint.glowLines or 8)
+		end
+		if data.dispelTintGlowThickness ~= nil then
+			cfg.status.dispelTint.glowThickness = clampNumber(data.dispelTintGlowThickness, 1, 10, cfg.status.dispelTint.glowThickness or 3)
+		end
 	end
 	if data.raidIconEnabled ~= nil or data.raidIconSize ~= nil or data.raidIconPoint ~= nil or data.raidIconOffsetX ~= nil or data.raidIconOffsetY ~= nil then
 		cfg.status.raidIcon = cfg.status.raidIcon or {}
@@ -11738,6 +12194,16 @@ function GF:EnsureEditMode()
 				dispelTintFillColor = (sc.dispelTint and sc.dispelTint.fillColor) or defDispel.fillColor or { 0, 0, 0, 1 },
 				dispelTintSample = (sc.dispelTint and sc.dispelTint.showSample ~= nil) and (sc.dispelTint.showSample == true)
 					or ((sc.dispelTint == nil or sc.dispelTint.showSample == nil) and defDispel.showSample == true),
+				dispelTintGlowEnabled = (sc.dispelTint and sc.dispelTint.glowEnabled ~= nil) and (sc.dispelTint.glowEnabled == true)
+					or ((sc.dispelTint == nil or sc.dispelTint.glowEnabled == nil) and defDispel.glowEnabled == true),
+				dispelTintGlowColorMode = (sc.dispelTint and sc.dispelTint.glowColorMode) or defDispel.glowColorMode or "DISPEL",
+				dispelTintGlowColor = (sc.dispelTint and sc.dispelTint.glowColor) or defDispel.glowColor or { 1, 1, 1, 1 },
+				dispelTintGlowEffect = (sc.dispelTint and sc.dispelTint.glowEffect) or defDispel.glowEffect or "PIXEL",
+				dispelTintGlowFrequency = (sc.dispelTint and sc.dispelTint.glowFrequency) or defDispel.glowFrequency or 0.25,
+				dispelTintGlowX = (sc.dispelTint and sc.dispelTint.glowX) or defDispel.glowX or 0,
+				dispelTintGlowY = (sc.dispelTint and sc.dispelTint.glowY) or defDispel.glowY or 0,
+				dispelTintGlowLines = (sc.dispelTint and sc.dispelTint.glowLines) or defDispel.glowLines or 8,
+				dispelTintGlowThickness = (sc.dispelTint and sc.dispelTint.glowThickness) or defDispel.glowThickness or 3,
 				raidIconEnabled = (sc.raidIcon and sc.raidIcon.enabled) ~= false,
 				raidIconSize = (sc.raidIcon and sc.raidIcon.size) or 18,
 				raidIconPoint = (sc.raidIcon and sc.raidIcon.point) or "TOP",

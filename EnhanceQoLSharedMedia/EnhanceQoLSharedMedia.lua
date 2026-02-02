@@ -16,6 +16,7 @@ addon.SharedMedia.sounds = {
 	{ key = "bloodlust", label = "For the Horde", path = effectPath .. "bloodlust.ogg" },
 	{ key = "cartoonbite", label = "EQOL: Bite", path = effectPath .. "cartoonbite.ogg" },
 	{ key = "gamingpunch", label = "EQOL: Punch", path = effectPath .. "gamingpunch.ogg" },
+	{ key = "yougotmail", label = "EQOL: You Got Mail", path = effectPath .. "yougotmail.ogg" },
 
 	-- Voiceovers
 	{ key = "1", label = "EQOL: 1", path = voiceoverPath .. "1.ogg" },
