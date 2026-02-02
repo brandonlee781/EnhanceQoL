@@ -131,7 +131,7 @@ local combatFeedbackLocationOptions = {
 	{ value = "FRAME", label = L["Frame"] or "Frame" },
 	{ value = "STATUS", label = L["UFStatusLine"] or "Status line" },
 	{ value = "HEALTH", label = L["Health"] or HEALTH or "Health" },
-	{ value = "POWER", label = L["Power"] or POWER or "Power" },
+	{ value = "POWER", label = L["Power"] or _G.POWER or "Power" },
 }
 
 local combatFeedbackAnchorOptions = {
