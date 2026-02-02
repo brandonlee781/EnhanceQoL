@@ -14,6 +14,7 @@
 ### 🐛 Fixed
 
 - Tooltips: Guard secret values when resolving unit names (prevents secret boolean test errors)
+- Group Frames: Guard missing Edit Mode registration IDs on disable
 
 ---
 

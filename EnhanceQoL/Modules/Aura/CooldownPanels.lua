@@ -244,6 +244,7 @@ local updateItemCountCacheForItem
 local ensureRoot
 local ensurePanelAnchor
 local panelAllowsSpec
+local getPlayerSpecId
 
 local function refreshEditModeSettingValues()
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
@@ -268,6 +269,7 @@ local fakeCursorFrame
 local fakeCursorResetOnShow = true
 local fakeCursorMode
 local cursorFollowRunner
+local cursorSpecRetryPending
 
 local function ensureFakeCursorFrame()
 	if fakeCursorFrame then return fakeCursorFrame end
@@ -368,6 +370,37 @@ local function panelUsesFakeCursor(panel)
 	return rel == FAKE_CURSOR_FRAME_NAME
 end
 
+local function hasSpecFilteredCursorPanels()
+	local root = ensureRoot()
+	if not root or not root.panels then return false end
+	for _, panel in pairs(root.panels) do
+		if panel and panelUsesFakeCursor(panel) and panel.enabled ~= false then
+			local filter = panel.specFilter
+			if type(filter) == "table" then
+				for _, enabled in pairs(filter) do
+					if enabled then return true end
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function scheduleCursorSpecRetry()
+	if cursorSpecRetryPending then return end
+	if not C_Timer or not C_Timer.After then return end
+	cursorSpecRetryPending = true
+	C_Timer.After(0.5, function()
+		cursorSpecRetryPending = false
+		if not hasSpecFilteredCursorPanels() then return end
+		if getPlayerSpecId and getPlayerSpecId() then
+			CooldownPanels:UpdateCursorAnchorState()
+			return
+		end
+		scheduleCursorSpecRetry()
+	end)
+end
+
 local function hasFakeCursorPanels()
 	local root = ensureRoot()
 	if not root or not root.panels then return false end
@@ -389,9 +422,11 @@ function CooldownPanels:UpdateCursorAnchorState()
 			setFakeCursorMode("follow")
 			startCursorFollow()
 		end
+		cursorSpecRetryPending = false
 	else
 		stopCursorFollow()
 		setFakeCursorMode("hidden")
+		if hasSpecFilteredCursorPanels() and getPlayerSpecId and not getPlayerSpecId() then scheduleCursorSpecRetry() end
 	end
 end
 
@@ -783,7 +818,7 @@ local function getEntryTypeLabel(entryType)
 	return entryType or ""
 end
 
-local function getPlayerSpecId()
+getPlayerSpecId = function()
 	if not GetSpecialization then return nil end
 	local specIndex = GetSpecialization()
 	if not specIndex then return nil end
@@ -1644,6 +1679,11 @@ local function applyIconLayout(frame, count, layout)
 	local drawEdge = layout.cooldownDrawEdge ~= false
 	local drawBling = layout.cooldownDrawBling ~= false
 	local drawSwipe = layout.cooldownDrawSwipe ~= false
+	local cooldownTextFont = layout.cooldownTextFont
+	local cooldownTextSize = layout.cooldownTextSize
+	local cooldownTextStyle = layout.cooldownTextStyle
+	local cooldownTextX = Helper.ClampInt(layout.cooldownTextX, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, 0)
+	local cooldownTextY = Helper.ClampInt(layout.cooldownTextY, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, 0)
 
 	local cols, rows = 1, 1
 	local baseIconSize = iconSize
@@ -1771,6 +1811,31 @@ local function applyIconLayout(frame, count, layout)
 			icon.keybind:SetFont(keybindFontPath, keybindFontSize, keybindFontStyle)
 		end
 		setCooldownDrawState(icon.cooldown, drawEdge, drawBling, drawSwipe)
+		if icon.cooldown and icon.cooldown.GetCountdownFontString then
+			local fontString = icon.cooldown:GetCountdownFontString()
+			if fontString then
+				if not icon.cooldown._eqolCooldownTextDefaults then
+					local fontPath, fontSize, fontStyle = fontString:GetFont()
+					local point, _, relPoint, x, y = fontString:GetPoint()
+					icon.cooldown._eqolCooldownTextDefaults = {
+						font = fontPath,
+						size = fontSize,
+						style = fontStyle,
+						point = point,
+						relPoint = relPoint,
+						x = x,
+						y = y,
+					}
+				end
+				local defaults = icon.cooldown._eqolCooldownTextDefaults
+				local fontPath = Helper.ResolveFontPath(cooldownTextFont, defaults and defaults.font)
+				local fontSize = Helper.ClampInt(cooldownTextSize, 6, 64, defaults and defaults.size or 12)
+				local fontStyle = Helper.NormalizeFontStyle(cooldownTextStyle, defaults and defaults.style) or ""
+				fontString:SetFont(fontPath, fontSize, fontStyle)
+				fontString:ClearAllPoints()
+				fontString:SetPoint("CENTER", icon.cooldown, "CENTER", cooldownTextX, cooldownTextY)
+			end
+		end
 		if icon.previewGlow then
 			icon.previewGlow:ClearAllPoints()
 			icon.previewGlow:SetPoint("CENTER", icon, "CENTER", 0, 0)
@@ -2207,6 +2272,11 @@ local function copyPanelSettings(targetPanelId, sourcePanelId)
 			data.showTooltips = layout.showTooltips == true
 			data.hideOnCooldown = layout.hideOnCooldown == true
 			data.showOnCooldown = layout.showOnCooldown == true
+			data.cooldownTextFont = layout.cooldownTextFont or data.cooldownTextFont
+			data.cooldownTextSize = layout.cooldownTextSize or data.cooldownTextSize
+			data.cooldownTextStyle = Helper.NormalizeFontStyleChoice(layout.cooldownTextStyle, data.cooldownTextStyle)
+			data.cooldownTextX = layout.cooldownTextX or 0
+			data.cooldownTextY = layout.cooldownTextY or 0
 		end
 	end
 	if runtime and runtime.editModeId and EditMode and EditMode.RefreshFrame then EditMode:RefreshFrame(runtime.editModeId) end
@@ -2362,6 +2432,16 @@ local function ensureEditor()
 	local entryHeader = Helper.CreateLabel(rightContent, L["CooldownPanelEntry"] or "Entry", 12, "OUTLINE")
 	entryHeader:SetPoint("TOPLEFT", panelSpecButton, "BOTTOMLEFT", 2, -16)
 	entryHeader:SetTextColor(0.9, 0.9, 0.9, 1)
+
+	local entryEmptyHint = rightContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	entryEmptyHint:SetPoint("TOPLEFT", entryHeader, "BOTTOMLEFT", 2, -8)
+	entryEmptyHint:SetWidth(200)
+	entryEmptyHint:SetJustifyH("LEFT")
+	entryEmptyHint:SetJustifyV("TOP")
+	if entryEmptyHint.SetWordWrap then entryEmptyHint:SetWordWrap(true) end
+	entryEmptyHint:SetText(L["CooldownPanelSelectEntryHint"] or "Click a spell/item/slot to modify")
+	entryEmptyHint:SetTextColor(0.75, 0.75, 0.75, 1)
+	entryEmptyHint:Hide()
 
 	local entryIcon = rightContent:CreateTexture(nil, "ARTWORK")
 	entryIcon:SetSize(36, 36)
@@ -2570,6 +2650,8 @@ local function ensureEditor()
 			panelEnabled = panelEnabled,
 			panelSpecLabel = panelSpecLabel,
 			panelSpecButton = panelSpecButton,
+			entryHeader = entryHeader,
+			entryEmptyHint = entryEmptyHint,
 			entryIcon = entryIcon,
 			entryName = entryName,
 			entryType = entryType,
@@ -3346,6 +3428,13 @@ local function refreshInspector(editor, panel, entry)
 	end
 
 	if entry then
+		if inspector.entryHeader then inspector.entryHeader:Show() end
+		if inspector.entryEmptyHint then inspector.entryEmptyHint:Hide() end
+		if inspector.entryIcon then inspector.entryIcon:Show() end
+		if inspector.entryName then inspector.entryName:Show() end
+		if inspector.entryType then inspector.entryType:Show() end
+		if inspector.entryId then inspector.entryId:Show() end
+
 		inspector.entryIcon:SetTexture(getEntryIcon(entry))
 		inspector.entryName:SetText(getEntryName(entry))
 		inspector.entryType:SetText(getEntryTypeLabel(entry.type))
@@ -3375,13 +3464,22 @@ local function refreshInspector(editor, panel, entry)
 		inspector.removeEntry:Enable()
 		layoutInspectorToggles(inspector, entry)
 	else
-		inspector.entryIcon:SetTexture(Helper.PREVIEW_ICON)
-		inspector.entryName:SetText(L["CooldownPanelSelectEntry"] or "Select an entry.")
-		inspector.entryType:SetText("")
-		inspector.entryId:SetText("")
+		if inspector.entryHeader then inspector.entryHeader:Hide() end
+		if inspector.entryEmptyHint then
+			inspector.entryEmptyHint:SetText(L["CooldownPanelSelectEntryHint"] or "Click a spell/item/slot to modify")
+			inspector.entryEmptyHint:Show()
+		end
+		if inspector.entryIcon then inspector.entryIcon:Hide() end
+		if inspector.entryName then inspector.entryName:Hide() end
+		if inspector.entryType then inspector.entryType:Hide() end
+		if inspector.entryId then
+			inspector.entryId:SetText("")
+			inspector.entryId:Hide()
+		end
 
 		inspector.entryId:Disable()
 		inspector.removeEntry:Disable()
+		if inspector.removeEntry then inspector.removeEntry:Hide() end
 		if inspector.soundButton then inspector.soundButton:SetText(getSoundButtonText(nil)) end
 		layoutInspectorToggles(inspector, nil)
 	end
@@ -4333,6 +4431,7 @@ function CooldownPanels:RefreshAllPanels()
 	for panelId in pairs(root.panels) do
 		if not containsId(root.order, panelId) then self:RefreshPanel(panelId) end
 	end
+	self:UpdateCursorAnchorState()
 end
 
 local function syncEditModeValue(panelId, field, value)
@@ -4442,6 +4541,16 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 	elseif field == "showOnCooldown" then
 		layout.showOnCooldown = value == true
 		if layout.showOnCooldown then layout.hideOnCooldown = false end
+	elseif field == "cooldownTextFont" then
+		if type(value) == "string" and value ~= "" then layout.cooldownTextFont = value end
+	elseif field == "cooldownTextSize" then
+		layout.cooldownTextSize = Helper.ClampInt(value, 6, 64, layout.cooldownTextSize or 12)
+	elseif field == "cooldownTextStyle" then
+		layout.cooldownTextStyle = Helper.NormalizeFontStyleChoice(value, layout.cooldownTextStyle or Helper.PANEL_LAYOUT_DEFAULTS.cooldownTextStyle)
+	elseif field == "cooldownTextX" then
+		layout.cooldownTextX = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.cooldownTextX or 0)
+	elseif field == "cooldownTextY" then
+		layout.cooldownTextY = Helper.ClampInt(value, -Helper.OFFSET_RANGE, Helper.OFFSET_RANGE, layout.cooldownTextY or 0)
 	elseif field == "opacityOutOfCombat" then
 		layout.opacityOutOfCombat = Helper.NormalizeOpacity(value, layout.opacityOutOfCombat or Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat)
 	elseif field == "opacityInCombat" then
@@ -4542,6 +4651,11 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "showTooltips", data.showTooltips, true)
 	applyEditLayout(panelId, "hideOnCooldown", data.hideOnCooldown, true)
 	applyEditLayout(panelId, "showOnCooldown", data.showOnCooldown, true)
+	applyEditLayout(panelId, "cooldownTextFont", data.cooldownTextFont, true)
+	applyEditLayout(panelId, "cooldownTextSize", data.cooldownTextSize, true)
+	applyEditLayout(panelId, "cooldownTextStyle", data.cooldownTextStyle, true)
+	applyEditLayout(panelId, "cooldownTextX", data.cooldownTextX, true)
+	applyEditLayout(panelId, "cooldownTextY", data.cooldownTextY, true)
 	applyEditLayout(panelId, "opacityOutOfCombat", data.opacityOutOfCombat, true)
 	applyEditLayout(panelId, "opacityInCombat", data.opacityInCombat, true)
 
@@ -5272,6 +5386,90 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				end,
 			},
 			{
+				name = L["CooldownPanelCooldownTextHeader"] or "Cooldown text",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelCooldownText",
+				defaultCollapsed = true,
+			},
+			{
+				name = L["CooldownPanelCooldownTextFont"] or "Cooldown text font",
+				kind = SettingType.Dropdown,
+				field = "cooldownTextFont",
+				parentId = "cooldownPanelCooldownText",
+				height = 160,
+				default = layout.cooldownTextFont or countFontPath,
+				get = function() return layout.cooldownTextFont or countFontPath end,
+				set = function(_, value) applyEditLayout(panelId, "cooldownTextFont", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(fontOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return (layout.cooldownTextFont or countFontPath) == option.value end,
+							function() applyEditLayout(panelId, "cooldownTextFont", option.value) end
+						)
+					end
+				end,
+			},
+			{
+				name = L["CooldownPanelCooldownTextSize"] or "Cooldown text size",
+				kind = SettingType.Slider,
+				field = "cooldownTextSize",
+				parentId = "cooldownPanelCooldownText",
+				default = layout.cooldownTextSize or countFontSize or 12,
+				minValue = 6,
+				maxValue = 64,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return layout.cooldownTextSize or countFontSize or 12 end,
+				set = function(_, value) applyEditLayout(panelId, "cooldownTextSize", value) end,
+				formatter = function(value) return tostring(math.floor((tonumber(value) or 0) + 0.5)) end,
+			},
+			{
+				name = L["CooldownPanelCooldownTextStyle"] or "Cooldown text outline",
+				kind = SettingType.Dropdown,
+				field = "cooldownTextStyle",
+				parentId = "cooldownPanelCooldownText",
+				height = 120,
+				default = Helper.NormalizeFontStyleChoice(layout.cooldownTextStyle, "NONE"),
+				get = function() return Helper.NormalizeFontStyleChoice(layout.cooldownTextStyle, "NONE") end,
+				set = function(_, value) applyEditLayout(panelId, "cooldownTextStyle", value) end,
+				generator = function(_, root)
+					for _, option in ipairs(fontStyleOptions) do
+						root:CreateRadio(
+							option.label,
+							function() return Helper.NormalizeFontStyleChoice(layout.cooldownTextStyle, "NONE") == option.value end,
+							function() applyEditLayout(panelId, "cooldownTextStyle", option.value) end
+						)
+					end
+				end,
+			},
+			{
+				name = L["CooldownPanelCooldownTextOffsetX"] or "Cooldown text offset X",
+				kind = SettingType.Slider,
+				field = "cooldownTextX",
+				parentId = "cooldownPanelCooldownText",
+				default = layout.cooldownTextX or 0,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return layout.cooldownTextX or 0 end,
+				set = function(_, value) applyEditLayout(panelId, "cooldownTextX", value) end,
+			},
+			{
+				name = L["CooldownPanelCooldownTextOffsetY"] or "Cooldown text offset Y",
+				kind = SettingType.Slider,
+				field = "cooldownTextY",
+				parentId = "cooldownPanelCooldownText",
+				default = layout.cooldownTextY or 0,
+				minValue = -Helper.OFFSET_RANGE,
+				maxValue = Helper.OFFSET_RANGE,
+				valueStep = 1,
+				allowInput = true,
+				get = function() return layout.cooldownTextY or 0 end,
+				set = function(_, value) applyEditLayout(panelId, "cooldownTextY", value) end,
+			},
+			{
 				name = L["CooldownPanelOverlaysHeader"] or "Overlays",
 				kind = SettingType.Collapsible,
 				id = "cooldownPanelOverlays",
@@ -5743,6 +5941,11 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			showTooltips = layout.showTooltips == true,
 			hideOnCooldown = layout.hideOnCooldown == true,
 			showOnCooldown = layout.showOnCooldown == true,
+			cooldownTextFont = layout.cooldownTextFont,
+			cooldownTextSize = layout.cooldownTextSize or 12,
+			cooldownTextStyle = Helper.NormalizeFontStyleChoice(layout.cooldownTextStyle, "NONE"),
+			cooldownTextX = layout.cooldownTextX or 0,
+			cooldownTextY = layout.cooldownTextY or 0,
 		},
 		onApply = function(_, _, data)
 			local a = ensureAnchorTable()

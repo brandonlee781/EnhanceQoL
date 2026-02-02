@@ -4641,7 +4641,7 @@ function GF:DisableFeature()
 	unregisterFeatureEvents(GF._eventFrame)
 
 	-- Unregister Edit Mode frames
-	if EditMode and EditMode.UnregisterFrame then
+	if EditMode and EditMode.UnregisterFrame and type(EDITMODE_IDS) == "table" then
 		for _, id in pairs(EDITMODE_IDS) do
 			pcall(EditMode.UnregisterFrame, EditMode, id)
 		end
