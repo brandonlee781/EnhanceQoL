@@ -1539,3 +1539,149 @@ function H.getNPCColor(key)
 	end
 	return H.getNPCColorDefault(key)
 end
+
+local EnableSpellRangeCheck = C_Spell and C_Spell.EnableSpellRangeCheck
+local GetSpellIDForSpellIdentifier = C_Spell and C_Spell.GetSpellIDForSpellIdentifier
+local SpellBook = _G.C_SpellBook
+local SpellBookItemType = Enum and Enum.SpellBookItemType
+local SpellBookSpellBank = Enum and Enum.SpellBookSpellBank
+local wipeTable = wipe or (table and table.wipe)
+
+local rangeFadeHandlers = {}
+local rangeFadeState = {
+	activeSpells = {},
+	spellStates = {},
+	inRange = true,
+}
+local rangeFadeIgnoredSpells = {
+	[2096] = true, -- Mind Vision (unlimited range)
+}
+
+local function isRangeFadeIgnored(spellId, actionId)
+	local fn = rangeFadeHandlers.getConfig
+	if fn then
+		local _, _, ignoreUnlimited = fn()
+		if ignoreUnlimited == false then return false end
+	end
+	if spellId and rangeFadeIgnoredSpells[spellId] then return true end
+	if actionId and rangeFadeIgnoredSpells[actionId] then return true end
+	return false
+end
+
+local function clearTable(tbl)
+	if not tbl then return end
+	if wipeTable then
+		wipeTable(tbl)
+	else
+		for k in pairs(tbl) do
+			tbl[k] = nil
+		end
+	end
+end
+
+local function getRangeFadeConfig()
+	local fn = rangeFadeHandlers.getConfig
+	if not fn then return false, 1, true end
+	return fn()
+end
+
+local function applyRangeFadeAlpha(inRange, force)
+	local applyFn = rangeFadeHandlers.applyAlpha
+	if not applyFn then return end
+	local enabled, alpha = getRangeFadeConfig()
+	local targetAlpha = (enabled and not inRange) and alpha or 1
+	applyFn(targetAlpha, force)
+end
+
+local function recomputeRangeFade()
+	local anyChecked = false
+	local anyInRange = false
+	for _, inRange in pairs(rangeFadeState.spellStates) do
+		anyChecked = true
+		if inRange == true then
+			anyInRange = true
+			break
+		end
+	end
+	rangeFadeState.inRange = (not anyChecked) or anyInRange
+	applyRangeFadeAlpha(rangeFadeState.inRange)
+end
+
+local function buildRangeFadeSpellList()
+	local list = {}
+	if not (EnableSpellRangeCheck and SpellBook and SpellBook.GetNumSpellBookSkillLines and SpellBook.GetSpellBookSkillLineInfo and SpellBook.GetSpellBookItemInfo) then return list end
+	local bank = SpellBookSpellBank and SpellBookSpellBank.Player or 0
+	local spellType = (SpellBookItemType and SpellBookItemType.Spell) or 1
+	local numLines = SpellBook.GetNumSpellBookSkillLines() or 0
+	for line = 1, numLines do
+		local lineInfo = SpellBook.GetSpellBookSkillLineInfo(line)
+		local offset = lineInfo and lineInfo.itemIndexOffset or 0
+		local count = lineInfo and lineInfo.numSpellBookItems or 0
+		for slot = offset + 1, offset + count do
+			local info = SpellBook.GetSpellBookItemInfo(slot, bank)
+			if info and info.itemType == spellType and info.isPassive ~= true then
+				if not isRangeFadeIgnored(info.spellID, info.actionID) then
+					local spellId = info.spellID or info.actionID
+					if spellId then list[spellId] = true end
+				end
+			end
+		end
+	end
+	return list
+end
+
+function H.RangeFadeRegister(getConfigFn, applyAlphaFn)
+	rangeFadeHandlers.getConfig = getConfigFn
+	rangeFadeHandlers.applyAlpha = applyAlphaFn
+end
+
+function H.RangeFadeReset()
+	clearTable(rangeFadeState.spellStates)
+	rangeFadeState.inRange = true
+	applyRangeFadeAlpha(true, true)
+end
+
+function H.RangeFadeApplyCurrent(force) applyRangeFadeAlpha(rangeFadeState.inRange, force) end
+
+function H.RangeFadeUpdateFromEvent(spellIdentifier, isInRange, checksRange)
+	local enabled = getRangeFadeConfig()
+	if not enabled then return end
+	local id = tonumber(spellIdentifier)
+	if not id and GetSpellIDForSpellIdentifier then id = GetSpellIDForSpellIdentifier(spellIdentifier) end
+	if isRangeFadeIgnored(id) then return end
+	if not id or not rangeFadeState.activeSpells[id] then return end
+	if checksRange then
+		rangeFadeState.spellStates[id] = (isInRange == true)
+	else
+		rangeFadeState.spellStates[id] = nil
+	end
+	recomputeRangeFade()
+end
+
+function H.RangeFadeUpdateSpells()
+	if not EnableSpellRangeCheck then return end
+	local enabled = getRangeFadeConfig()
+	if not enabled then
+		for spellId in pairs(rangeFadeState.activeSpells) do
+			EnableSpellRangeCheck(spellId, false)
+		end
+		clearTable(rangeFadeState.activeSpells)
+		H.RangeFadeReset()
+		return
+	end
+	local wanted = buildRangeFadeSpellList()
+	for spellId in pairs(rangeFadeState.activeSpells) do
+		if not wanted[spellId] then
+			EnableSpellRangeCheck(spellId, false)
+			rangeFadeState.activeSpells[spellId] = nil
+			rangeFadeState.spellStates[spellId] = nil
+		end
+	end
+	for spellId in pairs(wanted) do
+		if not rangeFadeState.activeSpells[spellId] then
+			EnableSpellRangeCheck(spellId, true)
+			rangeFadeState.activeSpells[spellId] = true
+		end
+	end
+	recomputeRangeFade()
+end

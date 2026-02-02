@@ -1185,6 +1185,35 @@ local function buildUnitSettings(unit)
 	portraitSeparatorColor.isEnabled = function() return isPortraitEnabled() and isPortraitSeparatorEnabled() end
 	list[#list + 1] = portraitSeparatorColor
 
+	if unit == "target" then
+		local rangeDef = def.rangeFade or {}
+		local function isRangeFadeEnabled() return getValue(unit, { "rangeFade", "enabled" }, rangeDef.enabled == true) == true end
+
+		list[#list + 1] = { name = L["UFRangeFade"] or "Range fade", kind = settingType.Collapsible, id = "rangeFade", defaultCollapsed = true }
+
+		list[#list + 1] = checkbox(L["UFRangeFadeEnable"] or "Enable range fade", isRangeFadeEnabled, function(val)
+			setValue(unit, { "rangeFade", "enabled" }, val and true or false)
+			refreshSelf()
+			if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
+		end, rangeDef.enabled == true, "rangeFade")
+
+		local rangeFadeAlpha = slider(L["UFRangeFadeAlpha"] or "Out of range opacity", 0, 100, 1, function()
+			local alpha = getValue(unit, { "rangeFade", "alpha" }, rangeDef.alpha or 0.5)
+			if type(alpha) ~= "number" then alpha = 0.5 end
+			if alpha < 0 then alpha = 0 end
+			if alpha > 1 then alpha = 1 end
+			return math.floor((alpha * 100) + 0.5)
+		end, function(val)
+			local pct = tonumber(val) or 0
+			if pct < 0 then pct = 0 end
+			if pct > 100 then pct = 100 end
+			setValue(unit, { "rangeFade", "alpha" }, pct / 100)
+			refreshSelf()
+		end, math.floor(((rangeDef.alpha or 0.5) * 100) + 0.5), "rangeFade", true, function(v) return tostring(v) .. "%" end)
+		rangeFadeAlpha.isEnabled = isRangeFadeEnabled
+		list[#list + 1] = rangeFadeAlpha
+	end
+
 	list[#list + 1] = { name = L["HealthBar"] or "Health Bar", kind = settingType.Collapsible, id = "health", defaultCollapsed = true }
 
 	list[#list + 1] = slider(L["UFHealthHeight"] or "Health height", 8, 80, 1, function() return getValue(unit, { "healthHeight" }, def.healthHeight or 24) end, function(val)

@@ -401,6 +401,11 @@ local defaults = {
 	target = {
 		enabled = false,
 		showTooltip = false,
+		rangeFade = {
+			enabled = true,
+			alpha = 0.5,
+			ignoreUnlimitedSpells = true,
+		},
 		auraIcons = {
 			enabled = true,
 			size = 24,
@@ -632,6 +637,30 @@ local function ensureDB(unit)
 		end
 	end
 	return udb
+end
+
+if UFHelper and UFHelper.RangeFadeRegister then
+	UFHelper.RangeFadeRegister(function()
+		local cfg = ensureDB(UNIT.TARGET)
+		local def = defaultsFor(UNIT.TARGET)
+		local rcfg = (cfg and cfg.rangeFade) or (def and def.rangeFade) or {}
+		local enabled = (cfg and cfg.enabled ~= false) and rcfg.enabled == true
+		if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then enabled = false end
+		local alpha = rcfg.alpha
+		if type(alpha) ~= "number" then alpha = 0.5 end
+		if alpha < 0 then alpha = 0 end
+		if alpha > 1 then alpha = 1 end
+		local ignoreUnlimited = rcfg.ignoreUnlimitedSpells
+		if ignoreUnlimited == nil then ignoreUnlimited = true end
+		return enabled, alpha, ignoreUnlimited
+	end, function(targetAlpha, force)
+		local st = states[UNIT.TARGET]
+		if not st or not st.frame or not st.frame.SetAlpha then return end
+		if force or st._rangeFadeAlpha ~= targetAlpha then
+			st._rangeFadeAlpha = targetAlpha
+			st.frame:SetAlpha(targetAlpha)
+		end
+	end)
 end
 
 local function copySettings(fromUnit, toUnit, opts)
@@ -4678,6 +4707,7 @@ local function applyConfig(unit)
 		if unit == UNIT.PLAYER or unit == "target" or unit == UNIT.FOCUS or isBossUnit(unit) then AuraUtil.resetTargetAuras(unit) end
 		if unit == UNIT.PLAYER then updateRestingIndicator(cfg) end
 		if not isBossUnit(unit) then applyVisibilityRules(unit) end
+		if unit == UNIT.TARGET and UFHelper and UFHelper.RangeFadeReset then UFHelper.RangeFadeReset() end
 		if unit == UNIT.PLAYER and addon.functions and addon.functions.ApplyCastBarVisibility then addon.functions.ApplyCastBarVisibility() end
 		return
 	end
@@ -4754,6 +4784,7 @@ local function applyConfig(unit)
 		AuraUtil.fullScanTargetAuras(unit)
 	end
 	if not isBossUnit(unit) then applyVisibilityRules(unit) end
+	if unit == UNIT.TARGET and UFHelper and UFHelper.RangeFadeApplyCurrent then UFHelper.RangeFadeApplyCurrent(true) end
 end
 
 local function layoutBossFrames(cfg)
@@ -5090,6 +5121,10 @@ local generalEvents = {
 	"PLAYER_ALIVE",
 	"PLAYER_TARGET_CHANGED",
 	"PLAYER_LOGIN",
+	"SPELLS_CHANGED",
+	"PLAYER_TALENT_UPDATE",
+	"ACTIVE_PLAYER_SPECIALIZATION_CHANGED",
+	"TRAIT_CONFIG_UPDATED",
 	"PLAYER_REGEN_DISABLED",
 	"PLAYER_REGEN_ENABLED",
 	"PLAYER_FLAGS_CHANGED",
@@ -5101,6 +5136,7 @@ local generalEvents = {
 	"ENCOUNTER_START",
 	"ENCOUNTER_END",
 	"RAID_TARGET_UPDATE",
+	"SPELL_RANGE_CHECK_UPDATE",
 }
 
 local eventFrame
@@ -5376,6 +5412,16 @@ local function onEvent(self, event, unit, ...)
 	local arg1 = ...
 	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and not allowedEventUnit[unit] and event ~= "UNIT_THREAT_SITUATION_UPDATE" and event ~= "UNIT_THREAT_LIST_UPDATE" then return end
 	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and isBossUnit(unit) and not isBossFrameSettingEnabled() then return end
+	if event == "SPELL_RANGE_CHECK_UPDATE" then
+		local spellIdentifier = unit
+		local isInRange, checksRange = ...
+		if UFHelper and UFHelper.RangeFadeUpdateFromEvent then UFHelper.RangeFadeUpdateFromEvent(spellIdentifier, isInRange, checksRange) end
+		return
+	end
+	if event == "SPELLS_CHANGED" or event == "PLAYER_TALENT_UPDATE" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "TRAIT_CONFIG_UPDATED" then
+		if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
+		return
+	end
 	if event == "PLAYER_ENTERING_WORLD" then
 		local playerCfg = getCfg(UNIT.PLAYER)
 		local targetCfg = getCfg(UNIT.TARGET)
@@ -5383,6 +5429,7 @@ local function onEvent(self, event, unit, ...)
 		local petCfg = getCfg(UNIT.PET)
 		local focusCfg = getCfg(UNIT.FOCUS)
 		local bossCfg = getCfg("boss")
+		if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
 		refreshMainPower(UNIT.PLAYER)
 		applyConfig("player")
 		applyConfig("target")
@@ -5435,6 +5482,7 @@ local function onEvent(self, event, unit, ...)
 			bossLayoutDirty, bossHidePending, bossShowPending, bossInitPending = nil, nil, nil, nil
 		end
 	elseif event == "PLAYER_TARGET_CHANGED" then
+		if UFHelper and UFHelper.RangeFadeReset then UFHelper.RangeFadeReset() end
 		local targetCfg = getCfg(UNIT.TARGET)
 		local totCfg = getCfg(UNIT.TARGET_TARGET)
 		local focusCfg = getCfg(UNIT.FOCUS)
@@ -5833,6 +5881,7 @@ local function ensureEventHandling()
 	rebuildAllowedEventUnits()
 	if not anyUFEnabled() then
 		hideBossFrames()
+		if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
 		if eventFrame and eventFrame.UnregisterAllEvents then eventFrame:UnregisterAllEvents() end
 		if eventFrame then eventFrame:SetScript("OnEvent", nil) end
 		eventFrame = nil
@@ -5863,6 +5912,7 @@ local function ensureEventHandling()
 				if states[UNIT.PLAYER] and states[UNIT.PLAYER].castBar then setCastInfoFromUnit(UNIT.PLAYER) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
+				if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
 			end)
 
 			addon.EditModeLib:RegisterCallback("exit", function()
@@ -5879,10 +5929,12 @@ local function ensureEventHandling()
 				if states[UNIT.PLAYER] and states[UNIT.PLAYER].castBar then setCastInfoFromUnit(UNIT.PLAYER) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
+				if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
 			end)
 		end
 	end
 	updatePortraitEventRegistration()
+	if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
 end
 
 function UF.Enable()
