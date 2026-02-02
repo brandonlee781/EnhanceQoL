@@ -59,6 +59,22 @@ local data = {
 		end,
 		parentSection = expandable,
 	},
+	{
+		var = "floatingCombatTextCombatDamage_v2",
+		text = L["floatingCombatTextCombatDamage_v2"],
+		get = function() return getCVarOptionState("floatingCombatTextCombatDamage_v2") end,
+		func = function(value) setCVarOptionState("floatingCombatTextCombatDamage_v2", value) end,
+		default = false,
+		parentSection = expandable,
+	},
+	{
+		var = "floatingCombatTextCombatHealing_v2",
+		text = L["floatingCombatTextCombatHealing_v2"],
+		get = function() return getCVarOptionState("floatingCombatTextCombatHealing_v2") end,
+		func = function(value) setCVarOptionState("floatingCombatTextCombatHealing_v2", value) end,
+		default = false,
+		parentSection = expandable,
+	},
 }
 addon.functions.SettingsCreateCheckboxes(cUnitFrame, data)
 
