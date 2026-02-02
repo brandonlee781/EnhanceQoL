@@ -236,6 +236,9 @@ end
 local updatePowerEventRegistration
 local updateRangeCheckSpells
 local updateItemCountCacheForItem
+local ensureRoot
+local ensurePanelAnchor
+local panelAllowsSpec
 
 local function refreshEditModeSettingValues()
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
@@ -250,6 +253,141 @@ local function refreshEditModeSettings()
 		lib.internal:RefreshSettings()
 	end
 	if lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
+end
+
+local FAKE_CURSOR_FRAME_NAME = "EQOL_CooldownPanelsFakeCursor"
+local FAKE_CURSOR_ATLAS = "Cursor_Point_32"
+local FAKE_CURSOR_DEFAULT_X = 0
+local FAKE_CURSOR_DEFAULT_Y = 100
+local fakeCursorFrame
+local fakeCursorResetOnShow = true
+local fakeCursorMode
+local cursorFollowRunner
+
+local function ensureFakeCursorFrame()
+	if fakeCursorFrame then return fakeCursorFrame end
+	local frame = CreateFrame("Frame", FAKE_CURSOR_FRAME_NAME, UIParent)
+	frame:SetSize(32, 32)
+	frame:SetFrameStrata("TOOLTIP")
+	frame:SetClampedToScreen(true)
+	frame:EnableMouse(true)
+	frame:SetMovable(true)
+	frame:RegisterForDrag("LeftButton")
+	frame:SetScript("OnDragStart", frame.StartMoving)
+	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+	local tex = frame:CreateTexture(nil, "OVERLAY")
+	tex:SetAtlas(FAKE_CURSOR_ATLAS, true)
+	tex:SetAllPoints(frame)
+	frame.texture = tex
+
+	frame:Hide()
+	fakeCursorFrame = frame
+	return frame
+end
+
+local function showFakeCursorFrame()
+	local frame = ensureFakeCursorFrame()
+	if fakeCursorResetOnShow or not frame._eqolHasPosition then
+		frame:ClearAllPoints()
+		frame:SetPoint("CENTER", UIParent, "CENTER", FAKE_CURSOR_DEFAULT_X, FAKE_CURSOR_DEFAULT_Y)
+		frame._eqolHasPosition = true
+		fakeCursorResetOnShow = false
+	end
+	frame:Show()
+	return frame
+end
+
+local function hideFakeCursorFrame()
+	if fakeCursorFrame then fakeCursorFrame:Hide() end
+end
+
+local function resetFakeCursorFrame()
+	fakeCursorResetOnShow = true
+	if fakeCursorFrame then fakeCursorFrame._eqolHasPosition = nil end
+end
+
+local function setFakeCursorMode(mode)
+	if fakeCursorMode == mode then return end
+	fakeCursorMode = mode
+	if mode == "hidden" then
+		hideFakeCursorFrame()
+		return
+	end
+	local frame = ensureFakeCursorFrame()
+	if mode == "edit" then
+		showFakeCursorFrame()
+		frame:SetAlpha(1)
+		if frame.texture then frame.texture:Show() end
+		frame:EnableMouse(true)
+		frame:Show()
+	elseif mode == "follow" then
+		fakeCursorResetOnShow = false
+		frame:SetAlpha(0)
+		if frame.texture then frame.texture:Hide() end
+		frame:EnableMouse(false)
+		frame:Show()
+	end
+end
+
+local function updateFakeCursorToMouse()
+	local frame = ensureFakeCursorFrame()
+	local x, y = GetCursorPosition()
+	if not x or not y then return end
+	local scale = UIParent:GetEffectiveScale()
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+end
+
+local function startCursorFollow()
+	if cursorFollowRunner and cursorFollowRunner:GetScript("OnUpdate") then return end
+	local runner = cursorFollowRunner
+	if not runner then
+		runner = CreateFrame("Frame")
+		cursorFollowRunner = runner
+	end
+	updateFakeCursorToMouse()
+	runner:SetScript("OnUpdate", function(self)
+		if CooldownPanels:IsInEditMode() then return end
+		updateFakeCursorToMouse()
+	end)
+end
+
+local function stopCursorFollow()
+	if cursorFollowRunner then cursorFollowRunner:SetScript("OnUpdate", nil) end
+end
+
+local function panelUsesFakeCursor(panel)
+	local anchor = ensurePanelAnchor(panel)
+	local rel = anchor and anchor.relativeFrame
+	return rel == FAKE_CURSOR_FRAME_NAME
+end
+
+local function hasFakeCursorPanels()
+	local root = ensureRoot()
+	if not root or not root.panels then return false end
+	for _, panel in pairs(root.panels) do
+		if panel and panelUsesFakeCursor(panel) then
+			if panel.enabled ~= false and panelAllowsSpec(panel) then return true end
+		end
+	end
+	return false
+end
+
+function CooldownPanels:UpdateCursorAnchorState()
+	local wantsCursor = hasFakeCursorPanels()
+	if wantsCursor then
+		if self:IsInEditMode() then
+			stopCursorFollow()
+			setFakeCursorMode("edit")
+		else
+			setFakeCursorMode("follow")
+			startCursorFollow()
+		end
+	else
+		stopCursorFollow()
+		setFakeCursorMode("hidden")
+	end
 end
 
 local function getMasqueGroup()
@@ -312,7 +450,7 @@ local function getLayoutKey(layout)
 	}, "|")
 end
 
-local function ensurePanelAnchor(panel)
+ensurePanelAnchor = function(panel)
 	if not panel then return nil end
 	panel.anchor = panel.anchor or {}
 	local anchor = panel.anchor
@@ -332,6 +470,7 @@ local function anchorUsesUIParent(anchor) return not anchor or (anchor.relativeF
 local function resolveAnchorFrame(anchor)
 	local relativeName = Helper.NormalizeRelativeFrameName(anchor and anchor.relativeFrame)
 	if relativeName == "UIParent" then return UIParent end
+	if relativeName == FAKE_CURSOR_FRAME_NAME then return ensureFakeCursorFrame() end
 	local generic = Helper.GENERIC_ANCHORS[relativeName]
 	if generic then
 		local ufCfg = addon.db and addon.db.ufFrames
@@ -679,7 +818,7 @@ local function panelHasSpecFilter(panel)
 	return false
 end
 
-local function panelAllowsSpec(panel)
+panelAllowsSpec = function(panel)
 	if not panelHasSpecFilter(panel) then return true end
 	local specId = getPlayerSpecId()
 	if not specId then return false end
@@ -725,7 +864,7 @@ local function showErrorMessage(msg)
 	if UIErrorsFrame and msg then UIErrorsFrame:AddMessage(msg, 1, 0.2, 0.2, 1) end
 end
 
-local function ensureRoot()
+ensureRoot = function()
 	if not addon.db then return nil end
 	if type(addon.db.cooldownPanels) ~= "table" then
 		addon.db.cooldownPanels = Helper.CreateRoot()
@@ -827,6 +966,7 @@ function CooldownPanels:DeletePanel(panelId)
 		CooldownPanels.runtime[panelId] = nil
 	end
 	self:RebuildSpellIndex()
+	self:UpdateCursorAnchorState()
 end
 
 function CooldownPanels:AddEntry(panelId, entryType, idValue, overrides)
@@ -1508,10 +1648,31 @@ local function applyIconLayout(frame, count, layout)
 	local width = 0
 	local height = 0
 	local radialRadius = nil
+	local radialRotation = nil
+	local radialStep = nil
+	local radialBaseAngle = nil
 
 	if layoutMode == "RADIAL" then
 		radialRadius = Helper.ClampInt(layout.radialRadius, 0, Helper.RADIAL_RADIUS_RANGE or 600, Helper.PANEL_LAYOUT_DEFAULTS.radialRadius)
-		width = (radialRadius * 2) + baseIconSize
+		radialRotation = Helper.ClampNumber(layout.radialRotation, -Helper.RADIAL_ROTATION_RANGE, Helper.RADIAL_ROTATION_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.radialRotation)
+		radialStep = count > 0 and ((2 * math.pi) / count) or 0
+		radialBaseAngle = (math.pi / 2) - math.rad(radialRotation or 0)
+		local maxEdgeRadius = 0
+		if count > 0 then
+			for i = 1, count do
+				local angle = radialBaseAngle - ((i - 1) * radialStep)
+				local absCos = math.abs(math.cos(angle))
+				local absSin = math.abs(math.sin(angle))
+				local edgeInset = (baseIconSize / 2) * (absCos + absSin)
+				local centerRadius = radialRadius - edgeInset
+				if centerRadius < 0 then centerRadius = 0 end
+				local edgeRadius = centerRadius + edgeInset
+				if edgeRadius > maxEdgeRadius then maxEdgeRadius = edgeRadius end
+			end
+		else
+			maxEdgeRadius = radialRadius + (baseIconSize / 2)
+		end
+		width = math.max(baseIconSize, maxEdgeRadius * 2)
 		height = width
 	else
 		cols, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
@@ -1633,14 +1794,15 @@ local function applyIconLayout(frame, count, layout)
 	end
 
 	if layoutMode == "RADIAL" then
-		local rotation = Helper.ClampNumber(layout.radialRotation, -Helper.RADIAL_ROTATION_RANGE, Helper.RADIAL_ROTATION_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.radialRotation)
-		local step = count > 0 and ((2 * math.pi) / count) or 0
-		local baseAngle = (math.pi / 2) - math.rad(rotation or 0)
-		local radius = radialRadius or 0
 		for i = 1, count do
 			local icon = frame.icons[i]
 			applyIconCommon(icon, baseIconSize)
-			local angle = baseAngle - ((i - 1) * step)
+			local angle = radialBaseAngle - ((i - 1) * (radialStep or 0))
+			local absCos = math.abs(math.cos(angle))
+			local absSin = math.abs(math.sin(angle))
+			local edgeInset = (baseIconSize / 2) * (absCos + absSin)
+			local radius = (radialRadius or 0) - edgeInset
+			if radius < 0 then radius = 0 end
 			local x = math.cos(angle) * radius
 			local y = math.sin(angle) * radius
 			icon:ClearAllPoints()
@@ -2497,6 +2659,7 @@ local function ensureEditor()
 			CooldownPanels:RebuildSpellIndex()
 			Keybinds.MarkPanelsDirty()
 			CooldownPanels:RefreshPanel(panelId)
+			CooldownPanels:UpdateCursorAnchorState()
 			CooldownPanels:RefreshEditor()
 		end
 	end)
@@ -4486,6 +4649,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			end
 
 			add("UIParent", "UIParent")
+			add(FAKE_CURSOR_FRAME_NAME, _G.CURSOR or "Cursor")
 			for _, key in ipairs(Helper.GENERIC_ANCHOR_ORDER) do
 				local info = Helper.GENERIC_ANCHORS[key]
 				if info then add(key, info.label) end
@@ -4577,9 +4741,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 					if not a then return end
 					local target = Helper.NormalizeRelativeFrameName(value)
 					if wouldCauseLoop(target) then target = "UIParent" end
+					if target == FAKE_CURSOR_FRAME_NAME then
+						CooldownPanels:AttachFakeCursor(panelId)
+						applyAnchorPosition()
+						return
+					end
 					a.relativeFrame = target
 					applyAnchorDefaults(a, target)
 					applyAnchorPosition()
+					CooldownPanels:UpdateCursorAnchorState()
 					local anchorHelper = CooldownPanels.AnchorHelper
 					if anchorHelper and anchorHelper.MaybeScheduleRefresh then anchorHelper:MaybeScheduleRefresh(target) end
 				end,
@@ -4594,9 +4764,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 							if not a then return end
 							local target = entry.key
 							if wouldCauseLoop(target) then target = "UIParent" end
+							if target == FAKE_CURSOR_FRAME_NAME then
+								CooldownPanels:AttachFakeCursor(panelId)
+								applyAnchorPosition()
+								return
+							end
 							a.relativeFrame = target
 							applyAnchorDefaults(a, target)
 							applyAnchorPosition()
+							CooldownPanels:UpdateCursorAnchorState()
 							local anchorHelper = CooldownPanels.AnchorHelper
 							if anchorHelper and anchorHelper.MaybeScheduleRefresh then anchorHelper:MaybeScheduleRefresh(target) end
 						end)
@@ -5549,12 +5725,41 @@ function CooldownPanels:EnsureEditMode()
 	end
 end
 
+function CooldownPanels:AttachFakeCursor(panelId)
+	if not panelId then return end
+	local panel = self:GetPanel(panelId)
+	if not panel then return end
+	local anchor = ensurePanelAnchor(panel)
+	if not anchor then return end
+
+	local runtime = getRuntime(panelId)
+
+	anchor.point = "CENTER"
+	anchor.relativePoint = "CENTER"
+	anchor.relativeFrame = FAKE_CURSOR_FRAME_NAME
+	anchor.x = 0
+	anchor.y = 0
+	panel.point = anchor.point or panel.point or "CENTER"
+	panel.x = anchor.x or panel.x or 0
+	panel.y = anchor.y or panel.y or 0
+	self:ApplyPanelPosition(panelId)
+	if runtime.editModeId and EditMode and EditMode.RefreshFrame then EditMode:RefreshFrame(runtime.editModeId) end
+	refreshEditModeSettingValues()
+	resetFakeCursorFrame()
+	self:UpdateCursorAnchorState()
+end
+
 local editModeCallbacksRegistered = false
 local function registerEditModeCallbacks()
 	if editModeCallbacksRegistered then return end
 	if addon.EditModeLib and addon.EditModeLib.RegisterCallback then
-		addon.EditModeLib:RegisterCallback("enter", function() CooldownPanels:RefreshAllPanels() end)
+		addon.EditModeLib:RegisterCallback("enter", function()
+			CooldownPanels:RefreshAllPanels()
+			resetFakeCursorFrame()
+			CooldownPanels:UpdateCursorAnchorState()
+		end)
 		addon.EditModeLib:RegisterCallback("exit", function()
+			CooldownPanels:UpdateCursorAnchorState()
 			CooldownPanels:RefreshAllPanels()
 			refreshPanelsForCharges()
 		end)
@@ -6126,6 +6331,7 @@ function CooldownPanels:Init()
 	updateItemCountCache()
 	Keybinds.RebuildPanels()
 	self:RefreshAllPanels()
+	self:UpdateCursorAnchorState()
 	ensureUpdateFrame()
 	registerEditModeCallbacks()
 	registerCooldownPanelsSlashCommand()
