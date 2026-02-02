@@ -1657,22 +1657,7 @@ local function applyIconLayout(frame, count, layout)
 		radialRotation = Helper.ClampNumber(layout.radialRotation, -Helper.RADIAL_ROTATION_RANGE, Helper.RADIAL_ROTATION_RANGE, Helper.PANEL_LAYOUT_DEFAULTS.radialRotation)
 		radialStep = count > 0 and ((2 * math.pi) / count) or 0
 		radialBaseAngle = (math.pi / 2) - math.rad(radialRotation or 0)
-		local maxEdgeRadius = 0
-		if count > 0 then
-			for i = 1, count do
-				local angle = radialBaseAngle - ((i - 1) * radialStep)
-				local absCos = math.abs(math.cos(angle))
-				local absSin = math.abs(math.sin(angle))
-				local edgeInset = (baseIconSize / 2) * (absCos + absSin)
-				local centerRadius = radialRadius - edgeInset
-				if centerRadius < 0 then centerRadius = 0 end
-				local edgeRadius = centerRadius + edgeInset
-				if edgeRadius > maxEdgeRadius then maxEdgeRadius = edgeRadius end
-			end
-		else
-			maxEdgeRadius = radialRadius + (baseIconSize / 2)
-		end
-		width = math.max(baseIconSize, maxEdgeRadius * 2)
+		width = math.max(baseIconSize, radialRadius * 2)
 		height = width
 	else
 		cols, rows = getGridDimensions(count, wrapCount, primaryHorizontal)
@@ -1794,17 +1779,17 @@ local function applyIconLayout(frame, count, layout)
 	end
 
 	if layoutMode == "RADIAL" then
+		local centerRadius = (radialRadius or 0) - (baseIconSize / 2)
+		if centerRadius < 0 then centerRadius = 0 end
 		for i = 1, count do
 			local icon = frame.icons[i]
 			applyIconCommon(icon, baseIconSize)
-			local angle = radialBaseAngle - ((i - 1) * (radialStep or 0))
-			local absCos = math.abs(math.cos(angle))
-			local absSin = math.abs(math.sin(angle))
-			local edgeInset = (baseIconSize / 2) * (absCos + absSin)
-			local radius = (radialRadius or 0) - edgeInset
-			if radius < 0 then radius = 0 end
-			local x = math.cos(angle) * radius
-			local y = math.sin(angle) * radius
+			local x, y = 0, 0
+			if count > 1 then
+				local angle = radialBaseAngle - ((i - 1) * (radialStep or 0))
+				x = math.cos(angle) * centerRadius
+				y = math.sin(angle) * centerRadius
+			end
 			icon:ClearAllPoints()
 			icon:SetPoint("CENTER", frame, "CENTER", x, y)
 		end
