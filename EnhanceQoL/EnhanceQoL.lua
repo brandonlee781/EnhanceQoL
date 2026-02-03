@@ -21,50 +21,6 @@ local ActionBarLabels = addon.ActionBarLabels
 
 addon.constants = addon.constants or {}
 
-addon.optionsPages = addon.optionsPages or {}
-
-function addon.functions.RegisterOptionsPage(path, builder)
-	if type(path) ~= "string" or path == "" then return end
-	if type(builder) ~= "function" then return end
-	addon.optionsPages[path] = builder
-end
-
-function addon.functions.HasOptionsPage(path)
-	local pages = addon.optionsPages
-	if type(pages) ~= "table" or type(path) ~= "string" then return false end
-	return type(pages[path]) == "function"
-end
-
-function addon.functions.ShowOptionsPage(container, path)
-	local pages = addon.optionsPages
-	if type(pages) ~= "table" then return false end
-	local fn = pages[path]
-	if type(fn) ~= "function" then return false end
-	fn(container, path)
-	return true
-end
-
-local OPTIONS_FRAME_MIN_SCALE = 0.5
-local OPTIONS_FRAME_MAX_SCALE = 2
-
-addon.constants.OPTIONS_FRAME_MIN_SCALE = OPTIONS_FRAME_MIN_SCALE
-addon.constants.OPTIONS_FRAME_MAX_SCALE = OPTIONS_FRAME_MAX_SCALE
-
-function addon.functions.applyOptionsFrameScale(scale)
-	local db = addon.db
-	local desired = tonumber(scale)
-	if not desired then desired = (db and db["optionsFrameScale"]) or 1.0 end
-	if desired < OPTIONS_FRAME_MIN_SCALE then desired = OPTIONS_FRAME_MIN_SCALE end
-	if desired > OPTIONS_FRAME_MAX_SCALE then desired = OPTIONS_FRAME_MAX_SCALE end
-
-	desired = math.floor(desired * 100 + 0.5) / 100
-
-	if db then db["optionsFrameScale"] = desired end
-
-	if addon.aceFrame and addon.aceFrame.SetScale then addon.aceFrame:SetScale(desired) end
-	return desired
-end
-
 local LFGListFrame = _G.LFGListFrame
 local GetContainerItemInfo = C_Container.GetContainerItemInfo
 local StaticPopup_Visible = StaticPopup_Visible
@@ -3882,9 +3838,6 @@ local function initUI()
 	addon.functions.InitDBValue("dungeonJournalLootSpecIconPadding", 0)
 	addon.functions.InitDBValue("dungeonJournalLootSpecShowAll", false)
 
-	addon.functions.InitDBValue("optionsFrameScale", 1.0)
-	addon.functions.applyOptionsFrameScale(addon.db["optionsFrameScale"])
-
 	-- Mailbox address book
 	addon.functions.InitDBValue("enableMailboxAddressBook", false)
 	addon.functions.InitDBValue("mailboxContacts", {})
@@ -5010,14 +4963,6 @@ end
 
 local function initCharacter() addon.functions.initItemInventory() end
 
--- Frame-Position wiederherstellen
-local function RestorePosition(frame)
-	if addon.db.point and addon.db.x and addon.db.y then
-		frame:ClearAllPoints()
-		frame:SetPoint(addon.db.point, UIParent, addon.db.point, addon.db.x, addon.db.y)
-	end
-end
-
 local function OpenSettingsRoot()
 	if not (Settings and Settings.OpenToCategory) then return end
 	if not (addon.SettingsLayout and addon.SettingsLayout.rootCategory) then return end
@@ -5075,51 +5020,6 @@ function addon.functions.checkReloadFrame()
 end
 
 local function CreateUI()
-	-- Create the main frame
-	local frame = AceGUI:Create("Frame")
-	addon.aceFrame = frame.frame
-	addon.functions.applyOptionsFrameScale()
-	frame:SetTitle("EnhanceQoL")
-	frame:SetWidth(800)
-	frame:SetHeight(600)
-	frame:SetLayout("Fill")
-
-	-- Frame wiederherstellen und überprfen, wenn das Addon geladen wird
-	frame.frame:Hide()
-	frame.frame:SetScript("OnShow", function(self)
-		addon.functions.applyOptionsFrameScale()
-		RestorePosition(self)
-	end)
-	frame.frame:SetScript("OnHide", function(self)
-		local point, _, _, xOfs, yOfs = self:GetPoint()
-		addon.db.point = point
-		addon.db.x = xOfs
-		addon.db.y = yOfs
-		addon.functions.checkReloadFrame()
-	end)
-	addon.treeGroupData = {}
-
-	-- Create the TreeGroup with new top-level navigation
-	addon.treeGroup = AceGUI:Create("TreeGroup")
-	addon.treeGroup.enabletooltips = false
-
-	-- Top-level tree nodes are registered by modules (e.g., Aura).
-
-	addon.treeGroup:SetLayout("Fill")
-	addon.treeGroup:SetTree(addon.treeGroupData)
-	addon.treeGroup:SetCallback("OnGroupSelected", function(container, _, group)
-		container:ReleaseChildren() -- Entfernt vorherige Inhalte
-		-- Prüfen, welche Gruppe ausgewählt wurde
-		if addon.functions.ShowOptionsPage and addon.functions.ShowOptionsPage(container, group) then return end
-
-		if type(group) ~= "string" then return end
-		if group == "bufftracker" or group == "cooldownpanels" or group == "combat" or group:sub(1, #"combat\001") == "combat\001" or group:sub(1, #"aura\001") == "aura\001" then
-			if addon.Aura and addon.Aura.functions and addon.Aura.functions.treeCallback then addon.Aura.functions.treeCallback(container, group) end
-		end
-	end)
-	addon.treeGroup:SetStatusTable(addon.variables.statusTable)
-	frame:AddChild(addon.treeGroup)
-
 	local function QuickMenuGenerator(_, root)
 		local first = true
 		local function DoDevider()
@@ -5153,15 +5053,6 @@ local function CreateUI()
 		end)
 		root:CreateButton(L["VisibilityEditor"] or "Visibility Configurator", function()
 			if addon.Visibility and addon.Visibility.OpenEditor then addon.Visibility:OpenEditor() end
-		end)
-
-		DoDevider()
-		root:CreateButton(LFG_LIST_LEGACY .. " " .. SETTINGS, function()
-			if frame:IsShown() then
-				frame:Hide()
-			else
-				frame:Show()
-			end
 		end)
 	end
 
@@ -5455,7 +5346,6 @@ local function setAllHooks()
 				lsmSoundDirty = true
 				C_Timer.After(1, function()
 					lsmSoundDirty = false
-					if addon.Aura and addon.Aura.functions and addon.Aura.functions.BuildSoundTable then addon.Aura.functions.BuildSoundTable() end
 					if addon.ChatIM and addon.ChatIM.BuildSoundTable then addon.ChatIM:BuildSoundTable() end
 				end)
 			end
@@ -5473,8 +5363,6 @@ local function setAllHooks()
 	-- Init modules
 	if addon.Aura and addon.Aura.functions then
 		if addon.Aura.functions.InitDB then addon.Aura.functions.InitDB() end
-		if addon.Aura.functions.init then addon.Aura.functions.init() end
-		if addon.Aura.functions.InitBuffTracker then addon.Aura.functions.InitBuffTracker() end
 		if addon.Aura.functions.InitCooldownPanels then addon.Aura.functions.InitCooldownPanels() end
 		if addon.Aura.functions.InitResourceBars then addon.Aura.functions.InitResourceBars() end
 		if addon.Aura.functions.InitUnitFrames then addon.Aura.functions.InitUnitFrames() end
@@ -5530,15 +5418,7 @@ function loadMain()
 	-- Slash-Command hinzufügen
 	SLASH_ENHANCEQOL1 = "/eqol"
 	SlashCmdList["ENHANCEQOL"] = function(msg)
-		if msg == "resetframe" then
-			-- Frame zurücksetzen
-			addon.aceFrame:ClearAllPoints()
-			addon.aceFrame:SetPoint("CENTER", UIParent, "CENTER")
-			addon.db.point = "CENTER"
-			addon.db.x = 0
-			addon.db.y = 0
-			print(addonName .. " frame has been reset to the center.")
-		elseif msg:match("^aag%s*(%d+)$") then
+		if msg:match("^aag%s*(%d+)$") then
 			local id = tonumber(msg:match("^aag%s*(%d+)$")) -- Extrahiere die ID
 			if id then
 				addon.db["autogossipID"][id] = true
@@ -5570,39 +5450,10 @@ function loadMain()
 			end
 		elseif msg == "rq" then
 			if addon.Query and addon.Query.frame then addon.Query.frame:Show() end
-		elseif msg == "combat" or msg == "legacy" then
-			if addon.aceFrame:IsShown() then
-				addon.aceFrame:Hide()
-			else
-				addon.aceFrame:Show()
-			end
 		else
 			OpenSettingsRoot()
 		end
 	end
-
-	-- Frame für die Optionen
-	local configFrame = CreateFrame("Frame", addonName .. "ConfigFrame", InterfaceOptionsFramePanelContainer)
-	configFrame.name = addonName
-
-	-- Button fr die Optionen
-	local configButton = CreateFrame("Button", nil, configFrame, "UIPanelButtonTemplate")
-	configButton:SetSize(140, 40)
-	configButton:SetPoint("TOPLEFT", 10, -10)
-	configButton:SetText("Config")
-	configButton:SetScript("OnClick", function()
-		if addon.aceFrame:IsShown() then
-			addon.aceFrame:Hide()
-		else
-			addon.aceFrame:Show()
-		end
-	end)
-
-	-- Frame zu den Interface-Optionen hinzufügen
-	-- InterfaceOptions_AddCategory(configFrame)
-	-- local category, layout = Settings.RegisterCanvasLayoutCategory(configFrame, configFrame.name)
-	-- Settings.RegisterAddOnCategory(category)
-	-- addon.settingsCategory = category
 end
 
 -- Erstelle ein Frame f��r Events

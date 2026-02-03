@@ -3136,6 +3136,7 @@ end
 local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
+	local layoutMode = Helper.NormalizeLayoutMode(baseLayout.layoutMode, Helper.PANEL_LAYOUT_DEFAULTS.layoutMode)
 	local baseIconSize = Helper.ClampInt(baseLayout.iconSize, 12, 128, Helper.PANEL_LAYOUT_DEFAULTS.iconSize)
 	local scale = baseIconSize > 0 and (Helper.PREVIEW_ICON_SIZE / baseIconSize) or 1
 	previewLayout.iconSize = Helper.PREVIEW_ICON_SIZE
@@ -3159,13 +3160,22 @@ local function getPreviewLayout(panel, previewFrame, count)
 
 	local iconSize = Helper.PREVIEW_ICON_SIZE
 	local spacing = Helper.ClampInt(baseLayout.spacing, 0, 50, Helper.PANEL_LAYOUT_DEFAULTS.spacing)
-	local direction = Helper.NormalizeDirection(baseLayout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
-	local wrapCount = Helper.ClampInt(baseLayout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 
 	local width = previewFrame:GetWidth() or 0
 	local height = previewFrame:GetHeight() or 0
 	local step = iconSize + spacing
 	if width <= 0 or height <= 0 or step <= 0 then return previewLayout end
+
+	if layoutMode == "RADIAL" then
+		local padding = 8
+		local maxRadius = math.floor((math.min(width, height) - padding) / 2)
+		if maxRadius < 0 then maxRadius = 0 end
+		previewLayout.radialRadius = Helper.ClampInt(previewLayout.radialRadius, 0, maxRadius, previewLayout.radialRadius)
+		return previewLayout
+	end
+
+	local direction = Helper.NormalizeDirection(baseLayout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction)
+	local wrapCount = Helper.ClampInt(baseLayout.wrapCount, 0, 40, Helper.PANEL_LAYOUT_DEFAULTS.wrapCount or 0)
 
 	local primaryHorizontal = direction == "LEFT" or direction == "RIGHT"
 	local available = primaryHorizontal and width or height
@@ -3628,6 +3638,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
+	local showIconTexture = layout.showIconTexture ~= false
 	local previewEntryIds = getPreviewEntryIds and getPreviewEntryIds(panel) or nil
 	local count = countOverride or getPreviewCount(panel)
 	ensureIconCount(frame, count)
@@ -3644,6 +3655,7 @@ function CooldownPanels:UpdatePreviewIcons(panelId, countOverride)
 		local showItemUses = entry and entry.type == "ITEM" and entry.showItemUses == true
 		icon.texture:SetTexture(getEntryIcon(entry))
 		icon.texture:SetVertexColor(1, 1, 1)
+		icon.texture:SetShown(showIconTexture)
 		icon.cooldown:SetHideCountdownNumbers(not showCooldownText)
 		icon.cooldown:Clear()
 		if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
@@ -3769,6 +3781,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	local layout = panel.layout
 	local showTooltips = layout.showTooltips == true
 	local showKeybinds = layout.keybindsEnabled == true
+	local showIconTexture = layout.showIconTexture ~= false
 	local checkPower = layout.checkPower == true
 	local powerTintR, powerTintG, powerTintB = Helper.ResolveColor(layout.powerTintColor, Helper.PANEL_LAYOUT_DEFAULTS.powerTintColor)
 	local unusableTintR, unusableTintG, unusableTintB = Helper.ResolveColor(layout.unusableTintColor, Helper.PANEL_LAYOUT_DEFAULTS.unusableTintColor)
@@ -4033,6 +4046,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		clearPreviewCooldown(icon.cooldown)
 		entryToIcon[data.entryId] = icon
 		icon.texture:SetTexture(data.icon or Helper.PREVIEW_ICON)
+		icon.texture:SetShown(showIconTexture)
 		applyIconTooltip(icon, data.entry, showTooltips)
 		icon.cooldown:SetHideCountdownNumbers(not data.showCooldownText)
 
@@ -4535,6 +4549,8 @@ local function applyEditLayout(panelId, field, value, skipRefresh)
 		layout.cooldownGcdDrawSwipe = value == true
 	elseif field == "showTooltips" then
 		layout.showTooltips = value == true
+	elseif field == "showIconTexture" then
+		layout.showIconTexture = value ~= false
 	elseif field == "hideOnCooldown" then
 		layout.hideOnCooldown = value == true
 		if layout.hideOnCooldown then layout.showOnCooldown = false end
@@ -4649,6 +4665,7 @@ function CooldownPanels:ApplyEditMode(panelId, data)
 	applyEditLayout(panelId, "cooldownGcdDrawBling", data.cooldownGcdDrawBling, true)
 	applyEditLayout(panelId, "cooldownGcdDrawSwipe", data.cooldownGcdDrawSwipe, true)
 	applyEditLayout(panelId, "showTooltips", data.showTooltips, true)
+	applyEditLayout(panelId, "showIconTexture", data.showIconTexture, true)
 	applyEditLayout(panelId, "hideOnCooldown", data.hideOnCooldown, true)
 	applyEditLayout(panelId, "showOnCooldown", data.showOnCooldown, true)
 	applyEditLayout(panelId, "cooldownTextFont", data.cooldownTextFont, true)
@@ -5334,6 +5351,15 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				set = function(_, value) applyEditLayout(panelId, "showTooltips", value) end,
 			},
 			{
+				name = L["CooldownPanelShowIconTexture"] or "Show icon texture",
+				kind = SettingType.Checkbox,
+				field = "showIconTexture",
+				parentId = "cooldownPanelDisplay",
+				default = layout.showIconTexture ~= false,
+				get = function() return layout.showIconTexture ~= false end,
+				set = function(_, value) applyEditLayout(panelId, "showIconTexture", value) end,
+			},
+			{
 				name = L["CooldownPanelHideOnCooldown"] or "Hide on cooldown",
 				kind = SettingType.Checkbox,
 				field = "hideOnCooldown",
@@ -5939,6 +5965,7 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			opacityOutOfCombat = Helper.NormalizeOpacity(layout.opacityOutOfCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityOutOfCombat),
 			opacityInCombat = Helper.NormalizeOpacity(layout.opacityInCombat, Helper.PANEL_LAYOUT_DEFAULTS.opacityInCombat),
 			showTooltips = layout.showTooltips == true,
+			showIconTexture = layout.showIconTexture ~= false,
 			hideOnCooldown = layout.hideOnCooldown == true,
 			showOnCooldown = layout.showOnCooldown == true,
 			cooldownTextFont = layout.cooldownTextFont,

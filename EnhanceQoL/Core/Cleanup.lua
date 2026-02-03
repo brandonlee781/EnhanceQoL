@@ -20,6 +20,13 @@ local function cleanupCombatMeterProfile(profile)
 	end
 end
 
+local function cleanupBuffTrackerProfile(profile)
+	if type(profile) ~= "table" then return end
+	for key in pairs(profile) do
+		if type(key) == "string" and key:lower():find("^bufftracker") then profile[key] = nil end
+	end
+end
+
 function addon.functions.CleanupCombatMeterSettings()
 	local db = _G.EnhanceQoLDB
 	if type(db) == "table" and type(db.profiles) == "table" then
@@ -31,4 +38,18 @@ function addon.functions.CleanupCombatMeterSettings()
 	end
 end
 
-function addon.functions.CleanupOldStuff() addon.functions.CleanupCombatMeterSettings() end
+function addon.functions.CleanupBuffTrackerSettings()
+	local db = _G.EnhanceQoLDB
+	if type(db) == "table" and type(db.profiles) == "table" then
+		for _, profile in pairs(db.profiles) do
+			cleanupBuffTrackerProfile(profile)
+		end
+	elseif addon.db then
+		cleanupBuffTrackerProfile(addon.db)
+	end
+end
+
+function addon.functions.CleanupOldStuff()
+	addon.functions.CleanupCombatMeterSettings()
+	addon.functions.CleanupBuffTrackerSettings()
+end

@@ -312,7 +312,6 @@ L["durabilityUseTextColor"] = "Use custom text color"
 
 L["Hide Raid Tools"] = "Hide Raid Tools in Party"
 L["hideRaidTools"] = "Hide Raid Tools in Party"
-L["optionsFrameScale"] = "Options window scale"
 L["microMenuHeader"] = "Micro menu"
 L["hideMicroMenuNotificationOverlay"] = "Hide micro menu notification diamonds"
 L["hideMicroMenuNotificationOverlayDesc"] = "Removes the small diamond notification overlay on the Blizzard micro menu buttons."

@@ -11,6 +11,15 @@
 - Cooldown Panels: Show on CD option for cooldown icons
 - Unit Frames: Combat feedback text with configurable font/anchor/events
 
+### ⚡ Performance
+
+- Unit Frames: Cache aura container height/visibility updates to reduce UI calls
+
+### ❌ Removed
+
+- Aura Tracker (BuffTracker module + settings/UI)
+- Legacy AceGUI options window (tree-based settings UI)
+
 ### 🐛 Fixed
 
 - Tooltips: Guard secret values when resolving unit names (prevents secret boolean test errors)

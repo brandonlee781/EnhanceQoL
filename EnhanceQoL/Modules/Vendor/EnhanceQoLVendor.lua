@@ -595,7 +595,7 @@ end
 local frameLoad = CreateFrame("Frame")
 
 local function updateLegend(value, value2)
-	if not addon.aceFrame:IsShown() or nil == addon.Vendor.variables["labelExplained" .. value .. "line"] then return end
+	if not addon.aceFrame or not addon.aceFrame:IsShown() or nil == addon.Vendor.variables["labelExplained" .. value .. "line"] then return end
 	local text = {}
 	if addon.db["vendor" .. value .. "IgnoreWarbound"] then table.insert(text, L["vendorIgnoreWarbound"]) end
 	if addon.db["vendor" .. value .. "IgnoreBoE"] then table.insert(text, L["vendorIgnoreBoE"]) end
@@ -854,7 +854,7 @@ local eventHandlers = {
 		if addon.db["vendorDestroyEnable"] then scheduleDestroyButtonUpdate() end
 	end,
 	["ITEM_DATA_LOAD_RESULT"] = function(arg1, arg2)
-		if arg2 == false and addon.aceFrame:IsShown() and lastEbox then
+		if arg2 == false and addon.aceFrame and addon.aceFrame:IsShown() and lastEbox then
 			StaticPopupDialogs["VendorWrongItemID"] = {
 				text = L["Item id does not exist"],
 				button1 = OKAY,
@@ -918,7 +918,7 @@ local function addVendorFrame(container, type)
 	local iqColor = ITEM_QUALITY_COLORS[type].hex .. _G["ITEM_QUALITY" .. type .. "_DESC"] .. "|r"
 
 	local function updateLegend(sValue, sValue2)
-		if not addon.aceFrame:IsShown() then return end
+		if not addon.aceFrame or not addon.aceFrame:IsShown() then return end
 		local text = {}
 		local uText = {}
 		if addon.db["vendor" .. sValue .. "IgnoreWarbound"] then table.insert(text, L["vendorIgnoreWarbound"]) end

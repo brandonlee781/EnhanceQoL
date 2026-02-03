@@ -1,7 +1,4 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-	<Script file="widgets\DragTreeGroup.lua" />
-	<Script file="Aura.lua" />
-	<Script file="BuffTracker.lua" />
 	<Script file="CooldownPanels_Helper.lua" />
 	<Script file="CooldownPanels_AnchorHelper.lua" />
 	<Script file="CooldownPanels.lua" />
