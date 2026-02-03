@@ -2327,25 +2327,6 @@ local function getMainPower(unit)
 	if not mainPowerEnum or not mainPowerToken then return refreshMainPower(UNIT.PLAYER) end
 	return mainPowerEnum, mainPowerToken
 end
-local function findTreeNode(path)
-	if not addon.treeGroupData or type(path) ~= "string" then return nil end
-	local segments = {}
-	for seg in string.gmatch(path, "[^\001]+") do
-		segments[#segments + 1] = seg
-	end
-	local function search(children, idx)
-		if not children then return nil end
-		for _, node in ipairs(children) do
-			if node.value == segments[idx] then
-				if idx == #segments then return node end
-				return search(node.children, idx + 1)
-			end
-		end
-		return nil
-	end
-	return search(addon.treeGroupData, 1)
-end
-
 local function getFrameInfo(frameName)
 	if not addon.variables or not addon.variables.unitFrameNames then return nil end
 	for _, info in ipairs(addon.variables.unitFrameNames) do
@@ -2475,42 +2456,6 @@ local function applyVisibilityRulesAll()
 	applyVisibilityRules("pet")
 	applyVisibilityRules("boss")
 end
-
-local function addTreeNode(path, node, parentPath)
-	if not addon.functions or not addon.functions.addToTree then return end
-	if findTreeNode(path) then return end
-	addon.functions.addToTree(parentPath, node, true)
-end
-
-local function removeTreeNode(path)
-	if not addon.treeGroupData or not addon.treeGroup then return end
-	local segments = {}
-	for seg in string.gmatch(path, "[^\001]+") do
-		segments[#segments + 1] = seg
-	end
-	if #segments == 0 then return end
-	local function remove(children, idx)
-		if not children then return false end
-		for i, node in ipairs(children) do
-			if node.value == segments[idx] then
-				if idx == #segments then
-					table.remove(children, i)
-					if addon.treeGroup.SetTree then addon.treeGroup:SetTree(addon.treeGroupData) end
-					if addon.treeGroup.RefreshTree then addon.treeGroup:RefreshTree() end
-					return true
-				elseif node.children then
-					local removed = remove(node.children, idx + 1)
-					if removed and #node.children == 0 then node.children = nil end
-					return removed
-				end
-			end
-		end
-		return false
-	end
-	remove(addon.treeGroupData, 1)
-end
-
-local function ensureRootNode() addTreeNode("ufplus", { value = "ufplus", text = L["UFPlusRoot"] or "UF Plus" }, nil) end
 
 local function hideBlizzardPlayerFrame()
 	if not _G.PlayerFrame then return end
