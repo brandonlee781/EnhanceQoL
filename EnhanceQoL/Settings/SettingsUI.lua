@@ -403,8 +403,5 @@ end
 
 local cat, layout = SettingsLib:CreateRootCategory(addonName, false)
 
--- Legacy settings hint (old UI likely broken in Midnight)
-addon.functions.SettingsCreateText(cat, "|cff99e599" .. L["SettingsLegacyNotice"] .. "|r")
-
 addon.SettingsLayout.rootCategory = cat
 addon.SettingsLayout.rootLayout = layout
