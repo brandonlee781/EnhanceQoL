@@ -715,6 +715,9 @@ end
 hooksecurefunc("PaperDollFrame_SetItemLevel", function(statFrame, unit) UpdateItemLevel() end)
 
 local function setCharFrame()
+	if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin then
+		addon.Skinner.functions.ApplyCharacterFrameSkin()
+	end
 	UpdateItemLevel()
 	if not addon.general.iconFrame then addon.functions.catalystChecks() end
 	if addon.db["showCatalystChargesOnCharframe"] and addon.variables.catalystID and addon.general.iconFrame and not addon.functions.IsTimerunner() then

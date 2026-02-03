@@ -158,6 +158,12 @@ local function updateRegistration()
 			frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
 		end
 
+		if ChatFrame_RemoveMessageEventFilter then
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_WHISPER", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_BN_WHISPER", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_WHISPER_INFORM", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_BN_WHISPER_INFORM", whisperFilter)
+		end
 		ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", whisperFilter)
 		ChatFrame_AddMessageEventFilter("CHAT_MSG_BN_WHISPER", whisperFilter)
 		ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", whisperFilter)
@@ -169,6 +175,12 @@ local function updateRegistration()
 		ChatIM:BuildSoundTable()
 	else
 		frame:UnregisterAllEvents()
+		if ChatFrame_RemoveMessageEventFilter then
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_WHISPER", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_BN_WHISPER", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_WHISPER_INFORM", whisperFilter)
+			ChatFrame_RemoveMessageEventFilter("CHAT_MSG_BN_WHISPER_INFORM", whisperFilter)
+		end
 		if ChatIM.widget and ChatIM.widget.frame then ChatIM:HideWindow() end
 	end
 end

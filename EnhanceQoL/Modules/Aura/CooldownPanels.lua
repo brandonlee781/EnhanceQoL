@@ -1106,6 +1106,7 @@ function CooldownPanels:RebuildSpellIndex()
 	if updateRangeCheckSpells then updateRangeCheckSpells(rangeCheckSpells) end
 	self:RebuildPowerIndex()
 	self:RebuildChargesIndex()
+	if self.UpdateEventRegistration then self:UpdateEventRegistration() end
 	return index
 end
 
@@ -4421,7 +4422,14 @@ function CooldownPanels:ShowEditModeHint(panelId, show)
 end
 
 function CooldownPanels:RefreshPanel(panelId)
-	if not self:GetPanel(panelId) then return end
+	local panel = self:GetPanel(panelId)
+	if not panel then return end
+	if panel.enabled == false and not self:IsInEditMode() then
+		local runtime = self.runtime and self.runtime[panelId]
+		local frame = runtime and runtime.frame
+		if frame then frame:Hide() end
+		return
+	end
 	self:EnsurePanelFrame(panelId)
 	local runtime = getRuntime(panelId)
 	if self:IsInEditMode() then
@@ -4438,6 +4446,10 @@ end
 function CooldownPanels:RefreshAllPanels()
 	local root = ensureRoot()
 	if not root then return end
+	if self:IsInEditMode() ~= true then
+		local enabledPanels = self.runtime and self.runtime.enabledPanels
+		if not enabledPanels or not next(enabledPanels) then return end
+	end
 	syncRootOrderIfDirty(root)
 	for _, panelId in ipairs(root.order) do
 		self:RefreshPanel(panelId)
@@ -6048,11 +6060,13 @@ local function registerEditModeCallbacks()
 			CooldownPanels:RefreshAllPanels()
 			resetFakeCursorFrame()
 			CooldownPanels:UpdateCursorAnchorState()
+			if CooldownPanels.UpdateEventRegistration then CooldownPanels:UpdateEventRegistration() end
 		end)
 		addon.EditModeLib:RegisterCallback("exit", function()
 			CooldownPanels:UpdateCursorAnchorState()
 			CooldownPanels:RefreshAllPanels()
 			refreshPanelsForCharges()
+			if CooldownPanels.UpdateEventRegistration then CooldownPanels:UpdateEventRegistration() end
 		end)
 	end
 	editModeCallbacksRegistered = true
@@ -6462,6 +6476,65 @@ local function setRangeOverlayForSpell(spellIdentifier, isInRange, checksRange)
 	return true
 end
 
+local UPDATE_FRAME_EVENTS = {
+	"PLAYER_ENTERING_WORLD",
+	"PLAYER_LOGIN",
+	"ADDON_LOADED",
+	"SPELL_UPDATE_COOLDOWN",
+	"SPELL_UPDATE_ICON",
+	"SPELL_UPDATE_CHARGES",
+	"SPELL_UPDATE_USES",
+	"SPELLS_CHANGED",
+	"ACTIVE_PLAYER_SPECIALIZATION_CHANGED",
+	"PLAYER_TALENT_UPDATE",
+	"PLAYER_EQUIPMENT_CHANGED",
+	"BAG_UPDATE_DELAYED",
+	"BAG_UPDATE_COOLDOWN",
+	"UPDATE_BINDINGS",
+	"UPDATE_MACROS",
+	"ACTIONBAR_PAGE_CHANGED",
+	"ACTIONBAR_HIDEGRID",
+	"SPELL_ACTIVATION_OVERLAY_GLOW_SHOW",
+	"SPELL_ACTIVATION_OVERLAY_GLOW_HIDE",
+	"SPELL_RANGE_CHECK_UPDATE",
+	"PLAYER_REGEN_DISABLED",
+	"PLAYER_REGEN_ENABLED",
+}
+
+local function hasEnabledPanels()
+	local runtime = CooldownPanels and CooldownPanels.runtime
+	local enabledPanels = runtime and runtime.enabledPanels
+	return enabledPanels and next(enabledPanels) ~= nil
+end
+
+local function shouldEnableUpdateFrame()
+	if CooldownPanels and CooldownPanels.IsInEditMode and CooldownPanels:IsInEditMode() then return true end
+	return hasEnabledPanels()
+end
+
+local function setUpdateFrameEnabled(frame, enabled)
+	if not frame then return end
+	if enabled then
+		if frame._eqolEventsRegistered then return end
+		for _, event in ipairs(UPDATE_FRAME_EVENTS) do
+			frame:RegisterEvent(event)
+		end
+		frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+		frame._eqolEventsRegistered = true
+		if updatePowerEventRegistration then updatePowerEventRegistration() end
+	else
+		if not frame._eqolEventsRegistered then return end
+		frame:UnregisterAllEvents()
+		frame._eqolEventsRegistered = false
+	end
+end
+
+function CooldownPanels:UpdateEventRegistration()
+	local frame = self.runtime and self.runtime.updateFrame
+	if not frame then return end
+	setUpdateFrameEnabled(frame, shouldEnableUpdateFrame())
+end
+
 local function ensureUpdateFrame()
 	if CooldownPanels.runtime and CooldownPanels.runtime.updateFrame then return end
 	local frame = CreateFrame("Frame")
@@ -6573,36 +6646,17 @@ local function ensureUpdateFrame()
 		if event == "BAG_UPDATE_DELAYED" or event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_ENTERING_WORLD" then updateItemCountCache() end
 		CooldownPanels:RequestUpdate("Event:" .. event)
 	end)
-	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-	frame:RegisterEvent("PLAYER_LOGIN")
-	frame:RegisterEvent("ADDON_LOADED")
-	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-	frame:RegisterEvent("SPELL_UPDATE_ICON")
-	frame:RegisterEvent("SPELL_UPDATE_CHARGES")
-	frame:RegisterEvent("SPELL_UPDATE_USES")
-	frame:RegisterEvent("SPELLS_CHANGED")
-	frame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-	frame:RegisterEvent("PLAYER_TALENT_UPDATE")
-	frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-	frame:RegisterEvent("BAG_UPDATE_DELAYED")
-	frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
-	frame:RegisterEvent("UPDATE_BINDINGS")
-	frame:RegisterEvent("UPDATE_MACROS")
-	frame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
-	frame:RegisterEvent("ACTIONBAR_HIDEGRID")
-	frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
-	frame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
-	frame:RegisterEvent("SPELL_RANGE_CHECK_UPDATE")
-	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
-	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-	frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 	CooldownPanels.runtime = CooldownPanels.runtime or {}
 	CooldownPanels.runtime.updateFrame = frame
-	updatePowerEventRegistration()
+	if CooldownPanels.UpdateEventRegistration then CooldownPanels:UpdateEventRegistration() end
 end
 
 function CooldownPanels:RequestUpdate(cause)
 	self.runtime = self.runtime or {}
+	if self:IsInEditMode() ~= true then
+		local enabledPanels = self.runtime.enabledPanels
+		if not enabledPanels or not next(enabledPanels) then return end
+	end
 	if self.runtime.updatePending then
 		if cause then self.runtime.updateCause = cause end
 		return

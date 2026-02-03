@@ -667,6 +667,19 @@ local function ensureDB(unit)
 	return udb
 end
 
+local function getVisibilityConfigFromCfg(cfg)
+	if not cfg then return nil end
+	local raw = cfg.visibility
+	if NormalizeUnitFrameVisibilityConfig then return NormalizeUnitFrameVisibilityConfig(nil, raw, { skipSave = true, ignoreOverride = true }) end
+	if type(raw) == "table" then return raw end
+	return nil
+end
+
+local function hasVisibilityRules(cfg)
+	local config = getVisibilityConfigFromCfg(cfg)
+	return config ~= nil and next(config) ~= nil
+end
+
 if UFHelper and UFHelper.RangeFadeRegister then
 	UFHelper.RangeFadeRegister(function()
 		local cfg = ensureDB(UNIT.TARGET)
@@ -674,6 +687,7 @@ if UFHelper and UFHelper.RangeFadeRegister then
 		local rcfg = (cfg and cfg.rangeFade) or (def and def.rangeFade) or {}
 		local enabled = (cfg and cfg.enabled ~= false) and rcfg.enabled == true
 		if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then enabled = false end
+		if hasVisibilityRules(cfg) then enabled = false end
 		local alpha = rcfg.alpha
 		if type(alpha) ~= "number" then alpha = 0.5 end
 		if alpha < 0 then alpha = 0 end
@@ -684,6 +698,11 @@ if UFHelper and UFHelper.RangeFadeRegister then
 	end, function(targetAlpha, force)
 		local st = states[UNIT.TARGET]
 		if not st or not st.frame or not st.frame.SetAlpha then return end
+		local cfg = ensureDB(UNIT.TARGET)
+		if hasVisibilityRules(cfg) then
+			st._rangeFadeAlpha = nil
+			return
+		end
 		if force or st._rangeFadeAlpha ~= targetAlpha then
 			st._rangeFadeAlpha = targetAlpha
 			st.frame:SetAlpha(targetAlpha)
@@ -1960,8 +1979,16 @@ function AuraUtil.updateAuraContainerSize(container, shown, ac, perRow, primary)
 	else
 		rows = math.ceil(shown / perRow)
 	end
-	container:SetHeight(rows > 0 and (rows * (ac.size + ac.padding) - ac.padding) or 0.001)
-	container:SetShown(shown > 0)
+	local height = rows > 0 and (rows * (ac.size + ac.padding) - ac.padding) or 0.001
+	if container._eqolAuraHeight ~= height then
+		container:SetHeight(height)
+		container._eqolAuraHeight = height
+	end
+	local shownFlag = shown > 0
+	if container._eqolAuraShown ~= shownFlag then
+		container:SetShown(shownFlag)
+		container._eqolAuraShown = shownFlag
+	end
 end
 
 function UF._auraLayout.calcPerRow(st, ac, width, primary)
@@ -3172,6 +3199,7 @@ local function setCastInfoFromUnit(unit)
 		end
 		return
 	end
+	applyCastLayout(cfg, unit)
 
 	local isEmpoweredCast = isChannel and (issecretvalue and not issecretvalue(isEmpowered)) and isEmpowered and numEmpowerStages and numEmpowerStages > 0
 	if isEmpoweredCast and startTimeMS and endTimeMS and (not issecretvalue or (not issecretvalue(startTimeMS) and not issecretvalue(endTimeMS))) then
@@ -3306,7 +3334,6 @@ local function setCastInfoFromUnit(unit)
 		castGUID = castGUID,
 		spellId = spellId,
 	}
-	applyCastLayout(cfg, unit)
 	configureCastStatic(unit, resolvedCfg, defc)
 	if isEmpowered then
 		UFHelper.setupEmpowerStages(st, unit, numEmpowerStages)

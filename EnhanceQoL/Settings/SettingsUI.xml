@@ -6,6 +6,7 @@
 	<Script file='CombatDungeon.lua'/>
 	<Script file='GearUpgrade.lua'/>
 	<Script file='ItemInventory.lua'/>
+	<Script file='Skinner.lua'/>
 	<Script file='Loot.lua'/>
 	<Script file='ChatFrame.lua'/>
 	<Script file='Social.lua'/>

@@ -114,61 +114,6 @@ local anchorOptions = {
 	{ value = "RIGHT", label = "RIGHT" },
 }
 
-local groupNumberFormatOptions = {
-	{ value = "GROUP", label = "Group 1" },
-	{ value = "G", label = "G1" },
-	{ value = "G_SPACE", label = "G 1" },
-	{ value = "NUMBER", label = "1" },
-	{ value = "PARENS", label = "(1)" },
-	{ value = "BRACKETS", label = "[1]" },
-	{ value = "BRACES", label = "{1}" },
-	{ value = "ANGLE", label = "<1>" },
-	{ value = "PIPE", label = "|| 1 ||" },
-	{ value = "HASH", label = "#1" },
-}
-
-local combatFeedbackLocationOptions = {
-	{ value = "FRAME", label = L["Frame"] or "Frame" },
-	{ value = "STATUS", label = L["UFStatusLine"] or "Status line" },
-	{ value = "HEALTH", label = L["Health"] or HEALTH or "Health" },
-	{ value = "POWER", label = L["Power"] or _G.POWER or "Power" },
-}
-
-local combatFeedbackAnchorOptions = {
-	{ value = "TOPLEFT", label = L["Top left"] or "Top left" },
-	{ value = "TOP", label = L["Top"] or "Top" },
-	{ value = "TOPRIGHT", label = L["Top right"] or "Top right" },
-	{ value = "LEFT", label = L["Left"] or "Left" },
-	{ value = "CENTER", label = L["Center"] or "Center" },
-	{ value = "RIGHT", label = L["Right"] or "Right" },
-	{ value = "BOTTOMLEFT", label = L["Bottom left"] or "Bottom left" },
-	{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
-	{ value = "BOTTOMRIGHT", label = L["Bottom right"] or "Bottom right" },
-}
-
-local combatFeedbackEventOptions = {
-	{ value = "WOUND", label = L["Combat feedback damage"] or "Damage" },
-	{ value = "HEAL", label = L["Combat feedback heal"] or "Heal" },
-	{ value = "ENERGIZE", label = L["Combat feedback energize"] or "Energize" },
-	{ value = "MISS", label = MISS or "Miss" },
-	{ value = "DODGE", label = DODGE or "Dodge" },
-	{ value = "PARRY", label = PARRY or "Parry" },
-	{ value = "BLOCK", label = BLOCK or "Block" },
-	{ value = "RESIST", label = RESIST or "Resist" },
-	{ value = "ABSORB", label = ABSORB or "Absorb" },
-	{ value = "IMMUNE", label = IMMUNE or "Immune" },
-	{ value = "DEFLECT", label = DEFLECT or "Deflect" },
-	{ value = "REFLECT", label = REFLECT or "Reflect" },
-	{ value = "EVADE", label = EVADE or "Evade" },
-	{ value = "INTERRUPT", label = INTERRUPT or "Interrupt" },
-}
-
-local combatFeedbackSampleOptions = {
-	{ value = "WOUND", label = L["Combat feedback damage"] or "Damage" },
-	{ value = "HEAL", label = L["Combat feedback heal"] or "Heal" },
-	{ value = "ENERGIZE", label = L["Combat feedback energize"] or "Energize" },
-}
-
 local classResourceClasses = {
 	DEATHKNIGHT = true,
 	DRUID = true,
@@ -3420,6 +3365,19 @@ local function buildUnitSettings(unit)
 		)
 		list[#list].isEnabled = isUnitStatusEnabled
 
+		local groupNumberFormatOptions = {
+			{ value = "GROUP", label = "Group 1" },
+			{ value = "G", label = "G1" },
+			{ value = "G_SPACE", label = "G 1" },
+			{ value = "NUMBER", label = "1" },
+			{ value = "PARENS", label = "(1)" },
+			{ value = "BRACKETS", label = "[1]" },
+			{ value = "BRACES", label = "{1}" },
+			{ value = "ANGLE", label = "<1>" },
+			{ value = "PIPE", label = "|| 1 ||" },
+			{ value = "HASH", label = "#1" },
+		}
+
 		local groupFormatSetting = checkboxDropdown(
 			L["UFUnitStatusGroupFormat"] or "Group number format",
 			groupNumberFormatOptions,
@@ -3642,6 +3600,48 @@ local function buildUnitSettings(unit)
 		setValue(unit, { "combatFeedback", "events" }, events)
 		refresh()
 	end
+
+	local combatFeedbackLocationOptions = {
+		{ value = "FRAME", label = L["Frame"] or "Frame" },
+		{ value = "STATUS", label = L["UFStatusLine"] or "Status line" },
+		{ value = "HEALTH", label = L["Health"] or HEALTH or "Health" },
+		{ value = "POWER", label = L["Power"] or _G.POWER or "Power" },
+	}
+
+	local combatFeedbackAnchorOptions = {
+		{ value = "TOPLEFT", label = L["Top left"] or "Top left" },
+		{ value = "TOP", label = L["Top"] or "Top" },
+		{ value = "TOPRIGHT", label = L["Top right"] or "Top right" },
+		{ value = "LEFT", label = L["Left"] or "Left" },
+		{ value = "CENTER", label = L["Center"] or "Center" },
+		{ value = "RIGHT", label = L["Right"] or "Right" },
+		{ value = "BOTTOMLEFT", label = L["Bottom left"] or "Bottom left" },
+		{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
+		{ value = "BOTTOMRIGHT", label = L["Bottom right"] or "Bottom right" },
+	}
+
+	local combatFeedbackEventOptions = {
+		{ value = "WOUND", label = L["Combat feedback damage"] or "Damage" },
+		{ value = "HEAL", label = L["Combat feedback heal"] or "Heal" },
+		{ value = "ENERGIZE", label = L["Combat feedback energize"] or "Energize" },
+		{ value = "MISS", label = MISS or "Miss" },
+		{ value = "DODGE", label = DODGE or "Dodge" },
+		{ value = "PARRY", label = PARRY or "Parry" },
+		{ value = "BLOCK", label = BLOCK or "Block" },
+		{ value = "RESIST", label = RESIST or "Resist" },
+		{ value = "ABSORB", label = ABSORB or "Absorb" },
+		{ value = "IMMUNE", label = IMMUNE or "Immune" },
+		{ value = "DEFLECT", label = DEFLECT or "Deflect" },
+		{ value = "REFLECT", label = REFLECT or "Reflect" },
+		{ value = "EVADE", label = EVADE or "Evade" },
+		{ value = "INTERRUPT", label = INTERRUPT or "Interrupt" },
+	}
+
+	local combatFeedbackSampleOptions = {
+		{ value = "WOUND", label = L["Combat feedback damage"] or "Damage" },
+		{ value = "HEAL", label = L["Combat feedback heal"] or "Heal" },
+		{ value = "ENERGIZE", label = L["Combat feedback energize"] or "Energize" },
+	}
 
 	list[#list + 1] = multiDropdown(
 		L["UFCombatFeedbackEvents"] or "Combat feedback events",

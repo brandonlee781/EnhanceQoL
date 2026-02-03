@@ -981,6 +981,10 @@ end
 local function updateManagerEyeButton()
 	local button = Internal.managerEyeButton
 	if not button then return end
+	if not lib.isEditing then
+		button:Hide()
+		return
+	end
 	local allHidden, hasSelections = areAllOverlayTogglesHidden()
 	button:SetShown(hasSelections)
 	if not hasSelections then return end
@@ -1522,6 +1526,7 @@ if not lib.activeLayoutName and C_EditMode and C_EditMode.GetLayouts then
 end
 
 function Layout:HandleLayoutsChanged(_, layoutInfo)
+	-- if not lib.isEditing then return end
 	local layoutIndex = layoutInfo and layoutInfo.activeLayout
 	if not layoutIndex then updateActiveLayoutFromAPI() end
 	layoutIndex = layoutIndex or lib.activeLayoutIndex
@@ -1552,6 +1557,7 @@ function Layout:HandleLayoutsChanged(_, layoutInfo)
 end
 
 function Layout:HandleSpecChanged()
+	-- if not lib.isEditing then return end
 	if C_EditMode and C_EditMode.GetLayouts then
 		local layouts = C_EditMode.GetLayouts()
 		self:HandleLayoutsChanged(nil, layouts)
@@ -3347,7 +3353,8 @@ local function adjustPosition(frame, dx, dy)
 	Internal:TriggerCallback(frame, point, roundOffset(x), roundOffset(y))
 end
 
-local function resetSelectionIndicators()
+local function resetSelectionIndicators(force)
+	if not force and not lib.isEditing then return end
 	if Internal.dialog then Internal.dialog:Hide() end
 	for frame, selection in next, State.selectionRegistry do
 		if selection.isSelected then frame:SetMovable(false) end
@@ -3546,7 +3553,7 @@ end
 
 local function onEditModeExit()
 	lib.isEditing = false
-	resetSelectionIndicators()
+	resetSelectionIndicators(true)
 	hideOverlapMenu()
 	updateManagerEyeButton()
 	for _, callback in next, lib.eventHandlersExit do

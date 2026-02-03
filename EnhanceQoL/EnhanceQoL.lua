@@ -1244,9 +1244,13 @@ addon.functions.ApplyUnitFrameSettingByVar = ApplyUnitFrameSettingByVar
 
 local function IsCooldownViewerEnabled()
 	if not C_CVar or not C_CVar.GetCVar then return false end
+	addon.variables = addon.variables or {}
+	if addon.variables.cooldownViewerEnabledCache ~= nil and not addon.variables.cooldownViewerEnabledDirty then return addon.variables.cooldownViewerEnabledCache end
 	local ok, value = pcall(C_CVar.GetCVar, "cooldownViewerEnabled")
-	if not ok then return false end
-	return tonumber(value) == 1
+	local enabled = ok and tonumber(value) == 1
+	addon.variables.cooldownViewerEnabledCache = enabled
+	addon.variables.cooldownViewerEnabledDirty = nil
+	return enabled
 end
 addon.functions.IsCooldownViewerEnabled = IsCooldownViewerEnabled
 
@@ -1277,6 +1281,16 @@ local function sanitizeCooldownViewerConfig(cfg)
 	end
 	if type(cfg) == "string" then return normalizeCooldownViewerConfigValue(cfg, {}) end
 	return nil
+end
+
+local function HasCooldownViewerVisibilityConfig()
+	local db = addon.db and addon.db.cooldownViewerVisibility
+	if type(db) ~= "table" then return false end
+	for _, cfg in pairs(db) do
+		local sanitized = sanitizeCooldownViewerConfig(cfg)
+		if sanitized and next(sanitized) then return true end
+	end
+	return false
 end
 
 local DRUID_TRAVEL_FORM_SPELL_IDS = {
@@ -1533,6 +1547,7 @@ function addon.functions.SetCooldownViewerVisibility(frameName, key, shouldSelec
 	else
 		db[frameName] = nil
 	end
+	if addon.functions.EnsureCooldownViewerWatcher then addon.functions.EnsureCooldownViewerWatcher() end
 	if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
 end
 
@@ -1571,35 +1586,67 @@ function addon.functions.ApplyCooldownViewerVisibility()
 	end
 end
 
+local COOLDOWN_VIEWER_EVENTS = {
+	"PLAYER_ENTERING_WORLD",
+	"COOLDOWN_VIEWER_DATA_LOADED",
+	"CVAR_UPDATE",
+	"PLAYER_REGEN_ENABLED",
+	"PLAYER_REGEN_DISABLED",
+	"PLAYER_MOUNT_DISPLAY_CHANGED",
+	"UPDATE_SHAPESHIFT_FORM",
+	"PLAYER_TARGET_CHANGED",
+	"GROUP_ROSTER_UPDATE",
+}
+
+local function setCooldownViewerWatcherEnabled(watcher, enabled)
+	if not watcher then return end
+	if enabled then
+		if watcher._eqolEventsRegistered then return end
+		for _, event in ipairs(COOLDOWN_VIEWER_EVENTS) do
+			watcher:RegisterEvent(event)
+		end
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_INTERRUPTED", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_START", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
+		watcher._eqolEventsRegistered = true
+	else
+		if not watcher._eqolEventsRegistered then return end
+		watcher:UnregisterAllEvents()
+		watcher._eqolEventsRegistered = false
+	end
+end
+
 local function EnsureCooldownViewerWatcher()
 	addon.variables = addon.variables or {}
-	if addon.variables.cooldownViewerWatcher then return end
+	local enable = HasCooldownViewerVisibilityConfig()
+	local watcher = addon.variables.cooldownViewerWatcher
+
+	if not watcher then
+		if not enable then return false end
+		EnsureSkyridingStateDriver()
+		watcher = CreateFrame("Frame")
+		watcher:SetScript("OnEvent", function(_, event, name)
+			if event == "CVAR_UPDATE" and name ~= "cooldownViewerEnabled" then return end
+			if addon.variables then
+				addon.variables.cooldownViewerRetryCount = nil
+				if event == "CVAR_UPDATE" and name == "cooldownViewerEnabled" then addon.variables.cooldownViewerEnabledDirty = true end
+			end
+			if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
+		end)
+		addon.variables.cooldownViewerWatcher = watcher
+	end
+
+	if not enable then
+		setCooldownViewerWatcherEnabled(watcher, false)
+		return false
+	end
 
 	EnsureSkyridingStateDriver()
-	local watcher = CreateFrame("Frame")
-	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-	watcher:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
-	watcher:RegisterEvent("CVAR_UPDATE")
-	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
-	watcher:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-	watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
-	watcher:RegisterEvent("GROUP_ROSTER_UPDATE")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_INTERRUPTED", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_START", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_HEALTH", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_MAXHEALTH", "player")
-	watcher:SetScript("OnEvent", function(_, event, name)
-		if event == "CVAR_UPDATE" and name ~= "cooldownViewerEnabled" then return end
-		if addon.variables then addon.variables.cooldownViewerRetryCount = nil end
-		if addon.functions.ApplyCooldownViewerVisibility then addon.functions.ApplyCooldownViewerVisibility() end
-	end)
-	addon.variables.cooldownViewerWatcher = watcher
+	setCooldownViewerWatcherEnabled(watcher, true)
+	return true
 end
 addon.functions.EnsureCooldownViewerWatcher = EnsureCooldownViewerWatcher
 
@@ -1983,6 +2030,15 @@ local function IsActionBarMouseoverEnabled(variable)
 	return cfg and cfg.MOUSEOVER == true
 end
 
+local function HasActionBarVisibilityConfig()
+	local list = addon.variables and addon.variables.actionBarNames
+	if not list then return false end
+	for _, info in ipairs(list) do
+		if info.var and GetActionBarVisibilityConfig(info.var) then return true end
+	end
+	return false
+end
+
 local function GetActionBarFadeStrength()
 	if not addon.db then return 1 end
 	local strength = tonumber(addon.db.actionBarFadeStrength)
@@ -2247,6 +2303,7 @@ local function UpdateActionBarMouseover(barName, config, variable)
 	if cfg.MOUSEOVER then C_Timer.After(0, EQOL_HookSpellFlyout) end
 
 	ApplyActionBarAlpha(bar, variable, cfg)
+	if EnsureActionBarVisibilityWatcher then EnsureActionBarVisibilityWatcher() end
 end
 addon.functions.UpdateActionBarMouseover = UpdateActionBarMouseover
 
@@ -2369,6 +2426,12 @@ local function RefreshAllActionBarVisibilityAlpha(skipFade, event)
 	end
 	addon.variables = addon.variables or {}
 	local vars = addon.variables
+	if EnsureActionBarVisibilityWatcher and not EnsureActionBarVisibilityWatcher() then
+		vars._eqolActionBarRefreshSkipFade = nil
+		vars._eqolActionBarRefreshEvent = nil
+		vars._eqolActionBarRefreshPending = nil
+		return
+	end
 	if skipFade then vars._eqolActionBarRefreshSkipFade = true end
 	if event then vars._eqolActionBarRefreshEvent = event end
 	if vars._eqolActionBarRefreshPending then return end
@@ -2436,43 +2499,85 @@ EnsureSkyridingStateDriver = function()
 	addon.variables.skyridingDriver = driver
 end
 
+local ACTIONBAR_VISIBILITY_EVENTS = {
+	"PLAYER_REGEN_DISABLED",
+	"PLAYER_REGEN_ENABLED",
+	"PLAYER_ENTERING_WORLD",
+	"PLAYER_MOUNT_DISPLAY_CHANGED",
+	"UPDATE_SHAPESHIFT_FORM",
+	"GROUP_ROSTER_UPDATE",
+	"ACTIONBAR_SHOWGRID",
+	"ACTIONBAR_HIDEGRID",
+}
+
+local function setActionBarVisibilityWatcherEnabled(watcher, enabled)
+	if not watcher then return end
+	if enabled then
+		if watcher._eqolEventsRegistered then return end
+		for _, event in ipairs(ACTIONBAR_VISIBILITY_EVENTS) do
+			watcher:RegisterEvent(event)
+		end
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_INTERRUPTED", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_START", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_HEALTH", "player")
+		SafeRegisterUnitEvent(watcher, "UNIT_MAXHEALTH", "player")
+		watcher._eqolEventsRegistered = true
+	else
+		if not watcher._eqolEventsRegistered then return end
+		watcher:UnregisterAllEvents()
+		watcher._eqolEventsRegistered = false
+	end
+end
+
 local function EnsureActionBarVisibilityWatcher()
 	addon.variables = addon.variables or {}
-	if addon.variables.actionBarVisibilityWatcher then return end
+	local enable = HasActionBarVisibilityConfig()
+	local watcher = addon.variables.actionBarVisibilityWatcher
+	if not watcher then
+		if not enable then
+			addon.variables.actionBarShowGrid = nil
+			addon.variables._eqolActionBarGroupHoverActive = nil
+			addon.variables._eqolActionBarHoverFrames = nil
+			addon.variables._eqolActionBarHoverUpdatePending = nil
+			return false
+		end
+		EnsureSkyridingStateDriver()
+		watcher = CreateFrame("Frame")
+		watcher:SetScript("OnEvent", function(_, event)
+			if event == "ACTIONBAR_SHOWGRID" then
+				addon.variables = addon.variables or {}
+				addon.variables.actionBarShowGrid = true
+				RefreshAllActionBarVisibilityAlpha(true, event)
+				return
+			end
+			if event == "ACTIONBAR_HIDEGRID" then
+				if addon.variables then addon.variables.actionBarShowGrid = nil end
+				RefreshAllActionBarVisibilityAlpha(true, event)
+				return
+			end
+			RefreshAllActionBarVisibilityAlpha(nil, event)
+		end)
+		addon.variables.actionBarVisibilityWatcher = watcher
+	end
+
+	if not enable then
+		setActionBarVisibilityWatcherEnabled(watcher, false)
+		addon.variables.actionBarShowGrid = nil
+		addon.variables._eqolActionBarGroupHoverActive = nil
+		addon.variables._eqolActionBarHoverFrames = nil
+		addon.variables._eqolActionBarHoverUpdatePending = nil
+		return false
+	end
+
 	EnsureSkyridingStateDriver()
-	local watcher = CreateFrame("Frame")
-	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
-	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-	watcher:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-	watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-	watcher:RegisterEvent("GROUP_ROSTER_UPDATE")
-	watcher:RegisterEvent("ACTIONBAR_SHOWGRID")
-	watcher:RegisterEvent("ACTIONBAR_HIDEGRID")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_INTERRUPTED", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_START", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_HEALTH", "player")
-	SafeRegisterUnitEvent(watcher, "UNIT_MAXHEALTH", "player")
-	watcher:SetScript("OnEvent", function(_, event)
-		if event == "ACTIONBAR_SHOWGRID" then
-			addon.variables = addon.variables or {}
-			addon.variables.actionBarShowGrid = true
-			RefreshAllActionBarVisibilityAlpha(true, event)
-			return
-		end
-		if event == "ACTIONBAR_HIDEGRID" then
-			if addon.variables then addon.variables.actionBarShowGrid = nil end
-			RefreshAllActionBarVisibilityAlpha(true, event)
-			return
-		end
-		RefreshAllActionBarVisibilityAlpha(nil, event)
-	end)
-	addon.variables.actionBarVisibilityWatcher = watcher
+	setActionBarVisibilityWatcherEnabled(watcher, true)
+	return true
 end
+addon.functions.UpdateActionBarVisibilityWatcher = EnsureActionBarVisibilityWatcher
 
 local DEFAULT_CHAT_BUBBLE_FONT_SIZE = 13
 local CHAT_BUBBLE_FONT_MIN = 1
@@ -5380,6 +5485,9 @@ local function setAllHooks()
 		if addon.Mover.functions.InitDB then addon.Mover.functions.InitDB() end
 		if addon.Mover.functions.InitRegistry then addon.Mover.functions.InitRegistry() end
 		if addon.Mover.functions.InitSettings then addon.Mover.functions.InitSettings() end
+	end
+	if addon.Skinner and addon.Skinner.functions then
+		if addon.Skinner.functions.InitDB then addon.Skinner.functions.InitDB() end
 	end
 	if addon.MythicPlus and addon.MythicPlus.functions then
 		if addon.MythicPlus.functions.InitDB then addon.MythicPlus.functions.InitDB() end

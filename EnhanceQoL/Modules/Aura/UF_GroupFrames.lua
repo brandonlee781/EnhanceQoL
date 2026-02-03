@@ -14,6 +14,7 @@ local UF = addon.Aura.UF
 
 UF.GroupFrames = UF.GroupFrames or {}
 local GF = UF.GroupFrames
+local EMPTY = {}
 
 local UFHelper = addon.Aura.UFHelper
 local AuraUtil = UF.AuraUtil
@@ -39,6 +40,9 @@ local UnitLevel = UnitLevel
 local UnitGUID = UnitGUID
 local C_Timer = C_Timer
 local GetTime = GetTime
+local IsAltKeyDown = IsAltKeyDown
+local IsShiftKeyDown = IsShiftKeyDown
+local IsControlKeyDown = IsControlKeyDown
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGroupRolesAssignedEnum = UnitGroupRolesAssignedEnum
 local GetRaidTargetIndex = GetRaidTargetIndex
@@ -109,42 +113,35 @@ local floor = math.floor
 local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
--- local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID|PLAYER"
-local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID_IN_COMBAT|PLAYER"
-local AURA_FILTER_HARMFUL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY"
-local AURA_FILTER_DISPELLABLE = "HARMFUL|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE"
-local AURA_FILTER_BIG_DEFENSIVE = "HELPFUL|BIG_DEFENSIVE"
-local debuffinfo = {
-	[1] = DEBUFF_TYPE_MAGIC_COLOR,
-	[2] = DEBUFF_TYPE_CURSE_COLOR,
-	[3] = DEBUFF_TYPE_DISEASE_COLOR,
-	[4] = DEBUFF_TYPE_POISON_COLOR,
-	[5] = DEBUFF_TYPE_BLEED_COLOR,
-	[0] = DEBUFF_TYPE_NONE_COLOR,
-}
-local dispelIndexByName = {
-	Magic = 1,
-	Curse = 2,
-	Disease = 3,
-	Poison = 4,
-	Bleed = 5,
-	None = 0,
-}
-local function getDebuffColorFromName(name)
-	local idx = dispelIndexByName[name] or 0
-	local col = debuffinfo[idx] or debuffinfo[0]
-	if not col then return nil end
-	if col.GetRGBA then return col:GetRGBA() end
-	if col.GetRGB then return col:GetRGB() end
-	if col.r then return col.r, col.g, col.b, col.a end
-	return col[1], col[2], col[3], col[4]
+local AURA_FILTERS = GFH.AuraFilters
+local AURA_CACHE_OPTS = GFH.AuraCacheOptions
+local function hideDispelTint(st)
+	if not (st and st.dispelTint) then return end
+	if st._dispelTintShown == false then return end
+	st._dispelTintShown = false
+	st.dispelTint:Hide()
 end
-local colorcurve = C_CurveUtil and C_CurveUtil.CreateColorCurve() or nil
-if colorcurve and Enum.LuaCurveType and Enum.LuaCurveType.Step then
-	colorcurve:SetType(Enum.LuaCurveType.Step)
-	for dispeltype, v in pairs(debuffinfo) do
-		colorcurve:AddPoint(dispeltype, v)
+local function applyDispelTint(st, r, g, b, alpha, fr, fg, fb, bgAlpha)
+	if not (st and st.dispelTint) then return end
+	st._dispelTintShown = true
+
+	local bg = st.dispelTint.Background
+	if bg then
+		-- Use a solid color so the background color choice is visible (the atlas is dark).
+		if bg.SetColorTexture then
+			bg:SetColorTexture(fr, fg, fb, 1)
+		elseif bg.SetVertexColor then
+			bg:SetVertexColor(fr, fg, fb, 1)
+		end
+		if bg.SetAlpha then bg:SetAlpha(bgAlpha) end
+		if bg.SetShown then bg:SetShown(bgAlpha > 0) end
 	end
+	local grad = st.dispelTint.Gradient
+	if grad then grad:SetVertexColor(r, g, b, alpha) end
+	local border = st.dispelTint.Border
+	if border then border:SetVertexColor(r, g, b, alpha) end
+	if st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(1) end
+	st.dispelTint:Show()
 end
 
 local function resolveBorderTexture(key)
@@ -230,7 +227,7 @@ local function buildHighlightConfig(cfg, def, key)
 	if size < 1 then size = 1 end
 	local color = hcfg.color
 	if type(color) ~= "table" then color = hdef.color end
-	if type(color) ~= "table" then color = { 1, 1, 1, 1 } end
+	if type(color) ~= "table" then color = GFH.COLOR_WHITE end
 	local offset = hcfg.offset
 	if offset == nil then offset = hdef.offset end
 	offset = tonumber(offset) or 0
@@ -265,7 +262,7 @@ local function applyHighlightStyle(st, cfg, key)
 		insets = { left = size, right = size, top = size, bottom = size },
 	})
 	frame:SetBackdropColor(0, 0, 0, 0)
-	local color = cfg.color or { 1, 1, 1, 1 }
+	local color = cfg.color or GFH.COLOR_WHITE
 	frame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
 	frame:ClearAllPoints()
 	frame:SetPoint("TOPLEFT", st.barGroup, "TOPLEFT", -offset, offset)
@@ -372,43 +369,11 @@ local function getClassColor(class)
 	return nil
 end
 
-local function selectionHasAny(selection)
-	if type(selection) ~= "table" then return false end
-	for _, value in pairs(selection) do
-		if value then return true end
-	end
-	return false
-end
-
-local function selectionContains(selection, key)
-	if type(selection) ~= "table" or key == nil then return false end
-	if selection[key] == true then return true end
-	if #selection > 0 then
-		for _, value in ipairs(selection) do
-			if value == key then return true end
-		end
-	end
-	return false
-end
-
 local function unpackColor(color, fallback)
 	if not color then color = fallback end
 	if not color then return 1, 1, 1, 1 end
 	if color.r then return color.r, color.g, color.b, color.a or 1 end
 	return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
-end
-
-local function selectionMode(selection)
-	if type(selection) ~= "table" then return "all" end
-	if selectionHasAny(selection) then return "some" end
-	return "none"
-end
-
-local function textModeUsesPercent(mode) return type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil end
-local function textModeUsesDeficit(mode) return mode == "DEFICIT" end
-local function unsecretBool(value)
-	if issecretvalue and issecretvalue(value) then return nil end
-	return value
 end
 
 local function stopDispelGlow(frame)
@@ -417,6 +382,11 @@ local function stopDispelGlow(frame)
 	if LCG.AutoCastGlow_Stop then LCG.AutoCastGlow_Stop(frame, DISPEL_GLOW_KEY) end
 	if LCG.ProcGlow_Stop then LCG.ProcGlow_Stop(frame, DISPEL_GLOW_KEY) end
 	if LCG.ButtonGlow_Stop then LCG.ButtonGlow_Stop(frame) end
+end
+local function stopDispelGlowIfActive(st, frame)
+	if not (st and st._dispelGlowActive) then return end
+	st._dispelGlowActive = nil
+	stopDispelGlow(frame)
 end
 
 local function resolveDispelIndicatorEnabled(cfg, kind)
@@ -560,26 +530,26 @@ end
 
 local function shouldShowPowerForUnit(pcfg, unit)
 	if not pcfg then return true end
-	local roleMode = selectionMode(pcfg.showRoles)
-	local specMode = selectionMode(pcfg.showSpecs)
+	local roleMode = GFH.SelectionMode(pcfg.showRoles)
+	local specMode = GFH.SelectionMode(pcfg.showSpecs)
 
 	if roleMode == "some" then
 		local roleKey = getUnitRoleKey(unit)
-		return selectionContains(pcfg.showRoles, roleKey)
+		return GFH.SelectionContains(pcfg.showRoles, roleKey)
 	end
 
 	if roleMode == "none" then
 		if specMode ~= "some" then return false end
 		local specId = getPlayerSpecId()
 		if not specId then return true end
-		return selectionContains(pcfg.showSpecs, specId)
+		return GFH.SelectionContains(pcfg.showSpecs, specId)
 	end
 
 	-- roleMode == "all"
 	if specMode == "some" then
 		local specId = getPlayerSpecId()
 		if not specId then return true end
-		return selectionContains(pcfg.showSpecs, specId)
+		return GFH.SelectionContains(pcfg.showSpecs, specId)
 	end
 	if specMode == "none" then return false end
 	return true
@@ -587,8 +557,8 @@ end
 
 local function canShowPowerBySelection(pcfg)
 	if not pcfg then return true end
-	local roleMode = selectionMode(pcfg.showRoles)
-	local specMode = selectionMode(pcfg.showSpecs)
+	local roleMode = GFH.SelectionMode(pcfg.showRoles)
+	local specMode = GFH.SelectionMode(pcfg.showSpecs)
 	if roleMode == "some" then return true end
 	if roleMode == "none" then return specMode == "some" end
 	-- roleMode == "all"
@@ -610,6 +580,10 @@ local DEFAULTS = {
 		enabled = false,
 		showPlayer = true,
 		showSolo = false,
+		tooltip = {
+			mode = "OFF", -- OFF/ALWAYS/MODIFIER
+			modifier = "ALT",
+		},
 		width = 180,
 		height = 100,
 		powerHeight = 6,
@@ -815,7 +789,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showCooldownText = false,
 				cooldownAnchor = "CENTER",
@@ -844,7 +818,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showDispelIcon = true,
 				showCooldownText = false,
@@ -874,7 +848,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showCooldownText = true,
 				cooldownAnchor = "CENTER",
@@ -902,6 +876,10 @@ local DEFAULTS = {
 	},
 	raid = {
 		enabled = false,
+		tooltip = {
+			mode = "OFF", -- OFF/ALWAYS/MODIFIER
+			modifier = "ALT",
+		},
 		width = 180,
 		height = 100,
 		powerHeight = 6,
@@ -1113,7 +1091,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showDispelIcon = true,
 				showCooldownText = false,
@@ -1143,7 +1121,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showCooldownText = false,
 				cooldownAnchor = "CENTER",
@@ -1172,7 +1150,7 @@ local DEFAULTS = {
 				growthY = "DOWN",
 				x = 0,
 				y = 0,
-				showTooltip = true,
+				showTooltip = false,
 				showCooldown = true,
 				showCooldownText = true,
 				cooldownAnchor = "CENTER",
@@ -1283,9 +1261,27 @@ local function getState(self)
 	return st
 end
 
-function GF:UpdateAbsorbCache(self, which)
-	local unit = getUnit(self)
-	local st = getState(self)
+local function shouldShowTooltip(self)
+	local kind = (self and self._eqolGroupKind) or "party"
+	local cfg = (self and (self._eqolCfg or getCfg(kind))) or getCfg(kind)
+	local tc = cfg and cfg.tooltip or nil
+	local def = (DEFAULTS[kind] and DEFAULTS[kind].tooltip) or (DEFAULTS.party and DEFAULTS.party.tooltip) or nil
+	local mode = (tc and tc.mode) or (def and def.mode) or "OFF"
+	if mode == "OFF" then return false end
+	if mode == "ALWAYS" then return true end
+	if mode == "MODIFIER" then
+		local mod = (tc and tc.modifier) or (def and def.modifier) or "ALT"
+		mod = tostring(mod):upper()
+		if mod == "SHIFT" then return IsShiftKeyDown and IsShiftKeyDown() end
+		if mod == "CTRL" or mod == "CONTROL" then return IsControlKeyDown and IsControlKeyDown() end
+		return IsAltKeyDown and IsAltKeyDown()
+	end
+	return false
+end
+
+function GF:UpdateAbsorbCache(self, which, unit, st)
+	unit = unit or getUnit(self)
+	st = st or getState(self)
 	if not (unit and st) then return end
 	if UnitExists and not UnitExists(unit) then
 		st._absorbAmount = 0
@@ -1660,7 +1656,7 @@ function GF:LayoutButton(self)
 	local sc = cfg.status or {}
 	local rolePad = 0
 	local roleEnabled = rc.enabled ~= false
-	if roleEnabled and type(rc.showRoles) == "table" and not selectionHasAny(rc.showRoles) then roleEnabled = false end
+	if roleEnabled and type(rc.showRoles) == "table" and not GFH.SelectionHasAny(rc.showRoles) then roleEnabled = false end
 	if roleEnabled then
 		local indicatorLayer = st.healthTextLayer or st.health
 		if not st.roleIcon then st.roleIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
@@ -1772,7 +1768,7 @@ function GF:LayoutButton(self)
 
 	-- Health text color
 	if st.healthTextLeft or st.healthTextCenter or st.healthTextRight then
-		local r, g, b, a = unpackColor(hc.textColor, defH.textColor or { 1, 1, 1, 1 })
+		local r, g, b, a = unpackColor(hc.textColor, defH.textColor or GFH.COLOR_WHITE)
 		if st._lastHealthTextR ~= r or st._lastHealthTextG ~= g or st._lastHealthTextB ~= b or st._lastHealthTextA ~= a then
 			st._lastHealthTextR, st._lastHealthTextG, st._lastHealthTextB, st._lastHealthTextA = r, g, b, a
 			if st.healthTextLeft then st.healthTextLeft:SetTextColor(r, g, b, a) end
@@ -1933,6 +1929,18 @@ local function hideAuraButtons(buttons, startIndex)
 	end
 end
 
+local function setAuraTooltipState(btn, style)
+	if not (btn and style) then return end
+	local show = style.showTooltip == true
+	if btn._showTooltip ~= show then btn._showTooltip = show end
+	if btn.EnableMouse then
+		if btn._eqolAuraMouseEnabled ~= show then
+			btn._eqolAuraMouseEnabled = show
+			btn:EnableMouse(show)
+		end
+	end
+end
+
 local function calcAuraGridSize(shown, perRow, size, spacing, primary)
 	if shown == nil or shown < 1 then return 0.001, 0.001 end
 	perRow = perRow or 1
@@ -2012,12 +2020,12 @@ function GF:UpdateRoleIcon(self)
 	if roleKey == "NONE" and isEditModeActive() then roleKey = "DAMAGER" end
 	local selection = rc.showRoles
 	if type(selection) == "table" then
-		if not selectionHasAny(selection) then
+		if not GFH.SelectionHasAny(selection) then
 			st._lastRoleAtlas = nil
 			st.roleIcon:Hide()
 			return
 		end
-		if roleKey == "NONE" or not selectionContains(selection, roleKey) then
+		if roleKey == "NONE" or not GFH.SelectionContains(selection, roleKey) then
 			st._lastRoleAtlas = nil
 			st.roleIcon:Hide()
 			return
@@ -2145,7 +2153,7 @@ function GF:UpdateHighlightState(self)
 	end
 	if showTarget then
 		if targetFrame then
-			local color = targetCfg.color or { 1, 1, 1, 1 }
+			local color = targetCfg.color or GFH.COLOR_WHITE
 			targetFrame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
 			targetFrame:Show()
 		end
@@ -2163,7 +2171,7 @@ function GF:UpdateHighlightState(self)
 	end
 	if showHover then
 		if hoverFrame then
-			local color = hoverCfg.color or { 1, 1, 1, 1 }
+			local color = hoverCfg.color or GFH.COLOR_WHITE
 			hoverFrame:SetBackdropBorderColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
 			hoverFrame:Show()
 		end
@@ -2475,10 +2483,10 @@ function GF:LayoutAuras(self)
 	end
 end
 
-local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache, externalFilter)
+local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache, externalFilter, changed)
 	local meta = AURA_TYPE_META[kindKey]
 	if not meta then return end
-	local typeCfg = ac and ac[kindKey] or {}
+	local typeCfg = (ac and ac[kindKey]) or EMPTY
 	if typeCfg.enabled == false then
 		local container = st[meta.containerKey]
 		if container then container:Hide() end
@@ -2529,7 +2537,7 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache,
 					elseif externalIndex and externalIndex[auraId] then
 						match = false
 					elseif externalFilter and (flags == nil or flags[auraId] == nil) then
-						local isExternal = isAuraBigDefensive(unit, aura, externalFilter or AURA_FILTER_BIG_DEFENSIVE)
+						local isExternal = isAuraBigDefensive(unit, aura, externalFilter or AURA_FILTERS.bigDefensive)
 						if isExternal then
 							if flags then flags[auraId] = setAuraFlag(flags[auraId], AURA_KIND_EXTERNAL) end
 							match = false
@@ -2547,8 +2555,13 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache,
 			end
 			if match then
 				shown = shown + 1
-				local btn = AuraUtil.ensureAuraButton(container, buttons, shown, style)
-				AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
+				local btn = buttons and buttons[shown]
+				if not btn then btn = AuraUtil.ensureAuraButton(container, buttons, shown, style) end
+				local auraIdForBtn = aura.auraInstanceID or auraId
+				if btn.unitToken ~= unit or btn.auraInstanceID ~= auraIdForBtn or (changed and auraIdForBtn and changed[auraIdForBtn]) then
+					AuraUtil.applyAuraToButton(btn, aura, style, meta.isDebuff, unit)
+				end
+				setAuraTooltipState(btn, style)
 				if btn._auraLayoutKey ~= layout.key then
 					positionAuraButton(btn, container, layout.primary, layout.secondary, shown, layout.perRow, layout.size, layout.spacing)
 					btn._auraLayoutKey = layout.key
@@ -2620,44 +2633,32 @@ end
 
 local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
 	if not (unit and st and updateInfo and AuraUtil and AuraUtil.updateAuraCacheFromEvent) then return end
-	local helpfulCache = getAuraCache(st, "helpful")
-	local harmfulCache = getAuraCache(st, "harmful")
-	local externalCache = getAuraCache(st, "externals")
-	local dispelCache = getAuraCache(st, "dispel")
 	local wantsHelpful = ac and (ac.buff and ac.buff.enabled ~= false) or false
 	local wantsHarmful = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
 	local wantsExternals = ac and (ac.externals and ac.externals.enabled ~= false) or false
 	local wantsDispel = st._wantsDispelTint == true
+	local helpfulCache = wantsHelpful and getAuraCache(st, "helpful") or nil
+	local harmfulCache = wantsHarmful and getAuraCache(st, "harmful") or nil
+	local externalCache = wantsExternals and getAuraCache(st, "externals") or nil
+	local dispelCache = wantsDispel and getAuraCache(st, "dispel") or nil
 	if wantsHelpful and helpfulCache then
-		AuraUtil.updateAuraCacheFromEvent(helpfulCache, unit, updateInfo, {
-			showHelpful = true,
-			showHarmful = false,
-			helpfulFilter = helpfulFilter,
-		})
+		local opts = AURA_CACHE_OPTS.helpful
+		if opts then opts.helpfulFilter = helpfulFilter end
+		AuraUtil.updateAuraCacheFromEvent(helpfulCache, unit, updateInfo, opts)
 		updateAuraKindFlagsFromEvent(st, helpfulCache, AURA_KIND_HELPFUL, updateInfo)
 	end
 	if wantsHarmful and harmfulCache then
-		AuraUtil.updateAuraCacheFromEvent(harmfulCache, unit, updateInfo, {
-			showHelpful = false,
-			showHarmful = true,
-			harmfulFilter = harmfulFilter,
-		})
+		local opts = AURA_CACHE_OPTS.harmful
+		if opts then opts.harmfulFilter = harmfulFilter end
+		AuraUtil.updateAuraCacheFromEvent(harmfulCache, unit, updateInfo, opts)
 		updateAuraKindFlagsFromEvent(st, harmfulCache, AURA_KIND_HARMFUL, updateInfo)
 	end
 	if wantsExternals then
-		if externalCache then AuraUtil.updateAuraCacheFromEvent(externalCache, unit, updateInfo, {
-			showHelpful = true,
-			showHarmful = false,
-			helpfulFilter = AURA_FILTER_BIG_DEFENSIVE,
-		}) end
+		if externalCache then AuraUtil.updateAuraCacheFromEvent(externalCache, unit, updateInfo, AURA_CACHE_OPTS.external) end
 		if externalCache then updateAuraKindFlagsFromEvent(st, externalCache, AURA_KIND_EXTERNAL, updateInfo) end
 	end
 	if wantsDispel then
-		if dispelCache then AuraUtil.updateAuraCacheFromEvent(dispelCache, unit, updateInfo, {
-			showHelpful = false,
-			showHarmful = true,
-			harmfulFilter = AURA_FILTER_DISPELLABLE,
-		}) end
+		if dispelCache then AuraUtil.updateAuraCacheFromEvent(dispelCache, unit, updateInfo, AURA_CACHE_OPTS.dispel) end
 		if dispelCache then updateAuraKindFlagsFromEvent(st, dispelCache, AURA_KIND_DISPEL, updateInfo) end
 	end
 end
@@ -2697,7 +2698,7 @@ function GF:UpdateAuras(self, updateInfo)
 		return
 	end
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
-	local ac = cfg and cfg.auras or {}
+	local ac = (cfg and cfg.auras) or EMPTY
 	if cfg then syncAurasEnabled(cfg) end
 	local wantsAuras = st._wantsAuras
 	if wantsAuras == nil then wantsAuras = ((ac.buff and ac.buff.enabled) or (ac.debuff and ac.debuff.enabled) or (ac.externals and ac.externals.enabled)) or false end
@@ -2735,10 +2736,10 @@ function GF:UpdateAuras(self, updateInfo)
 			GF:LayoutAuras(self)
 		end
 	end
-	local helpfulFilter = AURA_FILTER_HELPFUL
-	local harmfulFilter = AURA_FILTER_HARMFUL
-	local dispelFilter = AURA_FILTER_DISPELLABLE
-	local externalFilter = AURA_FILTER_BIG_DEFENSIVE
+	local helpfulFilter = AURA_FILTERS.helpful
+	local harmfulFilter = AURA_FILTERS.harmful
+	local dispelFilter = AURA_FILTERS.dispellable
+	local externalFilter = AURA_FILTERS.bigDefensive
 	local helpfulCache = getAuraCache(st, "helpful")
 	local harmfulCache = getAuraCache(st, "harmful")
 	local externalCache = getAuraCache(st, "externals")
@@ -2782,12 +2783,84 @@ function GF:UpdateAuras(self, updateInfo)
 		end
 		return
 	end
+	local touchBuff, touchDebuff, touchExternals
+	local function markKinds(flags)
+		if not flags then return end
+		if hasAuraFlag(flags, AURA_KIND_HELPFUL) then touchBuff = true end
+		if hasAuraFlag(flags, AURA_KIND_HARMFUL) then touchDebuff = true end
+		if hasAuraFlag(flags, AURA_KIND_EXTERNAL) then touchExternals = true end
+	end
+	if updateInfo then
+		local preFlags = st._auraKindById
+		local removed = updateInfo.removedAuraInstanceIDs
+		if removed then
+			if preFlags then
+				for i = 1, #removed do
+					markKinds(preFlags[removed[i]])
+				end
+			else
+				touchBuff = wantBuff
+				touchDebuff = wantDebuff
+				touchExternals = wantExternals
+			end
+		end
+	end
 
 	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
+	local changed = st._auraChanged
+	if updateInfo then
+		if not changed then
+			changed = {}
+			st._auraChanged = changed
+		elseif wipe then
+			wipe(changed)
+		else
+			for k in pairs(changed) do
+				changed[k] = nil
+			end
+		end
+		local added = updateInfo.addedAuras
+		if added then
+			for i = 1, #added do
+				local aura = added[i]
+				local id = aura and aura.auraInstanceID
+				if id then changed[id] = true end
+			end
+		end
+		local updated = updateInfo.updatedAuraInstanceIDs
+		if updated then
+			for i = 1, #updated do
+				local id = updated[i]
+				if id then changed[id] = true end
+			end
+		end
+		local flags = st._auraKindById
+		if not flags then
+			if not (touchBuff or touchDebuff or touchExternals) then
+				touchBuff = wantBuff
+				touchDebuff = wantDebuff
+				touchExternals = wantExternals
+			end
+		else
+			if added then
+				for i = 1, #added do
+					local aura = added[i]
+					local id = aura and aura.auraInstanceID
+					if id then markKinds(flags[id]) end
+				end
+			end
+			if updated then
+				for i = 1, #updated do
+					local id = updated[i]
+					if id then markKinds(flags[id]) end
+				end
+			end
+		end
+	end
 	if wantsAuras then
-		if wantBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter) end
-		if wantDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter) end
-		if wantExternals then updateAuraType(self, unit, st, ac, "externals", externalCache, externalCache, externalFilter) end
+		if wantBuff and touchBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter, changed) end
+		if wantDebuff and touchDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter, changed) end
+		if wantExternals and touchExternals then updateAuraType(self, unit, st, ac, "externals", externalCache, externalCache, externalFilter, changed) end
 	end
 	if wantsDispelTint then
 		GF:UpdateDispelTint(self, dispelCache, dispelFilter)
@@ -2801,8 +2874,8 @@ function GF:UpdateSampleAuras(self)
 	local st = getState(self)
 	if not (st and AuraUtil) then return end
 	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
-	local ac = cfg and cfg.auras or {}
-	local scfg = cfg and cfg.status or {}
+	local ac = (cfg and cfg.auras) or EMPTY
+	local scfg = (cfg and cfg.status) or EMPTY
 	local wantsDispelTint = resolveDispelIndicatorEnabled(cfg, self._eqolGroupKind or "party")
 	st._wantsDispelTint = wantsDispelTint
 	if cfg then syncAurasEnabled(cfg) end
@@ -2840,7 +2913,7 @@ function GF:UpdateSampleAuras(self)
 	local function updateSampleType(kindKey)
 		local meta = AURA_TYPE_META[kindKey]
 		if not meta then return end
-		local typeCfg = ac and ac[kindKey] or {}
+		local typeCfg = (ac and ac[kindKey]) or EMPTY
 		if typeCfg.enabled == false then
 			local container = st[meta.containerKey]
 			if container then container:Hide() end
@@ -2877,6 +2950,7 @@ function GF:UpdateSampleAuras(self)
 			local aura = getSampleAuraData(kindKey, i, now)
 			local btn = AuraUtil.ensureAuraButton(container, buttons, i, sampleStyle)
 			AuraUtil.applyAuraToButton(btn, aura, sampleStyle, meta.isDebuff, unitToken)
+			setAuraTooltipState(btn, sampleStyle)
 			if btn._auraLayoutKey ~= layout.key then
 				positionAuraButton(btn, container, layout.primary, layout.secondary, i, layout.perRow, layout.size, layout.spacing)
 				btn._auraLayoutKey = layout.key
@@ -2927,7 +3001,7 @@ function GF:UpdateName(self)
 	local cfg = self._eqolCfg or getCfg(kind)
 	local tc = cfg and cfg.text or {}
 	local sc = cfg and cfg.status or {}
-	local connected = UnitIsConnected and unsecretBool(UnitIsConnected(unit))
+	local connected = UnitIsConnected and GFH.UnsecretBool(UnitIsConnected(unit))
 	local displayName = name or ""
 	local maxChars = tonumber(tc.nameMaxChars) or 0
 	local noEllipsis = tc.nameNoEllipsis
@@ -2952,7 +3026,7 @@ function GF:UpdateName(self)
 	local nameMode = sc.nameColorMode
 	if nameMode == nil then nameMode = (tc.useClassColor ~= false) and "CLASS" or "CUSTOM" end
 	if nameMode == "CUSTOM" then
-		r, g, b, a = unpackColor(sc.nameColor, { 1, 1, 1, 1 })
+		r, g, b, a = unpackColor(sc.nameColor, GFH.COLOR_WHITE)
 	elseif nameMode == "CLASS" and st._classR then
 		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	end
@@ -2998,7 +3072,7 @@ function GF:UpdateLevel(self)
 
 	local r, g, b, a = 1, 0.85, 0, 1
 	if scfg.levelColorMode == "CUSTOM" then
-		r, g, b, a = unpackColor(scfg.levelColor, { 1, 0.85, 0, 1 })
+		r, g, b, a = unpackColor(scfg.levelColor, GFH.COLOR_LEVEL)
 	elseif scfg.levelColorMode == "CLASS" and st._classR then
 		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	end
@@ -3037,9 +3111,9 @@ function GF:UpdateStatusText(self)
 	if showOffline == nil then showOffline = true end
 	local showAFK = us.showAFK == true
 	local showDND = us.showDND == true
-	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
-	local isAFK = unit and UnitIsAFK and unsecretBool(UnitIsAFK(unit)) or nil
-	local isDND = unit and UnitIsDND and unsecretBool(UnitIsDND(unit)) or nil
+	local connected = unit and UnitIsConnected and GFH.UnsecretBool(UnitIsConnected(unit)) or nil
+	local isAFK = unit and UnitIsAFK and GFH.UnsecretBool(UnitIsAFK(unit)) or nil
+	local isDND = unit and UnitIsDND and GFH.UnsecretBool(UnitIsDND(unit)) or nil
 	if connected == false then
 		if showOffline then statusTag = PLAYER_OFFLINE or "Offline" end
 	elseif isAFK == true then
@@ -3058,7 +3132,7 @@ function GF:UpdateStatusText(self)
 	end
 	if statusTag then
 		st.statusText:SetText(statusTag)
-		local col = us.color or { 1, 1, 1, 1 }
+		local col = us.color or GFH.COLOR_WHITE
 		st.statusText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
 		st.statusText:Show()
 	else
@@ -3080,16 +3154,16 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 	local glowEnabled = dcfg.glowEnabled
 	if glowEnabled == nil then glowEnabled = defDispel.glowEnabled == true end
 	if not overlayEnabled and not glowEnabled then
-		if st.dispelTint then st.dispelTint:Hide() end
-		stopDispelGlow(st.barGroup or self)
+		hideDispelTint(st)
+		stopDispelGlowIfActive(st, st.barGroup or self)
 		return
 	end
 	if allowSample then
 		local showSample = dcfg.showSample
 		if showSample == nil then showSample = defDispel.showSample == true end
 		if not showSample then
-			if st.dispelTint then st.dispelTint:Hide() end
-			stopDispelGlow(st.barGroup or self)
+			hideDispelTint(st)
+			stopDispelGlowIfActive(st, st.barGroup or self)
 			return
 		end
 	end
@@ -3099,30 +3173,16 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 	if fillEnabled == nil then fillEnabled = defDispel.fillEnabled ~= false end
 	local fillAlpha = dcfg.fillAlpha
 	if fillAlpha == nil then fillAlpha = defDispel.fillAlpha or 0.2 end
-	local fillColor = dcfg.fillColor or defDispel.fillColor or { 0, 0, 0, 1 }
-	local fr, fg, fb, fa = unpackColor(fillColor, { 0, 0, 0, 1 })
+	local fillColor = dcfg.fillColor or defDispel.fillColor or GFH.COLOR_BLACK
+	local fr, fg, fb, fa = unpackColor(fillColor, GFH.COLOR_BLACK)
 	if not fillEnabled then fillAlpha = 0 end
 	local bgAlpha = fillAlpha * (fa or 1)
-	local function applyTint(r, g, b)
-		if st.dispelTint and st.dispelTint.Background then
-			-- Use a solid color so the background color choice is visible (the atlas is dark).
-			if st.dispelTint.Background.SetColorTexture then
-				st.dispelTint.Background:SetColorTexture(fr, fg, fb, 1)
-			elseif st.dispelTint.Background.SetVertexColor then
-				st.dispelTint.Background:SetVertexColor(fr, fg, fb, 1)
-			end
-			if st.dispelTint.Background.SetAlpha then st.dispelTint.Background:SetAlpha(bgAlpha) end
-			if st.dispelTint.Background.SetShown then st.dispelTint.Background:SetShown(bgAlpha > 0) end
-		end
-		if st.dispelTint and st.dispelTint.Gradient then st.dispelTint.Gradient:SetVertexColor(r, g, b, alpha) end
-		if st.dispelTint and st.dispelTint.Border then st.dispelTint.Border:SetVertexColor(r, g, b, alpha) end
-		if st.dispelTint and st.dispelTint.SetAlpha then st.dispelTint:SetAlpha(1) end
-		if st.dispelTint then st.dispelTint:Show() end
-	end
 
 	local r, g, b
+	local colorKey
 	if allowSample then
-		r, g, b = getDebuffColorFromName("Magic")
+		r, g, b = GFH.GetDebuffColorFromName("Magic")
+		colorKey = "Magic"
 	else
 		local unit = getUnit(self)
 		if unit and cache and cache.order and cache.auras then
@@ -3132,8 +3192,11 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 				local auraId = order[i]
 				local aura = auraId and auras[auraId]
 				if aura then
-					if aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
-						local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, colorcurve)
+					local dispelName = aura.dispelName
+					if not (issecretvalue and issecretvalue(dispelName)) and dispelName and dispelName ~= "" then colorKey = dispelName end
+					local dispelCurve = GFH.DispelColorCurve
+					if aura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and dispelCurve then
+						local color = C_UnitAuras.GetAuraDispelTypeColor(unit, aura.auraInstanceID, dispelCurve)
 						if not (issecretvalue and issecretvalue(color)) then
 							if color and color.GetRGBA then
 								r, g, b = color:GetRGBA()
@@ -3143,9 +3206,8 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 						end
 					end
 					if not r then
-						local dispelName = aura.dispelName
 						if not (issecretvalue and issecretvalue(dispelName)) then
-							r, g, b = getDebuffColorFromName(dispelName or "None")
+							r, g, b = GFH.GetDebuffColorFromName(dispelName or "None")
 						end
 					end
 					break
@@ -3154,24 +3216,26 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 		end
 	end
 
+	if r and not colorKey then colorKey = "UNKNOWN" end
+
 	if overlayEnabled then
 		if r then
-			applyTint(r, g or 0, b or 0)
-		elseif st.dispelTint then
-			st.dispelTint:Hide()
+			applyDispelTint(st, r, g or 0, b or 0, alpha, fr, fg, fb, bgAlpha)
+		else
+			hideDispelTint(st)
 		end
-	elseif st.dispelTint then
-		st.dispelTint:Hide()
+	else
+		hideDispelTint(st)
 	end
 
 	if glowEnabled then
-		GF:UpdateDispelGlow(self, r, g, b)
+		GF:UpdateDispelGlow(self, r, g, b, colorKey)
 	else
-		stopDispelGlow(st.barGroup or self)
+		stopDispelGlowIfActive(st, st.barGroup or self)
 	end
 end
 
-function GF:UpdateDispelGlow(self, r, g, b)
+function GF:UpdateDispelGlow(self, r, g, b, colorKey)
 	local st = getState(self)
 	if not st then return end
 	if not (LCG and LCG.PixelGlow_Start) then return end
@@ -3183,21 +3247,19 @@ function GF:UpdateDispelGlow(self, r, g, b)
 	local glowEnabled = dcfg.glowEnabled
 	if glowEnabled == nil then glowEnabled = defDispel.glowEnabled == true end
 	if not glowEnabled then
-		stopDispelGlow(st.barGroup or self)
-		st._dispelGlowActive = nil
+		stopDispelGlowIfActive(st, st.barGroup or self)
 		return
 	end
 	if not (r and g and b) then
-		stopDispelGlow(st.barGroup or self)
-		st._dispelGlowActive = nil
+		stopDispelGlowIfActive(st, st.barGroup or self)
 		return
 	end
 
 	local colorMode = dcfg.glowColorMode or defDispel.glowColorMode or "DISPEL"
 	local cr, cg, cb = r, g, b
 	if colorMode == "CUSTOM" then
-		local col = dcfg.glowColor or defDispel.glowColor or { 1, 1, 1, 1 }
-		cr, cg, cb = unpackColor(col, { 1, 1, 1, 1 })
+		local col = dcfg.glowColor or defDispel.glowColor or GFH.COLOR_WHITE
+		cr, cg, cb = unpackColor(col, GFH.COLOR_WHITE)
 	end
 	local lines = clampNumber(dcfg.glowLines or defDispel.glowLines or 8, 1, 20, 8)
 	local freq = clampNumber(dcfg.glowFrequency or defDispel.glowFrequency or 0.25, -1.5, 1.5, 0.25)
@@ -3215,35 +3277,40 @@ function GF:UpdateDispelGlow(self, r, g, b)
 
 	if
 		st._dispelGlowActive
-		and st._dispelGlowR == cr
-		and st._dispelGlowG == cg
-		and st._dispelGlowB == cb
 		and st._dispelGlowLines == lines
 		and st._dispelGlowFreq == freq
 		and st._dispelGlowThickness == thickness
 		and st._dispelGlowX == xoff
 		and st._dispelGlowY == yoff
 		and st._dispelGlowEffect == effect
+		and colorKey
+		and st._dispelGlowKey == colorKey
 	then
 		return
 	end
 
 	local target = st.barGroup or self
-	stopDispelGlow(target)
+	stopDispelGlowIfActive(st, target)
+	local glowColor = st._dispelGlowColor
+	if not glowColor then
+		glowColor = { 1, 1, 1, 1 }
+		st._dispelGlowColor = glowColor
+	end
+	glowColor[1], glowColor[2], glowColor[3], glowColor[4] = cr, cg, cb, 1
 	if effect == "SHINE" and LCG.AutoCastGlow_Start then
-		LCG.AutoCastGlow_Start(target, { cr, cg, cb, 1 }, lines, freq, scale, xoff, yoff, DISPEL_GLOW_KEY)
+		LCG.AutoCastGlow_Start(target, glowColor, lines, freq, scale, xoff, yoff, DISPEL_GLOW_KEY)
 	elseif effect == "BLIZZARD" and LCG.ButtonGlow_Start then
-		LCG.ButtonGlow_Start(target, { cr, cg, cb, 1 }, freq)
+		LCG.ButtonGlow_Start(target, glowColor, freq)
 	else
-		LCG.PixelGlow_Start(target, { cr, cg, cb, 1 }, lines, freq, nil, thickness, xoff, yoff, nil, DISPEL_GLOW_KEY)
+		LCG.PixelGlow_Start(target, glowColor, lines, freq, nil, thickness, xoff, yoff, nil, DISPEL_GLOW_KEY)
 	end
 	st._dispelGlowActive = true
-	st._dispelGlowR, st._dispelGlowG, st._dispelGlowB = cr, cg, cb
 	st._dispelGlowLines = lines
 	st._dispelGlowFreq = freq
 	st._dispelGlowThickness = thickness
 	st._dispelGlowX, st._dispelGlowY = xoff, yoff
 	st._dispelGlowEffect = effect
+	st._dispelGlowKey = colorKey
 end
 
 function GF:UpdateRange(self, inRange)
@@ -3265,7 +3332,7 @@ function GF:UpdateRange(self, inRange)
 		end
 	end
 	local unit = getUnit(self)
-	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
+	local connected = unit and UnitIsConnected and GFH.UnsecretBool(UnitIsConnected(unit)) or nil
 	if connected == false then
 		local offA = rcfg.offlineAlpha or rcfg.alpha or 0.55
 		if st.frame and st.frame.SetAlpha then st.frame:SetAlpha(offA) end
@@ -3277,9 +3344,9 @@ function GF:UpdateRange(self, inRange)
 	end
 end
 
-function GF:UpdateHealthValue(self)
-	local unit = getUnit(self)
-	local st = getState(self)
+function GF:UpdateHealthValue(self, unit, st)
+	unit = unit or getUnit(self)
+	st = st or getState(self)
 	if not (unit and st and st.health) then return end
 	if UnitExists and not UnitExists(unit) then
 		st.health:SetMinMaxValues(0, 1)
@@ -3437,7 +3504,7 @@ function GF:UpdateHealthValue(self)
 	local scfg = cfg and cfg.status or {}
 	local us = scfg.unitStatus or {}
 	local hideTextOffline = us.hideHealthTextWhenOffline == true
-	local connected = unit and UnitIsConnected and unsecretBool(UnitIsConnected(unit)) or nil
+	local connected = unit and UnitIsConnected and GFH.UnsecretBool(UnitIsConnected(unit)) or nil
 	if hideTextOffline and connected == false then
 		if st.healthTextLeft then st.healthTextLeft:SetText("") end
 		if st.healthTextCenter then st.healthTextCenter:SetText("") end
@@ -3461,7 +3528,7 @@ function GF:UpdateHealthValue(self)
 			local useShort = hc.useShortNumbers ~= false
 			local hidePercentSymbol = hc.hidePercentSymbol == true
 			local percentVal
-			if textModeUsesPercent(leftMode) or textModeUsesPercent(centerMode) or textModeUsesPercent(rightMode) then
+			if GFH.TextModeUsesPercent(leftMode) or GFH.TextModeUsesPercent(centerMode) or GFH.TextModeUsesPercent(rightMode) then
 				if addon.variables and addon.variables.isMidnight then
 					percentVal = getHealthPercent(unit, cur, maxv)
 				elseif not secretHealth then
@@ -3473,7 +3540,7 @@ function GF:UpdateHealthValue(self)
 				if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
 			end
 			local missingValue
-			if textModeUsesDeficit(leftMode) or textModeUsesDeficit(centerMode) or textModeUsesDeficit(rightMode) then
+			if GFH.TextModeUsesDeficit(leftMode) or GFH.TextModeUsesDeficit(centerMode) or GFH.TextModeUsesDeficit(rightMode) then
 				if UnitHealthMissing then missingValue = UnitHealthMissing(unit) end
 				if not (issecretvalue and issecretvalue(missingValue)) then
 					if missingValue == nil and not secretHealth then
@@ -3524,14 +3591,14 @@ function GF:UpdateHealthStyle(self)
 	local r, g, b, a
 	local useCustom = hc.useCustomColor == true
 	if useCustom then
-		r, g, b, a = unpackColor(hc.color, defH.color or { 0, 0.8, 0, 1 })
+		r, g, b, a = unpackColor(hc.color, defH.color or GFH.COLOR_HEALTH_DEFAULT)
 	elseif hc.useClassColor == true and st._classR then
 		r, g, b, a = st._classR, st._classG, st._classB, st._classA or 1
 	else
-		r, g, b, a = unpackColor(hc.color, defH.color or { 0, 0.8, 0, 1 })
+		r, g, b, a = unpackColor(hc.color, defH.color or GFH.COLOR_HEALTH_DEFAULT)
 	end
 
-	local connected = UnitIsConnected and unsecretBool(UnitIsConnected(unit))
+	local connected = UnitIsConnected and GFH.UnsecretBool(UnitIsConnected(unit))
 	if connected == false then
 		r, g, b, a = 0.5, 0.5, 0.5, 1
 	end
@@ -3584,9 +3651,9 @@ function GF:UpdatePowerVisibility(self)
 	return true
 end
 
-function GF:UpdatePowerValue(self)
-	local unit = getUnit(self)
-	local st = getState(self)
+function GF:UpdatePowerValue(self, unit, st)
+	unit = unit or getUnit(self)
+	st = st or getState(self)
 	if not (unit and st and st.power) then return end
 	if st._wantsPower == false or st._powerHidden then return end
 	if UnitExists and not UnitExists(unit) then
@@ -3669,7 +3736,7 @@ function GF:UpdatePowerValue(self)
 				local useShort = pcfg.useShortNumbers ~= false
 				local hidePercentSymbol = pcfg.hidePercentSymbol == true
 				local percentVal
-				if textModeUsesPercent(leftMode) or textModeUsesPercent(centerMode) or textModeUsesPercent(rightMode) then
+				if GFH.TextModeUsesPercent(leftMode) or GFH.TextModeUsesPercent(centerMode) or GFH.TextModeUsesPercent(rightMode) then
 					if addon.variables and addon.variables.isMidnight then
 						percentVal = getPowerPercent(unit, powerType or 0, cur, maxv)
 					elseif not secretPower then
@@ -3924,9 +3991,7 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 	if wantsLevel then reg("UNIT_LEVEL") end
 
 	if self._eqolUFState and (self._eqolUFState._wantsAuras or self._eqolUFState._wantsDispelTint) then reg("UNIT_AURA") end
-	-- if self._eqolUFState and self._eqolUFState._wantsRangeFade then
-	reg("UNIT_IN_RANGE_UPDATE")
-	-- end
+	if self._eqolUFState and self._eqolUFState._wantsRangeFade then reg("UNIT_IN_RANGE_UPDATE") end
 end
 
 function GF.UnitButton_OnAttributeChanged(self, name, value)
@@ -3941,16 +4006,24 @@ function GF.UnitButton_OnAttributeChanged(self, name, value)
 	GF:UnitButton_SetUnit(self, value)
 end
 
-local function dispatchUnitHealth(btn) GF:UpdateHealthValue(btn) end
-local function dispatchUnitAbsorb(btn)
-	GF:UpdateAbsorbCache(btn, "absorb")
-	GF:UpdateHealthValue(btn)
+local function dispatchUnitHealth(btn, unit)
+	local st = getState(btn)
+	GF:UpdateHealthValue(btn, unit, st)
 end
-local function dispatchUnitHealAbsorb(btn)
-	GF:UpdateAbsorbCache(btn, "heal")
-	GF:UpdateHealthValue(btn)
+local function dispatchUnitAbsorb(btn, unit)
+	local st = getState(btn)
+	GF:UpdateAbsorbCache(btn, "absorb", unit, st)
+	GF:UpdateHealthValue(btn, unit, st)
 end
-local function dispatchUnitPower(btn) GF:UpdatePowerValue(btn) end
+local function dispatchUnitHealAbsorb(btn, unit)
+	local st = getState(btn)
+	GF:UpdateAbsorbCache(btn, "heal", unit, st)
+	GF:UpdateHealthValue(btn, unit, st)
+end
+local function dispatchUnitPower(btn, unit)
+	local st = getState(btn)
+	GF:UpdatePowerValue(btn, unit, st)
+end
 local function dispatchUnitDisplayPower(btn) GF:UpdatePower(btn) end
 local function dispatchUnitName(btn)
 	GF:CacheUnitStatic(btn)
@@ -3958,23 +4031,25 @@ local function dispatchUnitName(btn)
 	GF:UpdateHealthStyle(btn)
 	GF:UpdateLevel(btn)
 end
-local function dispatchUnitLevel(btn)
-	GF:UpdateLevel(btn)
-	GF:UpdateHealthValue(btn)
-	GF:UpdatePowerValue(btn)
+local function dispatchUnitLevel(btn, unit)
+	local st = getState(btn)
+	GF:UpdateLevel(btn, unit, st)
+	GF:UpdateHealthValue(btn, unit, st)
+	GF:UpdatePowerValue(btn, unit, st)
 end
-local function dispatchUnitConnection(btn)
-	GF:UpdateHealthStyle(btn)
-	GF:UpdateHealthValue(btn)
-	GF:UpdatePowerValue(btn)
-	GF:UpdateName(btn)
-	GF:UpdateStatusText(btn)
-	GF:UpdateLevel(btn)
-	GF:UpdateRange(btn)
+local function dispatchUnitConnection(btn, unit)
+	local st = getState(btn)
+	GF:UpdateHealthStyle(btn, unit, st)
+	GF:UpdateHealthValue(btn, unit, st)
+	GF:UpdatePowerValue(btn, unit, st)
+	GF:UpdateName(btn, unit, st)
+	GF:UpdateStatusText(btn, unit, st)
+	GF:UpdateLevel(btn, unit, st)
+	GF:UpdateRange(btn, nil, unit, st)
 end
 local function dispatchUnitFlags(btn) GF:UpdateStatusText(btn) end
-local function dispatchUnitRange(btn, inRange) GF:UpdateRange(btn, inRange) end
-local function dispatchUnitAura(btn, updateInfo) GF:RequestAuraUpdate(btn, updateInfo) end
+local function dispatchUnitRange(btn, _, inRange) GF:UpdateRange(btn, inRange) end
+local function dispatchUnitAura(btn, _, updateInfo) GF:RequestAuraUpdate(btn, updateInfo) end
 
 local UNIT_DISPATCH = {
 	UNIT_HEALTH = dispatchUnitHealth,
@@ -3998,17 +4073,18 @@ function GF.UnitButton_OnEvent(self, event, unit, ...)
 	if not u or (unit and unit ~= u) then return end
 
 	local fn = UNIT_DISPATCH[event]
-	if fn then fn(self, ...) end
+	if fn then fn(self, u, ...) end
 end
 
 function GF.UnitButton_OnEnter(self)
-	local unit = getUnit(self)
-	if not unit then return end
 	local st = getState(self)
 	if st then
 		st._hovered = true
 		GF:UpdateHighlightState(self)
 	end
+	if not shouldShowTooltip(self) then return end
+	local unit = getUnit(self)
+	if not unit then return end
 	if not GameTooltip or GameTooltip:IsForbidden() then return end
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 	GameTooltip:SetUnit(unit)
@@ -4016,7 +4092,6 @@ function GF.UnitButton_OnEnter(self)
 end
 
 function GF.UnitButton_OnLeave(self)
-	local unit = getUnit(self)
 	local st = getState(self)
 	if st then
 		st._hovered = false
@@ -4232,9 +4307,30 @@ end
 
 local function forEachChild(header, fn)
 	if not header or not fn then return end
+	if header.EnumerateChildren then
+		for child in header:EnumerateChildren() do
+			fn(child)
+		end
+		return
+	end
 	local children = { header:GetChildren() }
 	for _, child in ipairs(children) do
 		fn(child)
+	end
+end
+
+local function refreshAllAuras()
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateAuras(child) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateAuras(btn) end
+			end
+		end
 	end
 end
 
@@ -4325,7 +4421,7 @@ function GF:RefreshDispelTint()
 				else
 					local st = getState(child)
 					local cache = st and getAuraCache(st, "dispel")
-					GF:UpdateDispelTint(child, cache, AURA_FILTER_DISPELLABLE)
+					GF:UpdateDispelTint(child, cache, AURA_FILTERS.dispellable)
 				end
 			end
 		end)
@@ -4516,7 +4612,8 @@ function GF:ApplyHeaderAttributes(kind)
 		else
 			header:SetAttribute("columnSpacing", tonumber(cfg.columnSpacing) or spacing)
 		end
-		header:SetAttribute("columnAnchorPoint", "LEFT")
+		-- For horizontal growth, columns should stack vertically (rows).
+		header:SetAttribute("columnAnchorPoint", "TOP")
 	else
 		local yOff = (growth == "UP") and spacing or -spacing
 		local point = (growth == "UP") and "BOTTOM" or "TOP"
@@ -4708,6 +4805,62 @@ local function buildEditModeSettings(kind, editModeId)
 	local widthLabel = HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH or "Width"
 	local heightLabel = HUD_EDIT_MODE_SETTING_CHAT_FRAME_HEIGHT or "Height"
 	local specOptions = buildSpecOptions()
+	local tooltipModeOptions = {
+		{ value = "OFF", label = "Off" },
+		{ value = "ALWAYS", label = "Always" },
+		{ value = "MODIFIER", label = "Only with modifier" },
+	}
+	local tooltipModifierOptions = {
+		{ value = "ALT", label = "Alt" },
+		{ value = "SHIFT", label = "Shift" },
+		{ value = "CTRL", label = "Ctrl" },
+	}
+	local function getTooltipModeValue()
+		local cfg = getCfg(kind)
+		local tc = cfg and cfg.tooltip or {}
+		return tc.mode or (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.mode) or "OFF"
+	end
+	local function getTooltipModeLabel()
+		local mode = tostring(getTooltipModeValue() or "OFF"):upper()
+		for _, option in ipairs(tooltipModeOptions) do
+			if option.value == mode then return option.label end
+		end
+		return mode
+	end
+	local function getTooltipModifierValue()
+		local cfg = getCfg(kind)
+		local tc = cfg and cfg.tooltip or {}
+		return tc.modifier or (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.modifier) or "ALT"
+	end
+	local function getTooltipModifierLabel()
+		local modifier = tostring(getTooltipModifierValue() or "ALT"):upper()
+		for _, option in ipairs(tooltipModifierOptions) do
+			if option.value == modifier then return option.label end
+		end
+		return modifier
+	end
+	local function tooltipModeGenerator()
+		return function(_, root, data)
+			for _, option in ipairs(tooltipModeOptions) do
+				root:CreateRadio(option.label, function() return data.get and data.get() == option.value end, function()
+					if data.set then data.set(nil, option.value) end
+					data.customDefaultText = option.label
+					if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RequestRefreshSettings then addon.EditModeLib.internal:RequestRefreshSettings() end
+				end)
+			end
+		end
+	end
+	local function tooltipModifierGenerator()
+		return function(_, root, data)
+			for _, option in ipairs(tooltipModifierOptions) do
+				root:CreateRadio(option.label, function() return data.get and data.get() == option.value end, function()
+					if data.set then data.set(nil, option.value) end
+					data.customDefaultText = option.label
+					if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RequestRefreshSettings then addon.EditModeLib.internal:RequestRefreshSettings() end
+				end)
+			end
+		end
+	end
 	local function getHealthTextMode(key, fallback)
 		local cfg = getCfg(kind)
 		local hc = cfg and cfg.health or {}
@@ -4847,6 +5000,69 @@ local function buildEditModeSettings(kind, editModeId)
 				cfg.powerHeight = v
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerHeight", v, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+			end,
+		},
+		{
+			name = "Tooltip",
+			kind = SettingType.Dropdown,
+			field = "tooltipMode",
+			parentId = "frame",
+			default = (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.mode) or "OFF",
+			customDefaultText = getTooltipModeLabel(),
+			get = function() return getTooltipModeValue() end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg or not value then return end
+				cfg.tooltip = cfg.tooltip or {}
+				cfg.tooltip.mode = tostring(value):upper()
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "tooltipMode", cfg.tooltip.mode, nil, true) end
+			end,
+			generator = tooltipModeGenerator(),
+		},
+		{
+			name = "Tooltip modifier",
+			kind = SettingType.Dropdown,
+			field = "tooltipModifier",
+			parentId = "frame",
+			default = (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.modifier) or "ALT",
+			customDefaultText = getTooltipModifierLabel(),
+			get = function() return getTooltipModifierValue() end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg or not value then return end
+				cfg.tooltip = cfg.tooltip or {}
+				cfg.tooltip.modifier = tostring(value):upper()
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "tooltipModifier", cfg.tooltip.modifier, nil, true) end
+			end,
+			generator = tooltipModifierGenerator(),
+			isEnabled = function()
+				local cfg = getCfg(kind)
+				local tc = cfg and cfg.tooltip or {}
+				local mode = tc.mode or (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.mode) or "OFF"
+				return mode == "MODIFIER"
+			end,
+		},
+		{
+			name = "Show tooltip for auras",
+			kind = SettingType.Checkbox,
+			field = "tooltipAuras",
+			parentId = "frame",
+			default = false,
+			get = function()
+				local cfg = getCfg(kind)
+				local ac = ensureAuraConfig(cfg)
+				return ac.buff.showTooltip == true and ac.debuff.showTooltip == true and ac.externals.showTooltip == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				local ac = ensureAuraConfig(cfg)
+				local enabled = value and true or false
+				ac.buff.showTooltip = enabled
+				ac.debuff.showTooltip = enabled
+				ac.externals.showTooltip = enabled
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "tooltipAuras", enabled, nil, true) end
+				refreshAllAuras()
 			end,
 		},
 		{
@@ -5146,10 +5362,10 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "hoverHighlightColor",
 			parentId = "hoverHighlight",
 			hasOpacity = true,
-			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightHover and DEFAULTS[kind].highlightHover.color) or { 1, 1, 1, 0.9 },
+			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightHover and DEFAULTS[kind].highlightHover.color) or GFH.COLOR_WHITE_90,
 			get = function()
 				local hcfg, def = getHighlightCfg("highlightHover")
-				local r, g, b, a = unpackColor(hcfg.color, def.color or { 1, 1, 1, 0.9 })
+				local r, g, b, a = unpackColor(hcfg.color, def.color or GFH.COLOR_WHITE_90)
 				return { r = r, g = g, b = b, a = a }
 			end,
 			set = function(_, value)
@@ -5274,10 +5490,10 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "targetHighlightColor",
 			parentId = "targetHighlight",
 			hasOpacity = true,
-			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightTarget and DEFAULTS[kind].highlightTarget.color) or { 1, 1, 0, 1 },
+			default = (DEFAULTS[kind] and DEFAULTS[kind].highlightTarget and DEFAULTS[kind].highlightTarget.color) or GFH.COLOR_YELLOW,
 			get = function()
 				local hcfg, def = getHighlightCfg("highlightTarget")
-				local r, g, b, a = unpackColor(hcfg.color, def.color or { 1, 1, 0, 1 })
+				local r, g, b, a = unpackColor(hcfg.color, def.color or GFH.COLOR_YELLOW)
 				return { r = r, g = g, b = b, a = a }
 			end,
 			set = function(_, value)
@@ -8628,7 +8844,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local rc = cfg and cfg.roleIcon or {}
 				local selection = rc.showRoles
 				if type(selection) ~= "table" then return true end
-				return selectionContains(selection, value)
+				return GFH.SelectionContains(selection, value)
 			end,
 			setSelected = function(_, value, state)
 				local cfg = getCfg(kind)
@@ -8671,7 +8887,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local pcfg = cfg and cfg.power or {}
 				local selection = pcfg.showRoles
 				if type(selection) ~= "table" then return true end
-				return selectionContains(selection, value)
+				return GFH.SelectionContains(selection, value)
 			end,
 			setSelected = function(_, value, state)
 				local cfg = getCfg(kind)
@@ -8705,12 +8921,12 @@ local function buildEditModeSettings(kind, editModeId)
 				if value == "__ALL__" then
 					if type(selection) ~= "table" then return true end
 					for _, opt in ipairs(specOptions) do
-						if opt.value ~= "__ALL__" and not selectionContains(selection, opt.value) then return false end
+						if opt.value ~= "__ALL__" and not GFH.SelectionContains(selection, opt.value) then return false end
 					end
 					return true
 				end
 				if type(selection) ~= "table" then return true end
-				return selectionContains(selection, value)
+				return GFH.SelectionContains(selection, value)
 			end,
 			setSelected = function(_, value, state)
 				local cfg = getCfg(kind)
@@ -11417,9 +11633,21 @@ local function applyEditModeData(kind, data)
 		if not cfg.relativeTo or cfg.relativeTo == "" then cfg.relativeTo = "UIParent" end
 	end
 
+	local refreshAuras = false
 	if data.width ~= nil then cfg.width = clampNumber(data.width, 40, 600, cfg.width or 100) end
 	if data.height ~= nil then cfg.height = clampNumber(data.height, 10, 200, cfg.height or 24) end
 	if data.powerHeight ~= nil then cfg.powerHeight = clampNumber(data.powerHeight, 0, 50, cfg.powerHeight or 6) end
+	if data.tooltipMode ~= nil or data.tooltipModifier ~= nil then cfg.tooltip = cfg.tooltip or {} end
+	if data.tooltipMode ~= nil then cfg.tooltip.mode = tostring(data.tooltipMode):upper() end
+	if data.tooltipModifier ~= nil then cfg.tooltip.modifier = tostring(data.tooltipModifier):upper() end
+	if data.tooltipAuras ~= nil then
+		local ac = ensureAuraConfig(cfg)
+		local enabled = data.tooltipAuras and true or false
+		ac.buff.showTooltip = enabled
+		ac.debuff.showTooltip = enabled
+		ac.externals.showTooltip = enabled
+		refreshAuras = true
+	end
 	if data.spacing ~= nil then cfg.spacing = clampNumber(data.spacing, 0, 40, cfg.spacing or 0) end
 	if data.growth then cfg.growth = tostring(data.growth):upper() end
 	if data.barTexture ~= nil then
@@ -12047,6 +12275,7 @@ local function applyEditModeData(kind, data)
 
 	GF:ApplyHeaderAttributes(kind)
 	if refreshNames then GF:RefreshNames() end
+	if refreshAuras then refreshAllAuras() end
 end
 
 function GF:EnsureEditMode()
@@ -12064,11 +12293,13 @@ function GF:EnsureEditMode()
 			local ac = ensureAuraConfig(cfg)
 			local pcfg = cfg.power or {}
 			local rc = cfg.roleIcon or {}
+			local tcfg = cfg.tooltip or {}
 			local sc = cfg.status or {}
 			local lc = sc.leaderIcon or {}
 			local acfg = sc.assistIcon or {}
 			local hc = cfg.health or {}
 			local def = DEFAULTS[kind] or {}
+			local defTooltip = def.tooltip or {}
 			local defH = def.health or {}
 			local defP = def.power or {}
 			local defAuras = def.auras or {}
@@ -12120,6 +12351,9 @@ function GF:EnsureEditMode()
 				targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size) or (def.highlightTarget and def.highlightTarget.size) or 2,
 				targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset) or (def.highlightTarget and def.highlightTarget.offset) or 0,
 				enabled = cfg.enabled == true,
+				tooltipMode = tcfg.mode or defTooltip.mode or "OFF",
+				tooltipModifier = tcfg.modifier or defTooltip.modifier or "ALT",
+				tooltipAuras = ac.buff.showTooltip == true and ac.debuff.showTooltip == true and ac.externals.showTooltip == true,
 				showPlayer = cfg.showPlayer == true,
 				showSolo = cfg.showSolo == true,
 				unitsPerColumn = cfg.unitsPerColumn or (DEFAULTS.raid and DEFAULTS.raid.unitsPerColumn) or 5,

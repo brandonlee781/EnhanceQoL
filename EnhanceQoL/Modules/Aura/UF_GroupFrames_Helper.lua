@@ -8,6 +8,13 @@ local UF = addon.Aura.UF
 UF.GroupFramesHelper = UF.GroupFramesHelper or {}
 local H = UF.GroupFramesHelper
 
+H.COLOR_WHITE = { 1, 1, 1, 1 }
+H.COLOR_WHITE_90 = { 1, 1, 1, 0.9 }
+H.COLOR_BLACK = { 0, 0, 0, 1 }
+H.COLOR_LEVEL = { 1, 0.85, 0, 1 }
+H.COLOR_HEALTH_DEFAULT = { 0, 0.8, 0, 1 }
+H.COLOR_YELLOW = { 1, 1, 0, 1 }
+
 local UnitSex = UnitSex
 local GetNumClasses = GetNumClasses
 local GetClassInfo = GetClassInfo
@@ -286,4 +293,87 @@ function H.SyncAurasEnabled(cfg)
 	if ac.debuff.enabled then enabled = true end
 	if ac.externals.enabled then enabled = true end
 	ac.enabled = enabled
+end
+
+H.AuraFilters = {
+	helpful = "HELPFUL|INCLUDE_NAME_PLATE_ONLY|RAID_IN_COMBAT|PLAYER",
+	harmful = "HARMFUL|INCLUDE_NAME_PLATE_ONLY",
+	dispellable = "HARMFUL|INCLUDE_NAME_PLATE_ONLY|RAID_PLAYER_DISPELLABLE",
+	bigDefensive = "HELPFUL|BIG_DEFENSIVE",
+}
+
+H.AuraCacheOptions = {
+	helpful = { showHelpful = true, showHarmful = false, helpfulFilter = nil },
+	harmful = { showHelpful = false, showHarmful = true, harmfulFilter = nil },
+	external = { showHelpful = true, showHarmful = false, helpfulFilter = H.AuraFilters.bigDefensive },
+	dispel = { showHelpful = false, showHarmful = true, harmfulFilter = H.AuraFilters.dispellable },
+}
+
+local debuffinfo = {
+	[1] = DEBUFF_TYPE_MAGIC_COLOR,
+	[2] = DEBUFF_TYPE_CURSE_COLOR,
+	[3] = DEBUFF_TYPE_DISEASE_COLOR,
+	[4] = DEBUFF_TYPE_POISON_COLOR,
+	[5] = DEBUFF_TYPE_BLEED_COLOR,
+	[0] = DEBUFF_TYPE_NONE_COLOR,
+}
+local dispelIndexByName = {
+	Magic = 1,
+	Curse = 2,
+	Disease = 3,
+	Poison = 4,
+	Bleed = 5,
+	None = 0,
+}
+
+function H.GetDebuffColorFromName(name)
+	local idx = dispelIndexByName[name] or 0
+	local col = debuffinfo[idx] or debuffinfo[0]
+	if not col then return nil end
+	if col.GetRGBA then return col:GetRGBA() end
+	if col.GetRGB then return col:GetRGB() end
+	if col.r then return col.r, col.g, col.b, col.a end
+	return col[1], col[2], col[3], col[4]
+end
+
+function H.SelectionHasAny(selection)
+	if type(selection) ~= "table" then return false end
+	for _, value in pairs(selection) do
+		if value then return true end
+	end
+	return false
+end
+
+function H.SelectionContains(selection, key)
+	if type(selection) ~= "table" or key == nil then return false end
+	if selection[key] == true then return true end
+	if #selection > 0 then
+		for _, value in ipairs(selection) do
+			if value == key then return true end
+		end
+	end
+	return false
+end
+
+function H.SelectionMode(selection)
+	if type(selection) ~= "table" then return "all" end
+	if H.SelectionHasAny(selection) then return "some" end
+	return "none"
+end
+
+function H.TextModeUsesPercent(mode) return type(mode) == "string" and mode:find("PERCENT", 1, true) ~= nil end
+function H.TextModeUsesDeficit(mode) return mode == "DEFICIT" end
+
+function H.UnsecretBool(value)
+	local issecretvalue = _G.issecretvalue
+	if issecretvalue and issecretvalue(value) then return nil end
+	return value
+end
+
+H.DispelColorCurve = C_CurveUtil and C_CurveUtil.CreateColorCurve() or nil
+if H.DispelColorCurve and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step then
+	H.DispelColorCurve:SetType(Enum.LuaCurveType.Step)
+	for dispeltype, v in pairs(debuffinfo) do
+		H.DispelColorCurve:AddPoint(dispeltype, v)
+	end
 end

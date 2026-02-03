@@ -504,6 +504,7 @@ local function buildSettings()
 			sType = "button",
 			parent = true,
 			parentCheck = function() return isChecked("vendorDestroyEnable") end,
+			isEnabled = function() return isChecked("vendorDestroyEnable") end,
 			func = function()
 				if not isChecked("vendorDestroyEnable") then return end
 				showAddPopup("EQOL_VENDOR_DESTROY_ADD", L["vendorDestroyManualHint"], "vendorIncludeDestroyList")

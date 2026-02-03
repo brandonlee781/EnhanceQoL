@@ -19,11 +19,15 @@
 
 - Aura Tracker (BuffTracker module + settings/UI)
 - Legacy AceGUI options window (tree-based settings UI)
+- Mover: Individual bag frame entries (Bag 1–6)
 
 ### 🐛 Fixed
 
 - Tooltips: Guard secret values when resolving unit names (prevents secret boolean test errors)
 - Group Frames: Guard missing Edit Mode registration IDs on disable
+- Unit Frames: Boss cast bar interrupt texture now resets on new casts
+- ChatIM: Disabling instant messenger restores whispers in normal chat
+- Vendor: Disable destroy-queue Add button when the feature is off
 
 ---
 
