@@ -108,6 +108,7 @@ local function maybeAutoEnableBars(specIndex, specCfg)
 					a.y = a.y or -2
 					a.autoSpacing = a.autoSpacing or nil
 					a.matchRelativeWidth = a.matchRelativeWidth or true
+					a.matchRelativeHeight = a.matchRelativeHeight or true
 					specCfg[pType].anchor = a
 					prevFrame = frameNameFor(pType)
 				elseif pType ~= "HEALTH" then
@@ -126,6 +127,7 @@ local function maybeAutoEnableBars(specIndex, specCfg)
 					a.y = a.y or -2
 					a.autoSpacing = a.autoSpacing or nil
 					a.matchRelativeWidth = a.matchRelativeWidth or true
+					a.matchRelativeHeight = a.matchRelativeHeight or true
 					specCfg[pType].anchor = a
 					if class ~= "DRUID" then prevFrame = frameNameFor(pType) end
 				else
@@ -413,6 +415,7 @@ local function registerEditModeBars()
 				a.y = 0
 				a.autoSpacing = nil
 				a.matchRelativeWidth = nil
+				a.matchRelativeHeight = nil
 				refreshSettingsUI()
 			end
 		end
@@ -508,6 +511,12 @@ local function registerEditModeBars()
 						if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "height", value, nil, true) end
 						applyBarSize()
 						queueRefresh()
+					end,
+					isEnabled = function()
+						if anchorUsesUIParent() then return true end
+						local c = curSpecCfg()
+						local a = c and c.anchor
+						return not (a and a.matchRelativeHeight == true)
 					end,
 				},
 			}
@@ -674,6 +683,7 @@ local function registerEditModeBars()
 						a.y = 0
 						a.autoSpacing = nil
 						a.matchRelativeWidth = nil
+						a.matchRelativeHeight = nil
 					else
 						a.point = "TOPLEFT"
 						a.relativePoint = "BOTTOMLEFT"
@@ -815,6 +825,31 @@ local function registerEditModeBars()
 						refreshSettingsUI()
 					end,
 					isEnabled = function() return not anchorUsesUIParent() end,
+					default = false,
+					parentId = "frame",
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["MatchRelativeFrameHeight"] or "Match Relative Frame height",
+					kind = settingType.Checkbox,
+					field = "matchRelativeHeight",
+					get = function()
+						local a = ensureAnchorTable()
+						return a and a.matchRelativeHeight == true
+					end,
+					set = function(_, value)
+						local a = ensureAnchorTable()
+						if not a then return end
+						a.matchRelativeHeight = value and true or nil
+						if a.matchRelativeHeight and ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					isEnabled = function()
+						if anchorUsesUIParent() then return false end
+						local c = curSpecCfg()
+						return c and c.verticalFill == true
+					end,
 					default = false,
 					parentId = "frame",
 				}

@@ -243,6 +243,7 @@ L["Level font size"] = "Level font size"
 L["Relative Frame"] = "Relative Frame"
 L["Relative Point"] = "Relative Point"
 L["MatchRelativeFrameWidth"] = "Match Relative Frame width"
+L["MatchRelativeFrameHeight"] = "Match Relative Frame height"
 L["Movable while holding SHIFT"] = "Movable while holding SHIFT"
 L["UFPlayerEnable"] = "Enable custom player frame"
 L["UFPlayerCastbarHint"] = 'Custom player cast bar can be configured in Edit Mode.\nTo avoid duplicates, disable Blizzard\'s cast bar\nin the Player Frame setting "%s".'
