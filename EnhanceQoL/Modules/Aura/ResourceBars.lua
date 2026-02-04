@@ -933,6 +933,7 @@ ensureSpecCfg = function(specIndex)
 						a.y = a.y or -2
 						a.autoSpacing = a.autoSpacing or nil
 						a.matchRelativeWidth = a.matchRelativeWidth or true
+						if a.matchRelativeHeight == nil then a.matchRelativeHeight = true end
 						specCfg[pType].anchor = a
 						prevFrame = frameNameFor(pType)
 					elseif pType ~= "HEALTH" then
@@ -955,6 +956,7 @@ ensureSpecCfg = function(specIndex)
 						a.y = a.y or -2
 						a.autoSpacing = a.autoSpacing or nil
 						a.matchRelativeWidth = a.matchRelativeWidth or true
+						if a.matchRelativeHeight == nil then a.matchRelativeHeight = true end
 						specCfg[pType].anchor = a
 						if class ~= "DRUID" then prevFrame = frameNameFor(pType) end
 					else
@@ -2020,6 +2022,7 @@ local function ensureRelativeFrameFallback(anchor, pType, specInfo)
 	if anchor.y == nil then anchor.y = -2 end
 	anchor.autoSpacing = nil
 	if anchor.matchRelativeWidth == nil then anchor.matchRelativeWidth = true end
+	if anchor.matchRelativeHeight == nil then anchor.matchRelativeHeight = true end
 end
 
 function updateHealthBar(evt)
@@ -2227,7 +2230,11 @@ function getAnchor(name, spec)
 		anchor.matchRelativeWidth = anchor.matchEssentialWidth and true or nil
 		anchor.matchEssentialWidth = nil
 	end
-	if (anchor.relativeFrame or "UIParent") == "UIParent" then anchor.matchRelativeWidth = nil end
+	-- if (anchor.relativeFrame or "UIParent") == "UIParent" then anchor.matchRelativeWidth = nil end
+	if (anchor.relativeFrame or "UIParent") == "UIParent" then
+		anchor.matchRelativeWidth = nil
+		anchor.matchRelativeHeight = nil
+	end
 	backfillAnchorFromLayout(anchor, name)
 	return anchor
 end
@@ -2548,6 +2555,8 @@ end
 
 local function wantsRelativeFrameWidthMatch(anchor) return anchor and (anchor.relativeFrame or "UIParent") ~= "UIParent" and anchor.matchRelativeWidth == true end
 
+local function wantsRelativeFrameHeightMatch(anchor, cfg) return anchor and (anchor.relativeFrame or "UIParent") ~= "UIParent" and anchor.matchRelativeHeight == true and cfg and cfg.verticalFill == true end
+
 local function getConfiguredBarWidth(pType)
 	local cfg = getBarSettings(pType)
 	local default = (pType == "HEALTH") and RB.DEFAULT_HEALTH_WIDTH or RB.DEFAULT_POWER_WIDTH
@@ -2595,11 +2604,58 @@ end
 
 ResourceBars.SyncRelativeFrameWidths = syncRelativeFrameWidths
 
+RB.MIN_RESOURCE_BAR_HEIGHT = 6
+
+function ResourceBars.SyncRelativeFrameHeights()
+	local function getConfiguredBarHeight(pType)
+		local cfg = getBarSettings(pType)
+		local default = (pType == "HEALTH") and RB.DEFAULT_HEALTH_HEIGHT or RB.DEFAULT_POWER_HEIGHT
+		local height = (cfg and type(cfg.height) == "number" and cfg.height > 0 and cfg.height) or default or RB.DEFAULT_POWER_HEIGHT
+		return max(RB.MIN_RESOURCE_BAR_HEIGHT, height or RB.MIN_RESOURCE_BAR_HEIGHT)
+	end
+	local function syncBarHeightWithAnchor(pType)
+		local frame = (pType == "HEALTH") and healthBar or powerbar[pType]
+		if not frame then return false end
+		local cfg = getBarSettings(pType)
+		local anchor = getAnchor(pType, addon.variables.unitSpec)
+		local baseHeight = max(1, getConfiguredBarHeight(pType) or 0)
+		if not wantsRelativeFrameHeightMatch(anchor, cfg) then
+			local current = frame:GetHeight() or 0
+			if abs(current - baseHeight) < 0.5 then return false end
+			frame:SetHeight(baseHeight)
+			return true
+		end
+		local relativeFrameName = anchor.relativeFrame
+		ensureRelativeFrameHooks(relativeFrameName)
+		local relFrame = relativeFrameName and _G[relativeFrameName]
+		if not relFrame or not relFrame.GetHeight then
+			local current = frame:GetHeight() or 0
+			if abs(current - baseHeight) < 0.5 then return false end
+			frame:SetHeight(baseHeight)
+			return true
+		end
+		local relHeight = relFrame:GetHeight() or 0
+		local desired = max(RB.MIN_RESOURCE_BAR_HEIGHT, relHeight or 0)
+		desired = max(desired, 1)
+		local current = frame:GetHeight() or 0
+		if abs(current - desired) < 0.5 then return false end
+		frame:SetHeight(desired)
+		return true
+	end
+	local changed = false
+	if healthBar then changed = syncBarHeightWithAnchor("HEALTH") or changed end
+	for pType, bar in pairs(powerbar) do
+		if bar then changed = syncBarHeightWithAnchor(pType) or changed end
+	end
+	return changed
+end
+
 local function handleRelativeFrameGeometryChanged()
 	if scheduleRelativeFrameWidthSync then
 		scheduleRelativeFrameWidthSync()
 	elseif ResourceBars and ResourceBars.SyncRelativeFrameWidths then
 		ResourceBars.SyncRelativeFrameWidths()
+		if ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	end
 end
 
@@ -2633,6 +2689,7 @@ scheduleRelativeFrameWidthSync = function()
 	if not ResourceBars.SyncRelativeFrameWidths then return end
 	if not After then
 		ResourceBars.SyncRelativeFrameWidths()
+		if ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 		return
 	end
 	if relativeFrameWidthPending then return end
@@ -2640,6 +2697,7 @@ scheduleRelativeFrameWidthSync = function()
 	After(0.25, function()
 		relativeFrameWidthPending = false
 		ResourceBars.SyncRelativeFrameWidths()
+		if ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	end)
 end
 
@@ -3825,6 +3883,7 @@ local function createPowerBar(type, anchor)
 			a.y = stackSpacing
 			a.autoSpacing = true
 			if a.matchRelativeWidth == nil then a.matchRelativeWidth = true end
+			if a.matchRelativeHeight == nil then a.matchRelativeHeight = true end
 		else
 			-- No anchor in DB and no previous anchor in code path; default: center on UIParent
 			bar:ClearAllPoints()
@@ -3906,6 +3965,7 @@ local function createPowerBar(type, anchor)
 	end)
 
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	if ensureEditModeRegistration then ensureEditModeRegistration() end
 end
 
@@ -4072,6 +4132,7 @@ local function setPowerbars(opts)
 
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference("fromSetPowerbars") end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 end
 addon.Aura.functions.setPowerBars = setPowerbars
 
@@ -4432,6 +4493,7 @@ function ResourceBars.EnableResourceBars()
 		setPowerbars()
 	end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 	if ensureEditModeRegistration then ensureEditModeRegistration() end
 end
@@ -4575,6 +4637,7 @@ function ResourceBars.SetHealthBarSize(w, h)
 	local height = h or RB.DEFAULT_HEALTH_HEIGHT
 	if healthBar then healthBar:SetSize(width, height) end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 end
 
 function ResourceBars.SetPowerBarSize(w, h, pType)
@@ -4622,6 +4685,7 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 		end
 	end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 end
 
 -- Re-apply anchors for any bars that currently reference a given frame name
@@ -4799,6 +4863,7 @@ function ResourceBars.Refresh()
 		end
 	end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 	-- Ensure RUNES animation stops when not visible/enabled
@@ -5009,6 +5074,7 @@ function ResourceBars.ReanchorAll()
 
 	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+	if ResourceBars and ResourceBars.SyncRelativeFrameHeights then ResourceBars.SyncRelativeFrameHeights() end
 	ResourceBars._reanchoring = false
 end
 
